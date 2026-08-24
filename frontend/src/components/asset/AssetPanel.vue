@@ -224,6 +224,15 @@ const executions = computed(() => manifest.value?.executions ?? []);
 const artifacts = computed(() => manifest.value?.artifacts ?? []);
 const segmentRoutes = computed(() => manifest.value?.segment_routes ?? []);
 
+/** segment_id → 视觉路由（分镜卡片与严格模式失败原因查询）。 */
+const segmentRouteBySegmentId = computed(() => {
+  const map = new Map<string, (typeof segmentRoutes.value)[number]>();
+  for (const route of segmentRoutes.value) {
+    map.set(route.segment_id, route);
+  }
+  return map;
+});
+
 const hasManifest = computed(() => !!manifest.value);
 
 const projectId = computed(() => projectStore.state.projectId ?? "");
@@ -1194,9 +1203,10 @@ function handleConfirm() {
       </div>
     </div>
 
-    <!-- 规划生成中：全屏阻塞 -->
+    <!-- 规划生成中：全屏阻塞。只允许规划阶段（asset_plan）——
+         基础资产生成一律走资产预览页顶部横幅，不做全屏阻塞。 -->
     <StageGenerating
-      v-else-if="phase.kind === 'plan_generating' && generatingView"
+      v-else-if="phase.kind === 'plan_generating' && generatingView?.kind === 'asset_plan'"
       :title="generatingView.title"
       :hint="generatingView.hint"
       :progress="generatingView.progress"
@@ -1634,13 +1644,6 @@ function handleConfirm() {
     />
   </div>
 
-  <GenerationQuoteDialog
-    :open="quoteDialogOpen"
-    :quote="pendingQuote"
-    :loading="quoteLoading"
-    @confirm="handleQuoteConfirm"
-    @cancel="handleQuoteCancel"
-  />
   <StrictFallbackDialog
     :open="strictDialogOpen"
     :segment-label="strictSegmentLabel"

@@ -164,6 +164,21 @@ describe("useAssetTabPhase", () => {
     expect(phase.value).toMatchObject({ kind: "basic_assets_generating" });
   });
 
+  it("资产生成态优先于残留的规划生成标志（不渲染全屏阻塞的规划 loading）", () => {
+    const { phase } = useAssetTabPhase({
+      assetPlanningStore: mockPlanningStore({
+        snapshot: planSnapshot("asset_plan_generating", {
+          active_asset_plan: activePlan({ execution_state: { generating: true } }),
+        }),
+      }),
+      assetsStore: mockAssetsStore({
+        isGenerating: true,
+      }),
+      initialLoadDone: computed(() => true),
+    });
+    expect(phase.value).toMatchObject({ kind: "basic_assets_generating" });
+  });
+
   it("returns basic_assets_failed when plan exists, no manifest, loadError and not generating", () => {
     const { phase } = useAssetTabPhase({
       assetPlanningStore: mockPlanningStore({

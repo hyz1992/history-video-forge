@@ -242,10 +242,13 @@ async function runAdapterPipeline(
       providerJobId: prepared.providerJobId,
       status: "prepared",
       attemptCount: execution.attempts,
-      // S2-2A 任务 6 整改：job 关联正式 run 与 0-based attempt 索引，
-      // 支撑重试不复用旧 quote 的可审计证据。
-      generationRunId: assetRunId,
-      attemptIndex: Math.max(0, execution.attempts - 1),
+      // call-intent 身份三元组（generationRunId, providerRequestKey, attemptIndex）
+      // 数据库 CHECK 约束要求三者全空或全非空。仅真实计费 adapter（billing 声明）
+      // 携带三元组；本地/fake adapter（零外部费用）保持全空——
+      // 2026-08-24 修复：此前无条件写 generationRunId/attemptIndex 而
+      // providerRequestKey 为 null，本地 provider 落库违反 CHECK 约束全部失败。
+      generationRunId: adapter.billing ? assetRunId : null,
+      attemptIndex: adapter.billing ? Math.max(0, execution.attempts - 1) : null,
       // S2-2A 任务 9A：付费外部提交意图携带稳定 request key（run+task 维度，
       // attemptIndex 区分重试），数据库唯一索引防重复计费提交。
       providerRequestKey: adapter.billing

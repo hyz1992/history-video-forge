@@ -39,6 +39,15 @@ export function useAssetTabPhase(input: UseAssetTabPhaseInput): UseAssetTabPhase
       input.assetsStore.state.isGenerating ||
       assetsSnap?.active_assets?.execution_state?.generating === true;
 
+    // 资产生成中优先于规划生成态：基础资产生成不阻塞页面，直接进入资产
+    // 预览页（顶部横幅提示生成进度）——用户要求：资产规划完成后立即切换
+    // 到资产预览页，口播等基础资产在页面内后台生成。
+    // 2026-08-24 修复：此前 plan_generating 优先，规划标志短暂残留时会与
+    // 资产生成态叠加，渲染成全屏阻塞的"正在生成基础资源"。
+    if (isAssetsGen) {
+      return { kind: "basic_assets_generating" };
+    }
+
     // 规划生成中：优先于初始查询 loading，避免已知生成态被误显示成普通查询
     if (isPlanGen) {
       return { kind: "plan_generating" };

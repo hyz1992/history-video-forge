@@ -169,6 +169,82 @@ describe("assets execution engine", () => {
     expect(db.assetProviderJobRecords.size).toBe(1);
   });
 
+  it("本地 adapter（无 billing）创建的 job 身份三元组全空（CHECK 约束一致）", async () => {
+    const db = createDbClient();
+    const adapter: AssetProviderAdapter = {
+      providerName: "fake_local",
+      providerType: "image",
+      canHandle: ({ taskType }) => taskType === "image_still",
+      prepare: async () => ({ providerJobId: null, rawRequestJson: {} }),
+      submit: async () => ({ providerJobId: "job_local_001", rawResponseJson: {} }),
+      poll: async () => ({ status: "completed", rawResponseJson: {} }),
+      download: async () => [],
+      normalizeResult: async ({ downloadedArtifacts }) => ({
+        artifacts: downloadedArtifacts,
+        notes: [],
+      }),
+      cancel: async () => undefined,
+    };
+
+    await executeAssetManifest({
+      db,
+      assetManifestRecordId: "manifest_001",
+      assetRunId: "assets_run_001",
+      manifest: makeManifest(),
+      registry: createAssetProviderRegistry([adapter]),
+      assetPlan: makeAssetPlan(),
+      projectStorageRootDir: "unused",
+    });
+
+    const job = [...db.assetProviderJobRecords.values()][0]!;
+    // 回归：2026-08-24 之前本地 job 混合写入（generationRunId/attemptIndex
+    // 非空、providerRequestKey 为空），违反数据库 call_intent_consistency CHECK。
+    expect(job.generationRunId).toBeNull();
+    expect(job.providerRequestKey).toBeNull();
+    expect(job.attemptIndex).toBeNull();
+  });
+
+  it("计费 adapter 创建的 job 携带完整 call-intent 三元组", async () => {
+    const db = createDbClient();
+    const runId = "assets_run_paid_001";
+    const snapshotId = "snapshot_paid_001";
+    db.generationRuns.set(runId, {
+      runConfigurationSnapshotId: snapshotId,
+    } as never);
+    db.runConfigurationSnapshots.set(snapshotId, { id: snapshotId } as never);
+
+    const adapter: AssetProviderAdapter = {
+      providerName: "fake_paid",
+      providerType: "image",
+      billing: { capability: "image.generate", providerKey: "fake", modelId: "fake-model" },
+      canHandle: ({ taskType }) => taskType === "image_still",
+      prepare: async () => ({ providerJobId: null, rawRequestJson: {} }),
+      submit: async () => ({ providerJobId: "job_paid_001", rawResponseJson: {} }),
+      poll: async () => ({ status: "completed", rawResponseJson: {} }),
+      download: async () => [],
+      normalizeResult: async ({ downloadedArtifacts }) => ({
+        artifacts: downloadedArtifacts,
+        notes: [],
+      }),
+      cancel: async () => undefined,
+    };
+
+    await executeAssetManifest({
+      db,
+      assetManifestRecordId: "manifest_001",
+      assetRunId: runId,
+      manifest: makeManifest(),
+      registry: createAssetProviderRegistry([adapter]),
+      assetPlan: makeAssetPlan(),
+      projectStorageRootDir: "unused",
+    });
+
+    const job = [...db.assetProviderJobRecords.values()][0]!;
+    expect(job.generationRunId).toBe(runId);
+    expect(job.providerRequestKey).toBe(`assets:${runId}:img_001`);
+    expect(job.attemptIndex).toBe(0);
+  });
+
   it("routes generated video artifacts as primary visual while preserving image fallback", async () => {
     const db = createDbClient();
     const manifest = makeManifest();
