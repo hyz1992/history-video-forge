@@ -208,6 +208,7 @@ function playPreviewAudio(uri: string): void {
     :model-value="open"
     title="项目生成设置"
     width="960px"
+    class="project-settings-dialog"
     @update:model-value="(value: boolean) => !value && emit('close')"
   >
     <div class="project-settings">
@@ -424,5 +425,27 @@ function playPreviewAudio(uri: string): void {
   font-size: 13px;
   color: #d8d0c7;
   line-height: 1.6;
+}
+</style>
+
+<!-- 弹窗限高与固定底部操作栏（非 scoped：el-dialog 内部元素跨组件边界） -->
+<style>
+.project-settings-dialog.el-dialog {
+  /* 90vh 会叠加弹窗默认 15vh 顶部偏移导致底部溢出，取 75vh */
+  max-height: 75vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.project-settings-dialog .el-dialog__body {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.project-settings-dialog .el-dialog__footer {
+  flex-shrink: 0;
+  border-top: 1px solid rgba(201, 162, 39, 0.14);
+  background: #1f1a16;
 }
 </style>
