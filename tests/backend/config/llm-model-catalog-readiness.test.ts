@@ -79,15 +79,15 @@ describe("LLM 候选表 seed（S2-2C §7.1）", () => {
       const keys = entries.map((e) => `${e.providerKey}:${e.modelId}`);
       expect(new Set(keys).size, slot).toBe(keys.length);
     }
-    // smart 默认 = deepseek-v4-pro（tier），候选 = glm-4；
+    // smart 默认 = deepseek-v4-pro（tier），候选 = glm-5；
     // flash 默认 = glm-4（tier），候选 = deepseek-v4-flash（2026-08-25：
-    // DeepSeek 按档位拆分，flash 槽不再出现 v4-pro）。
+    // 按档位拆分——smart 槽 glm-5、flash 槽 glm-4/v4-flash，不再出现 v4-pro/glm-4 错配）。
     const smartDefault = seed.find((e) => e.capability === "llm.smart" && e.isDefault)!;
     expect(smartDefault.providerKey).toBe("deepseek");
     expect(smartDefault.modelId).toBe("deepseek-v4-pro");
     const smartCandidate = seed.find((e) => e.capability === "llm.smart" && !e.isDefault)!;
     expect(smartCandidate.providerKey).toBe("zhipu");
-    expect(smartCandidate.modelId).toBe("glm-4");
+    expect(smartCandidate.modelId).toBe("glm-5");
     const flashDefault = seed.find((e) => e.capability === "llm.flash" && e.isDefault)!;
     expect(flashDefault.providerKey).toBe("zhipu");
     expect(flashDefault.modelId).toBe("glm-4");
@@ -119,17 +119,23 @@ describe("LLM 候选表 seed（S2-2C §7.1）", () => {
     expect(flashCandidate.displayName).toBe("DeepSeek V4 Flash");
     expect(flashCandidate.qualityTier).toBe("standard");
     expect(flashCandidate.speedTier).toBe("fast");
-    // glm-4 同时是 flash 默认与 smart 候选——元数据一致
+    // smart 候选 glm-5——元数据来自候选声明
+    const smartCandidate = seed.find(
+      (e) => e.capability === "llm.smart" && !e.isDefault && e.modelId === "glm-5",
+    )!;
+    expect(smartCandidate.displayName).toBe("智谱 GLM-5");
+    expect(smartCandidate.qualityTier).toBe("standard");
+    expect(smartCandidate.speedTier).toBe("fast");
+    // glm-4 是 flash 默认——元数据来自候选声明；且 smart 槽不得再出现 glm-4
     const flashDefault = seed.find(
       (e) => e.capability === "llm.flash" && e.isDefault && e.modelId === "glm-4",
     )!;
-    const smartCandidate = seed.find(
-      (e) => e.capability === "llm.smart" && !e.isDefault && e.modelId === "glm-4",
-    )!;
-    expect(smartCandidate.displayName).toBe("智谱 GLM-4");
-    expect(flashDefault.displayName).toBe(smartCandidate.displayName);
+    expect(flashDefault.displayName).toBe("智谱 GLM-4");
     expect(flashDefault.qualityTier).toBe("standard");
     expect(flashDefault.speedTier).toBe("fast");
+    expect(
+      seed.find((e) => e.capability === "llm.smart" && e.modelId === "glm-4"),
+    ).toBeUndefined();
   });
 
   it("tier 解析模型不在候选表 → 回退槽位默认元数据（displayName=provider:model）", () => {
@@ -153,7 +159,7 @@ describe("LLM 候选表 seed（S2-2C §7.1）", () => {
     );
     expect(candidates.map((e) => `${e.providerKey}:${e.modelId}`).sort()).toEqual([
       "deepseek:deepseek-v4-pro",
-      "zhipu:glm-4",
+      "zhipu:glm-5",
     ]);
   });
 

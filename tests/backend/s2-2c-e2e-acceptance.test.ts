@@ -184,7 +184,7 @@ function stubChatFetch(): ReturnType<typeof vi.fn> {
 }
 
 const FIXED_SMART_CAPABILITIES = {
-  "llm.smart": { mode: "fixed", provider_model_id: "llm.smart.zhipu.glm-4" },
+  "llm.smart": { mode: "fixed", provider_model_id: "llm.smart.zhipu.glm-5" },
   "llm.flash": { mode: "auto" },
   "image.generate": { mode: "auto" },
   "video.image_to_video": { mode: "auto" },
@@ -203,7 +203,7 @@ describe("S2-2C e2e 验收", () => {
         expected_revision: null,
         video: { strategy: "prefer_remotion", api_quality: "standard_720p" },
         capabilities: {
-          "llm.smart": { mode: "fixed", provider_model_id: "llm.smart.zhipu.glm-4" },
+          "llm.smart": { mode: "fixed", provider_model_id: "llm.smart.zhipu.glm-5" },
           "llm.flash": { mode: "auto" },
           "image.generate": { mode: "auto" },
           "video.image_to_video": { mode: "auto" },
@@ -225,7 +225,7 @@ describe("S2-2C e2e 验收", () => {
       string,
       { mode: string; provider_model_id?: string }
     >;
-    expect(capabilities["llm.smart"]).toEqual({ mode: "fixed", provider_model_id: "llm.smart.zhipu.glm-4" });
+    expect(capabilities["llm.smart"]).toEqual({ mode: "fixed", provider_model_id: "llm.smart.zhipu.glm-5" });
     expect(capabilities["tts.synthesize"]).toEqual({
       mode: "fixed",
       provider_model_id: "tts.synthesize.dashscope.cn-beijing.qwen3-tts-instruct-flash",
@@ -239,7 +239,7 @@ describe("S2-2C e2e 验收", () => {
     const project = await prepareScriptProject(app);
     const fetchMock = stubChatFetch();
 
-    // 项目配置 fixed：llm.smart 固定到候选（zhipu:glm-4，与 tier 默认 deepseek 不同）
+    // 项目配置 fixed：llm.smart 固定到候选（zhipu:glm-5，与 tier 默认 deepseek 不同）
     const patchProject = await app.inject({
       method: "PATCH",
       url: `/api/projects/${project.id}/generation-configuration`,
@@ -273,17 +273,17 @@ describe("S2-2C e2e 验收", () => {
     };
     expect(resolved.resolved_capabilities["llm.smart"]).toEqual({
       mode: "fixed",
-      provider_model_id: "llm.smart.zhipu.glm-4",
+      provider_model_id: "llm.smart.zhipu.glm-5",
       provider_key: "zhipu",
-      model_id: "glm-4",
+      model_id: "glm-5",
     });
 
-    // 执行消费：真实工厂按快照 provider/model 构造 → 请求到达 zhipu baseUrl 且 model=glm-4
+    // 执行消费：真实工厂按快照 provider/model 构造 → 请求到达 zhipu baseUrl 且 model=glm-5
     expect(fetchMock).toHaveBeenCalled();
     for (const [url, init] of fetchMock.mock.calls as Array<[string | URL, RequestInit]>) {
       expect(String(url)).toMatch(/^https:\/\/open\.bigmodel\.cn\/api\/paas\/v4\/chat\/completions$/);
       const body = JSON.parse(String(init.body)) as { model: string };
-      expect(body.model).toBe("glm-4");
+      expect(body.model).toBe("glm-5");
     }
 
     // usage 记账与执行/快照同源
@@ -291,7 +291,7 @@ describe("S2-2C e2e 验收", () => {
     expect(usages.length).toBeGreaterThan(0);
     for (const usage of usages) {
       expect(usage.providerKey).toBe("zhipu");
-      expect(usage.modelId).toBe("glm-4");
+      expect(usage.modelId).toBe("glm-5");
       expect(usage.runConfigurationSnapshotId).toBe(snapshot.id);
     }
   });
@@ -372,9 +372,9 @@ describe("S2-2C e2e 验收", () => {
     };
     expect(resolved.resolved_capabilities["llm.smart"]).toEqual({
       mode: "fixed",
-      provider_model_id: "llm.smart.zhipu.glm-4",
+      provider_model_id: "llm.smart.zhipu.glm-5",
       provider_key: "zhipu",
-      model_id: "glm-4",
+      model_id: "glm-5",
     });
     expect(fetchMock).toHaveBeenCalled();
   });
@@ -504,7 +504,7 @@ describe("S2-2C e2e 验收", () => {
     >;
     expect(projectCapabilities["llm.smart"]).toEqual({
       mode: "fixed",
-      provider_model_id: "llm.smart.zhipu.glm-4",
+      provider_model_id: "llm.smart.zhipu.glm-5",
     });
     expect(projectCapabilities["tts.synthesize"]).toEqual({ mode: "auto" });
   });
@@ -594,7 +594,7 @@ describe("S2-2C e2e 验收", () => {
     };
     expect(resolved.resolved_capabilities["llm.smart"]).toMatchObject({
       mode: "fixed",
-      provider_model_id: "llm.smart.zhipu.glm-4",
+      provider_model_id: "llm.smart.zhipu.glm-5",
     });
     expect(fetchMock).toHaveBeenCalled();
   });

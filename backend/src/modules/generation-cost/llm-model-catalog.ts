@@ -2,10 +2,11 @@
  * S2-2C（详细设计 §7.1）：LLM 候选常量表（服务端受控）。
  *
  * 语义：运营声明"平台可选的 LLM 模型清单"——项目当前真实在用的模型
- * （deepseek-v4-pro / deepseek-v4-flash / glm-4），不虚构模型名。每个候选
- * 种入其声明槽位（`slots`，缺省 = smart/flash 两槽）的目录（非默认条目），
- * tier 解析结果的模型为该槽默认条目。2026-08-25：DeepSeek 按档位拆分——
- * v4-pro 仅智能档（llm.smart）、v4-flash 仅快速档（llm.flash）。
+ * （deepseek-v4-pro / deepseek-v4-flash / glm-5 / glm-4），不虚构模型名。
+ * 每个候选种入其声明槽位（`slots`，缺省 = smart/flash 两槽）的目录（非默认
+ * 条目），tier 解析结果的模型为该槽默认条目。2026-08-25：按档位拆分——
+ * deepseek-v4-pro 与 glm-5 仅智能档（llm.smart），deepseek-v4-flash 与
+ * glm-4 仅快速档（llm.flash）。
  *
  * 元数据来源（外部审查 P2 整改）：目录条目的 displayName/qualityTier/
  * speedTier 一律来自候选声明（按 providerKey:modelId 匹配），默认条目与候选
@@ -47,9 +48,18 @@ export const LLM_MODEL_CANDIDATES_V1: LlmModelCandidate[] = [
   },
   {
     providerKey: "zhipu",
+    modelId: "glm-5",
+    displayName: "智谱 GLM-5",
+    qualityTier: "standard",
+    speedTier: "fast",
+    slots: ["llm.smart"],
+  },
+  {
+    providerKey: "zhipu",
     modelId: "glm-4",
     displayName: "智谱 GLM-4",
     qualityTier: "standard",
     speedTier: "fast",
+    slots: ["llm.flash"],
   },
 ];
