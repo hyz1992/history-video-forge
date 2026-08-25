@@ -63,12 +63,34 @@ const STAGE_ORDER = ["topic", "script", "storyboard", "asset", "compose-render",
 
 /**
  * 行：
- * - 媒体记录原样展示；
+ * - 媒体记录按同类项合并（同 capability/provider/model/单位 → 一行：数量、
+ *   单价、总价、总耗时）；
  * - LLM 记录逐条列举并标注具体用处（选题/文案等多次调用是不同的角色）；
  * - 资产阶段 LLM 记录按模型合并为一行（分段规划对同一 prompt 多次调用）。
  */
 type StageRow =
-  | { kind: "media"; key: string; record: ProjectCostRecordDto }
+  | {
+      kind: "media-group";
+      key: string;
+      capability: string;
+      providerKey: string;
+      modelId: string;
+      unitType: string;
+      inputUnits: number | null;
+      outputUnits: number | null;
+      /** 单件记录数（合并条数）。 */
+      count: number;
+      /** 单价（十进制微元串，向上取整）；仅图片/视频展示单价。 */
+      unitPrice: string | null;
+      /** 合计预计金额（十进制微元串）。 */
+      totalEstimated: string;
+      /** 合计实际金额（十进制微元串）；任一记录无实际时为 null。 */
+      totalActual: string | null;
+      /** 合计耗时（毫秒）；全部缺耗时信息时为 null。 */
+      durationMs: number | null;
+      statusText: string;
+      costBasis: string | null;
+    }
   | {
       kind: "llm";
       key: string;
@@ -138,6 +160,13 @@ function llmRoleLabel(operationName: string | null): string | null {
   return LLM_ROLE_LABELS[operationName] ?? operationName;
 }
 
+/** 十进制微元串 ↔ 展示用的 BigInt 微元值（"12.340000" → 12340000n）。 */
+function microsToDecimalString(value: bigint): string {
+  const sign = value < 0n ? "-" : "";
+  const abs = value < 0n ? -value : value;
+  return `${sign}${abs.toString().slice(0, -6) || "0"}.${abs.toString().slice(-6).padStart(6, "0")}`;
+}
+
 const stageGroups = computed<StageGroup[]>(() => {
   const byStage = new Map<string, ProjectCostRecordDto[]>();
   for (const record of records.value) {
@@ -150,6 +179,7 @@ const stageGroups = computed<StageGroup[]>(() => {
     const list = byStage.get(key) ?? [];
     const rows: StageRow[] = [];
     const llmByGroup = new Map<string, ProjectCostRecordDto[]>();
+    const mediaByGroup = new Map<string, ProjectCostRecordDto[]>();
     let estimated = 0n;
     let actual = 0n;
     let priced = false;
@@ -164,7 +194,59 @@ const stageGroups = computed<StageGroup[]>(() => {
       priced = true;
       estimated += BigInt(record.estimated_cost_cny.replace(".", ""));
       if (record.actual_cost_cny !== null) actual += BigInt(record.actual_cost_cny.replace(".", ""));
-      rows.push({ kind: "media", key: record.id, record });
+      const groupKey = `${record.capability}|${record.provider_key}|${record.model_id}|${record.unit_type}`;
+      const group = mediaByGroup.get(groupKey) ?? [];
+      group.push(record);
+      mediaByGroup.set(groupKey, group);
+    }
+    // 媒体同类项合并：数量/单价/总价/总耗时一行展示。
+    for (const [groupKey, group] of mediaByGroup) {
+      const [capability, , modelId, unitType] = groupKey.split("|");
+      const inputUnits = group.some((r) => r.input_units !== null)
+        ? group.reduce((sum, r) => sum + (r.input_units ?? 0), 0)
+        : null;
+      const outputUnits = group.some((r) => r.output_units !== null)
+        ? group.reduce((sum, r) => sum + (r.output_units ?? 0), 0)
+        : null;
+      const durationMs = group.some((r) => r.duration_ms !== null)
+        ? group.reduce((sum, r) => sum + (r.duration_ms ?? 0), 0)
+        : null;
+      const totalEstimated = group.reduce(
+        (sum, r) => sum + BigInt(r.estimated_cost_cny.replace(".", "")),
+        0n,
+      );
+      const totalActual = group.every((r) => r.actual_cost_cny !== null)
+        ? group.reduce((sum, r) => sum + BigInt(r.actual_cost_cny!.replace(".", "")), 0n)
+        : null;
+      // 单价：按输出单位（张/秒）向上取整，不低估；图片/视频才展示。
+      const priceBase = outputUnits !== null && outputUnits > 0 ? outputUnits : null;
+      const unitPrice =
+        priceBase !== null && (unitType === "image" || unitType === "video_second")
+          ? microsToDecimalString((totalEstimated + BigInt(priceBase) - 1n) / BigInt(priceBase))
+          : null;
+      const statusCounts = new Map<string, number>();
+      for (const r of group) statusCounts.set(r.status, (statusCounts.get(r.status) ?? 0) + 1);
+      const statusText = [...statusCounts.entries()]
+        .map(([status, count]) => `${status} ×${count}`)
+        .join(" · ");
+      const bases = [...new Set(group.map((r) => r.cost_basis))];
+      rows.push({
+        kind: "media-group",
+        key: `media:${groupKey}`,
+        capability: capability!,
+        providerKey: group[0]!.provider_key,
+        modelId: modelId!,
+        unitType: unitType!,
+        inputUnits,
+        outputUnits,
+        count: group.length,
+        unitPrice,
+        totalEstimated: microsToDecimalString(totalEstimated),
+        totalActual: totalActual === null ? null : microsToDecimalString(totalActual),
+        durationMs,
+        statusText,
+        costBasis: bases.length === 1 ? (bases[0] ?? null) : null,
+      });
     }
     for (const [groupKey, group] of llmByGroup) {
       const [capability, , modelId] = groupKey.split("|");
@@ -223,11 +305,6 @@ const stageGroups = computed<StageGroup[]>(() => {
         }
       }
     }
-    const micros = (value: bigint) => {
-      const sign = value < 0n ? "-" : "";
-      const abs = value < 0n ? -value : value;
-      return `${sign}${abs.toString().slice(0, -6) || "0"}.${abs.toString().slice(-6).padStart(6, "0")}`;
-    };
     const stageDurationMs = list.some((r) => r.duration_ms !== null)
       ? list.reduce((sum, r) => sum + (r.duration_ms ?? 0), 0)
       : null;
@@ -236,8 +313,8 @@ const stageGroups = computed<StageGroup[]>(() => {
       label: STAGE_LABELS[key] ?? key,
       rows,
       priced,
-      estimated: micros(estimated),
-      actual: micros(actual),
+      estimated: microsToDecimalString(estimated),
+      actual: microsToDecimalString(actual),
       durationMs: stageDurationMs,
     };
   });
@@ -251,8 +328,7 @@ const totals = computed(() => {
     estimated += BigInt(group.estimated.replace(".", ""));
     if (group.actual !== "0.000000") actual += BigInt(group.actual.replace(".", ""));
   }
-  const micros = (value: bigint) => `${value.toString().slice(0, -6) || "0"}.${value.toString().slice(-6).padStart(6, "0")}`;
-  return { estimated: micros(estimated), actual: micros(actual) };
+  return { estimated: microsToDecimalString(estimated), actual: microsToDecimalString(actual) };
 });
 
 const COST_BASIS_LABELS: Record<string, string> = {
@@ -277,19 +353,18 @@ const CAPABILITY_LABELS: Record<string, string> = {
   "tts.synthesize": "TTS 口播",
 };
 
-function recordTitle(record: ProjectCostRecordDto): string {
-  const capability = CAPABILITY_LABELS[record.capability] ?? record.capability;
+/** 合并后的媒体行标题：类型 + 模型 + 数量（图片张数/视频秒数/字数）。 */
+function mediaGroupTitle(row: Extract<StageRow, { kind: "media-group" }>): string {
+  const capability = CAPABILITY_LABELS[row.capability] ?? row.capability;
   const units: string[] = [];
-  if (record.input_units !== null) units.push(`${record.input_units}${UNIT_LABELS[record.unit_type] ?? ""} 输入`);
-  if (record.output_units !== null) units.push(`${record.output_units}${UNIT_LABELS[record.unit_type] ?? ""} 输出`);
-  // 规格明细（图片分辨率、视频画质）
-  const detail = record.unit_detail;
-  if (detail) {
-    if (typeof detail.resolution === "string") units.push(detail.resolution);
-    if (typeof detail.quality === "string") units.push(detail.quality);
+  if (row.inputUnits !== null && row.inputUnits > 0) {
+    units.push(`${row.inputUnits}${UNIT_LABELS[row.unitType] ?? ""} 输入`);
   }
-  const unitText = units.join(" · ") || "—";
-  return `${capability} · ${record.model_id}${unitText !== "—" ? ` · ${unitText}` : ""}`;
+  if (row.outputUnits !== null && row.outputUnits > 0) {
+    units.push(`${row.outputUnits}${UNIT_LABELS[row.unitType] ?? ""} 输出`);
+  }
+  const unitText = units.length > 0 ? ` · ${units.join(" · ")}` : "";
+  return `${capability} · ${row.modelId}${unitText}`;
 }
 
 /** 单条 LLM 行标题：调用角色（具体用处）+ 模型 + token。 */
@@ -317,9 +392,9 @@ function formatDurationMs(ms: number | null): string | null {
   return `${minutes}分${seconds}秒`;
 }
 
-/** 行的耗时（单条记录取自身耗时，合并行取合计耗时）。 */
+/** 行的耗时（单条 LLM 记录取自身耗时，合并行取合计耗时）。 */
 function rowDurationMs(row: StageRow): number | null {
-  if (row.kind === "media" || row.kind === "llm") return row.record.duration_ms;
+  if (row.kind === "llm") return row.record.duration_ms;
   return row.durationMs;
 }
 
@@ -405,10 +480,10 @@ const runStatusSummary = computed(() => {
               <span class="cost-record-title">
                 <template v-if="row.kind === 'llm'">{{ llmRecordTitle(row.record, row.roleLabel) }}</template>
                 <template v-else-if="row.kind === 'llm-group'">{{ llmGroupTitle(row) }}</template>
-                <template v-else>{{ recordTitle(row.record) }}</template>
+                <template v-else>{{ mediaGroupTitle(row) }}</template>
               </span>
               <span class="cost-record-status">
-                {{ row.kind === "llm-group" ? row.statusText : row.record.status }}
+                {{ row.kind === "media-group" || row.kind === "llm-group" ? row.statusText : row.record.status }}
                 <template v-if="rowDurationMs(row) !== null">
                   · 耗时 {{ formatDurationMs(rowDurationMs(row)) }}
                 </template>
@@ -432,11 +507,17 @@ const runStatusSummary = computed(() => {
               <span class="cost-record-unpriced" data-testid="cost-record-unpriced">—</span>
             </div>
             <div v-else class="cost-record-amounts">
-              <span class="cost-record-estimated">¥{{ microsDecimalToCnyDisplay(row.record.estimated_cost_cny) }}</span>
-              <span v-if="row.record.actual_cost_cny !== null" class="cost-record-actual">
-                ¥{{ microsDecimalToCnyDisplay(row.record.actual_cost_cny) }}
+              <span v-if="row.unitPrice !== null" class="cost-record-unit-price" data-testid="cost-record-unit-price">
+                单价 ¥{{ microsDecimalToCnyDisplay(row.unitPrice) }}
               </span>
-              <span class="cost-record-basis">{{ COST_BASIS_LABELS[row.record.cost_basis] ?? row.record.cost_basis }}</span>
+              <span class="cost-record-estimated">总价 ¥{{ microsDecimalToCnyDisplay(row.totalEstimated) }}</span>
+              <span
+                v-if="row.totalActual !== null && row.totalActual !== row.totalEstimated"
+                class="cost-record-actual"
+              >
+                实际 ¥{{ microsDecimalToCnyDisplay(row.totalActual) }}
+              </span>
+              <span v-if="row.costBasis" class="cost-record-basis">{{ COST_BASIS_LABELS[row.costBasis] ?? row.costBasis }}</span>
             </div>
           </li>
         </ul>
@@ -577,6 +658,10 @@ const runStatusSummary = computed(() => {
 
 .cost-record-estimated {
   color: #c9a227;
+}
+
+.cost-record-unit-price {
+  color: #a89f94;
 }
 
 .cost-record-actual {

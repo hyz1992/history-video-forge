@@ -52,8 +52,8 @@ function createMockCostStore(): GenerationCostStore {
             model_id: "wan2.6-t2i",
             status: "succeeded",
             unit_type: "image",
-            input_units: 1,
-            output_units: null,
+            input_units: null,
+            output_units: 1,
             estimated_cost_cny: "0.200000",
             actual_cost_cny: "0.200000",
             cost_basis: "provider_usage",
@@ -61,6 +61,26 @@ function createMockCostStore(): GenerationCostStore {
             created_at: "2026-08-20T10:00:00.000Z",
             operation_name: null,
 
+          },
+          {
+            id: "usage_1b",
+            run_id: "run_1",
+            run_status: "succeeded",
+            snapshot_id: "snap_1",
+            operation: "assets.generate",
+            capability: "image.generate",
+            provider_key: "dashscope",
+            model_id: "wan2.6-t2i",
+            status: "succeeded",
+            unit_type: "image",
+            input_units: null,
+            output_units: 1,
+            estimated_cost_cny: "0.200000",
+            actual_cost_cny: "0.200000",
+            cost_basis: "provider_usage",
+            duration_ms: 900,
+            created_at: "2026-08-20T10:01:00.000Z",
+            operation_name: null,
           },
           {
             id: "usage_2",
@@ -135,8 +155,8 @@ function createMockCostStore(): GenerationCostStore {
             model_id: "qwen3-tts-instruct-flash",
             status: "succeeded",
             unit_type: "tts_character",
-            input_units: 820,
-            output_units: null,
+            input_units: null,
+            output_units: 820,
             estimated_cost_cny: "0.800000",
             actual_cost_cny: null,
             cost_basis: "estimate",
@@ -185,7 +205,7 @@ function createMockCostStore(): GenerationCostStore {
             operation_name: "asset-planning.segment-intent-planner",
           },
         ],
-        total: 7,
+        total: 8,
       },
       loading: false,
       error: null,
@@ -227,10 +247,10 @@ describe("ProjectCostPanel（费用清单面板）", () => {
     expect(loadRecords).toHaveBeenCalledWith("proj-1");
     const text = wrapper.text();
     expect(text).toContain("总预计费用");
-    // 顶部总额排除 LLM（媒体：image 0.2 + tts 0.8）
-    expect(text).toContain("¥1");
+    // 顶部总额排除 LLM（媒体：image 0.2×2 + tts 0.8 = 1.2）
+    expect(text).toContain("¥1.2");
     expect(text).toContain("已确认实际");
-    expect(text).toContain("¥0.2");
+    expect(text).toContain("¥0.4");
     expect(text).toContain("成功 1");
   });
 
@@ -281,6 +301,26 @@ describe("ProjectCostPanel（费用清单面板）", () => {
     expect(text).toContain("900token 输出");
   });
 
+  it("媒体同类项合并：数量/单价/总价/总耗时一行展示", async () => {
+    const store = createMockCostStore();
+    const wrapper = mountPanel(store);
+    await flushPromises();
+
+    const assetGroup = wrapper.findAll('[data-testid="cost-stage-group"]')[1]!;
+    const text = assetGroup.text();
+    // 图片 2 张合并为一行
+    expect(text).toContain("图片 · wan2.6-t2i · 2张 输出");
+    expect(text).toContain("单价 ¥0.2");
+    expect(text).toContain("总价 ¥0.4");
+    expect(text).toContain("succeeded ×2");
+    // 图片合计耗时 1200+900=2100ms
+    expect(text).toContain("耗时 2.1秒");
+    // TTS 单条也走合并行（无单价）
+    expect(text).toContain("TTS 口播 · qwen3-tts-instruct-flash · 820字 输出");
+    expect(text).toContain("总价 ¥0.8");
+    expect(assetGroup.findAll('[data-testid="cost-record-unit-price"]').length).toBe(1);
+  });
+
   it("展示每条记录耗时与阶段总耗时", async () => {
     const store = createMockCostStore();
     const wrapper = mountPanel(store);
@@ -298,8 +338,8 @@ describe("ProjectCostPanel（费用清单面板）", () => {
     const assetText = assetGroup.text();
     // 资产合并行合计 3000+2600=5600ms
     expect(assetText).toContain("5.6秒");
-    // 资产阶段总耗时 1200+900+3000+2600=7700ms
-    expect(assetText).toContain("耗时 7.7秒");
+    // 资产阶段总耗时 1200+900+900+3000+2600=8600ms
+    expect(assetText).toContain("耗时 8.6秒");
   });
 
   it("LLM 消费只展示用量不展示金额，其余记录区分 provider actual 与估算", async () => {
