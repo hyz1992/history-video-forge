@@ -1,5 +1,5 @@
 import { inject, reactive, readonly, type InjectionKey } from "vue";
-import { apiFetch } from "../utils/api";
+import { apiFetch, ApiError } from "../utils/api";
 
 import type { ProjectStore } from "./project";
 
@@ -269,6 +269,9 @@ export function createAssetPlanningStore(
       // Fire the POST and capture any immediate error
       let postError: string | null = null;
       input.api.generateAssetPlan(projectId).catch((err) => {
+        // 2026-08-25：并发触发被后端阶段锁拒绝（另一请求已在进行）时，
+        // 视为"已在生成"，继续轮询等待，不向用户报错。
+        if (err instanceof ApiError && err.code === "project_stage_run_in_progress") return;
         postError = err instanceof Error ? err.message : String(err);
       });
 
