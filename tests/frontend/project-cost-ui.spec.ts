@@ -59,6 +59,8 @@ function createMockCostStore(): GenerationCostStore {
             cost_basis: "provider_usage",
             duration_ms: 1200,
             created_at: "2026-08-20T10:00:00.000Z",
+            operation_name: null,
+
           },
           {
             id: "usage_2",
@@ -78,6 +80,49 @@ function createMockCostStore(): GenerationCostStore {
             cost_basis: "provider_usage",
             duration_ms: 3400,
             created_at: "2026-08-20T09:00:00.000Z",
+            operation_name: "script.writer",
+
+          },
+          {
+            id: "usage_2b",
+            run_id: "run_1",
+            run_status: "succeeded",
+            snapshot_id: "snap_1",
+            operation: "script.generate",
+            capability: "llm.smart",
+            provider_key: "deepseek",
+            model_id: "deepseek-v4-pro",
+            status: "succeeded",
+            unit_type: "token",
+            input_units: 300,
+            output_units: 200,
+            estimated_cost_cny: "0.900000",
+            actual_cost_cny: "0.500000",
+            cost_basis: "provider_usage",
+            duration_ms: 2100,
+            created_at: "2026-08-20T09:01:00.000Z",
+            operation_name: "script.semantic-reviewer",
+
+          },
+          {
+            id: "usage_2c",
+            run_id: "run_3",
+            run_status: "succeeded",
+            snapshot_id: "snap_3",
+            operation: "script.generate",
+            capability: "llm.smart",
+            provider_key: "deepseek",
+            model_id: "deepseek-v4-pro",
+            status: "succeeded",
+            unit_type: "token",
+            input_units: 120,
+            output_units: 60,
+            estimated_cost_cny: "0.400000",
+            actual_cost_cny: "0.200000",
+            cost_basis: "provider_usage",
+            duration_ms: 900,
+            created_at: "2026-08-20T09:02:00.000Z",
+            operation_name: "script.writer",
           },
           {
             id: "usage_3",
@@ -97,9 +142,11 @@ function createMockCostStore(): GenerationCostStore {
             cost_basis: "estimate",
             duration_ms: 900,
             created_at: "2026-08-20T08:00:00.000Z",
+            operation_name: null,
+
           },
         ],
-        total: 3,
+        total: 5,
       },
       loading: false,
       error: null,
@@ -160,6 +207,28 @@ describe("ProjectCostPanel（费用清单面板）", () => {
     expect(groups[1]!.text()).toContain("资产");
     expect(groups[1]!.text()).toContain("wan2.6-t2i");
     expect(groups[1]!.text()).toContain("qwen3-tts-instruct-flash");
+  });
+
+  it("LLM 记录按阶段合并为一行：标注调用次数、角色与重跑", async () => {
+    const store = createMockCostStore();
+    const wrapper = mountPanel(store);
+    await flushPromises();
+
+    // 文案阶段 3 条 LLM 记录合并为 1 行
+    const scriptGroup = wrapper.findAll('[data-testid="cost-stage-group"]')[0]!;
+    const llmRows = scriptGroup.findAll('[data-testid="cost-record"]');
+    expect(llmRows.length).toBe(1);
+    const llmText = llmRows[0]!.text();
+    expect(llmText).toContain("×3 次调用");
+    expect(llmText).toContain("剧本写作");
+    expect(llmText).toContain("语义审校");
+    // 合并后 token 合计：500+300+120 输入，300+200+60 输出
+    expect(llmText).toContain("920token 输入");
+    expect(llmText).toContain("560token 输出");
+
+    // 第二次运行（run_3）单独标注重跑
+    expect(llmText).toContain("重跑 1 次");
+    expect(scriptGroup.find('[data-testid="cost-record-rerun"]').exists()).toBe(true);
   });
 
   it("LLM 消费只展示用量不展示金额，其余记录区分 provider actual 与估算", async () => {

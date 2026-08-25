@@ -50,6 +50,8 @@ export interface ProjectCostRecordDto {
   unit_detail: Record<string, unknown> | null;
   duration_ms: number | null;
   created_at: string;
+  /** 2026-08-25：LLM 调用角色（prompt id）；媒体记录为 null。 */
+  operation_name: string | null;
 }
 
 export interface GenerationCostApi {

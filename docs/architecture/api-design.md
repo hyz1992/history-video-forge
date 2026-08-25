@@ -875,7 +875,7 @@ script 摘要第一版建议至少包含：
 ### 成本只读
 
 - `GET /api/projects/:projectId/costs/summary`：总预计费用/已确认实际、run 计数与状态分布、capability 分组（`capability_breakdown`）。预计费用按请求级 usage 记录聚合（快照金额为 free 形态零值）。
-- `GET /api/projects/:projectId/costs/records`：usage 台账（run/operation/capability/provider/model/status/单位量/预计/实际/cost_basis：estimate | provider_usage | provider_invoice）。
+- `GET /api/projects/:projectId/costs/records`：usage 台账（run/operation/capability/provider/model/status/单位量/预计/实际/cost_basis：estimate | provider_usage | provider_invoice；`operation_name` 为 LLM 调用角色 prompt id、媒体记录为 null，供费用面板标注调用用途）。
 - `GET /api/projects/:projectId/runs/:runId/configuration`：run 状态 + 不可变 `RunConfigurationSnapshot`。
 
 全部 owner-scoped：cost/run 查询均经 projectId 反查 owner，其他用户只能得到 403/404。

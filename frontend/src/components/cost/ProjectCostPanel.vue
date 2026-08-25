@@ -61,10 +61,27 @@ const STAGE_LABELS: Record<string, string> = {
 
 const STAGE_ORDER = ["topic", "script", "storyboard", "asset", "compose-render", "publish", "other"];
 
+/** 行：媒体记录原样展示；LLM 记录按阶段合并（同 capability/model 多次调用合为一行）。 */
+type StageRow =
+  | { kind: "media"; key: string; record: ProjectCostRecordDto }
+  | {
+      kind: "llm";
+      key: string;
+      capability: string;
+      modelId: string;
+      calls: number;
+      inputUnits: number | null;
+      outputUnits: number | null;
+      roles: string[];
+      /** 同阶段同模型的多次运行数（不同 run）减一；>0 表示用户重新生成过。 */
+      rerunCount: number;
+      statusText: string;
+    };
+
 interface StageGroup {
   key: string;
   label: string;
-  records: ProjectCostRecordDto[];
+  rows: StageRow[];
   /** 组内是否存在有目录价的消费（LLM 只展示用量，不计金额）。 */
   priced: boolean;
   estimated: string;
@@ -77,6 +94,33 @@ function isLlm(record: ProjectCostRecordDto): boolean {
   return record.capability === "llm.smart" || record.capability === "llm.flash";
 }
 
+/** prompt id → 中文调用角色（与后端 PROMPT_ID_TO_TIER 同一取值域）。 */
+const LLM_ROLE_LABELS: Record<string, string> = {
+  "topic.candidate-builder": "选题候选生成",
+  "topic.candidate-builder-repair": "选题候选修复",
+  "topic.selector": "选题筛选",
+  "topic.custom-refine": "选题定制优化",
+  "script.writer": "剧本写作",
+  "script.semantic-reviewer": "语义审校",
+  "storyboard.planner": "分镜规划",
+  "storyboard.segment-regen": "分镜分段重写",
+  "asset-planning.planner": "资产全局规划",
+  "asset-planning.global-structural-repair": "资产结构修复",
+  "asset-planning.segment-intent-planner": "分段意图规划",
+  "asset-planning.segment-intent-repair": "分段意图修复",
+  "asset-planning.asset-structural-repair": "资产结构修复",
+  "publish.cover-prompt-generator": "封面提示词",
+  "publish.description-generator": "简介生成",
+  "publish.title-generator": "标题生成",
+  "publish.cover-prompt-optimizer": "封面提示词优化",
+  "asset.prompt-optimizer": "资产提示词优化",
+};
+
+function llmRoleLabel(operationName: string | null): string | null {
+  if (!operationName) return null;
+  return LLM_ROLE_LABELS[operationName] ?? operationName;
+}
+
 const stageGroups = computed<StageGroup[]>(() => {
   const byStage = new Map<string, ProjectCostRecordDto[]>();
   for (const record of records.value) {
@@ -87,21 +131,64 @@ const stageGroups = computed<StageGroup[]>(() => {
   }
   return STAGE_ORDER.filter((key) => byStage.has(key)).map((key) => {
     const list = byStage.get(key) ?? [];
+    const rows: StageRow[] = [];
+    const llmGroups = new Map<
+      string,
+      { records: ProjectCostRecordDto[]; roles: string[]; runIds: Set<string> }
+    >();
     let estimated = 0n;
     let actual = 0n;
     let priced = false;
     for (const record of list) {
-      if (isLlm(record)) continue;
+      if (isLlm(record)) {
+        const groupKey = `${record.capability}|${record.provider_key}|${record.model_id}`;
+        const group = llmGroups.get(groupKey) ?? { records: [], roles: [], runIds: new Set<string>() };
+        group.records.push(record);
+        if (record.run_id) group.runIds.add(record.run_id);
+        const label = llmRoleLabel(record.operation_name);
+        if (label && !group.roles.includes(label)) group.roles.push(label);
+        llmGroups.set(groupKey, group);
+        continue;
+      }
       priced = true;
       estimated += BigInt(record.estimated_cost_cny.replace(".", ""));
       if (record.actual_cost_cny !== null) actual += BigInt(record.actual_cost_cny.replace(".", ""));
+      rows.push({ kind: "media", key: record.id, record });
+    }
+    // 同一阶段的 LLM 调用合并为一行（多次调用通常是同一 run 内的分段/多角色调用，
+    // 而非重试；重跑以不同 run 计数标注）。
+    for (const [groupKey, group] of llmGroups) {
+      const [capability, , modelId] = groupKey.split("|");
+      const inputUnits = group.records.some((r) => r.input_units !== null)
+        ? group.records.reduce((sum, r) => sum + (r.input_units ?? 0), 0)
+        : null;
+      const outputUnits = group.records.some((r) => r.output_units !== null)
+        ? group.records.reduce((sum, r) => sum + (r.output_units ?? 0), 0)
+        : null;
+      const statusCounts = new Map<string, number>();
+      for (const r of group.records) statusCounts.set(r.status, (statusCounts.get(r.status) ?? 0) + 1);
+      const statusText = [...statusCounts.entries()]
+        .map(([status, count]) => `${status} ×${count}`)
+        .join(" · ");
+      rows.push({
+        kind: "llm",
+        key: `llm:${groupKey}`,
+        capability: capability!,
+        modelId: modelId!,
+        calls: group.records.length,
+        inputUnits,
+        outputUnits,
+        roles: group.roles,
+        rerunCount: Math.max(0, group.runIds.size - 1),
+        statusText,
+      });
     }
     const micros = (value: bigint) => {
       const sign = value < 0n ? "-" : "";
       const abs = value < 0n ? -value : value;
       return `${sign}${abs.toString().slice(0, -6) || "0"}.${abs.toString().slice(-6).padStart(6, "0")}`;
     };
-    return { key, label: STAGE_LABELS[key] ?? key, records: list, priced, estimated: micros(estimated), actual: micros(actual) };
+    return { key, label: STAGE_LABELS[key] ?? key, rows, priced, estimated: micros(estimated), actual: micros(actual) };
   });
 });
 
@@ -152,6 +239,17 @@ function recordTitle(record: ProjectCostRecordDto): string {
   }
   const unitText = units.join(" · ") || "—";
   return `${capability} · ${record.model_id}${unitText !== "—" ? ` · ${unitText}` : ""}`;
+}
+
+/** 合并后的 LLM 行标题：模型 + 调用次数 + 角色 + 合计 token。 */
+function llmGroupTitle(row: Extract<StageRow, { kind: "llm" }>): string {
+  const capability = CAPABILITY_LABELS[row.capability] ?? row.capability;
+  const units: string[] = [];
+  if (row.inputUnits !== null) units.push(`${row.inputUnits}token 输入`);
+  if (row.outputUnits !== null) units.push(`${row.outputUnits}token 输出`);
+  const roleText = row.roles.length > 0 ? ` · ${row.roles.join("、")}` : "";
+  const unitText = units.length > 0 ? ` · ${units.join(" · ")}` : "";
+  return `${capability} · ${row.modelId} · ×${row.calls} 次调用${roleText}${unitText}`;
 }
 
 const RUN_STATUS_LABELS: Record<string, string> = {
@@ -217,20 +315,32 @@ const runStatusSummary = computed(() => {
           <span v-else class="cost-stage-total">—</span>
         </header>
         <ul class="cost-stage-records">
-          <li v-for="record in group.records" :key="record.id" class="cost-record" data-testid="cost-record">
+          <li v-for="row in group.rows" :key="row.key" class="cost-record" data-testid="cost-record">
             <div class="cost-record-main">
-              <span class="cost-record-title">{{ recordTitle(record) }}</span>
-              <span class="cost-record-status">{{ record.status }}</span>
+              <span class="cost-record-title">
+                <template v-if="row.kind === 'llm'">{{ llmGroupTitle(row) }}</template>
+                <template v-else>{{ recordTitle(row.record) }}</template>
+              </span>
+              <span class="cost-record-status">
+                {{ row.kind === "llm" ? row.statusText : row.record.status }}
+                <span
+                  v-if="row.kind === 'llm' && row.rerunCount > 0"
+                  class="cost-record-retry"
+                  data-testid="cost-record-rerun"
+                >
+                  重跑 {{ row.rerunCount }} 次
+                </span>
+              </span>
             </div>
-            <div v-if="isLlm(record)" class="cost-record-amounts">
+            <div v-if="row.kind === 'llm'" class="cost-record-amounts">
               <span class="cost-record-unpriced" data-testid="cost-record-unpriced">—</span>
             </div>
             <div v-else class="cost-record-amounts">
-              <span class="cost-record-estimated">¥{{ microsDecimalToCnyDisplay(record.estimated_cost_cny) }}</span>
-              <span v-if="record.actual_cost_cny !== null" class="cost-record-actual">
-                ¥{{ microsDecimalToCnyDisplay(record.actual_cost_cny) }}
+              <span class="cost-record-estimated">¥{{ microsDecimalToCnyDisplay(row.record.estimated_cost_cny) }}</span>
+              <span v-if="row.record.actual_cost_cny !== null" class="cost-record-actual">
+                ¥{{ microsDecimalToCnyDisplay(row.record.actual_cost_cny) }}
               </span>
-              <span class="cost-record-basis">{{ COST_BASIS_LABELS[record.cost_basis] ?? record.cost_basis }}</span>
+              <span class="cost-record-basis">{{ COST_BASIS_LABELS[row.record.cost_basis] ?? row.record.cost_basis }}</span>
             </div>
           </li>
         </ul>
@@ -351,6 +461,15 @@ const runStatusSummary = computed(() => {
 
 .cost-record-status {
   color: #8a8178;
+}
+
+.cost-record-retry {
+  margin-left: 6px;
+  font-size: 11px;
+  color: #d98a3d;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(217, 138, 61, 0.12);
 }
 
 .cost-record-amounts {

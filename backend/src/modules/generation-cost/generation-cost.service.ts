@@ -324,9 +324,20 @@ export async function listProjectCostRecords(
       unit_detail: record.unitDetailJson,
       duration_ms: record.durationMs,
       created_at: record.createdAt.toISOString(),
+      operation_name: extractLlmOperationName(record.providerRequestKey),
     });
   });
   return records;
+}
+
+/**
+ * LLM usage 记录的 providerRequestKey 形如 `llm:<runId>:<operationName>`；
+ * 提取调用角色（prompt id）。媒体记录（`assets:...`/`job:...`）返回 null。
+ */
+function extractLlmOperationName(providerRequestKey: string): string | null {
+  if (!providerRequestKey.startsWith("llm:")) return null;
+  const parts = providerRequestKey.split(":");
+  return parts.length === 3 && parts[2] ? parts[2] : null;
 }
 
 export async function getRunConfiguration(

@@ -112,6 +112,11 @@ export const ProjectCostRecordSchema = z
     unit_detail: z.record(z.string(), z.unknown()).nullable().default(null),
     duration_ms: z.number().int().nonnegative().nullable(),
     created_at: z.string().datetime({ offset: true }),
+    /**
+     * 2026-08-25：LLM 调用角色（prompt id，如 topic.candidate-builder）；
+     * 媒体记录为 null。用于费用面板标注调用用途。
+     */
+    operation_name: z.string().min(1).nullable(),
   })
   .strict();
 export type ProjectCostRecord = z.infer<typeof ProjectCostRecordSchema>;
