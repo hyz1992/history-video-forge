@@ -91,6 +91,8 @@ export interface AssetPlanSnapshot {
   current_status: string | null;
   active_asset_plan: ActiveAssetPlanSnapshot | null;
   active_asset_plan_record_id: string | null;
+  /** 2026-08-25：最近一次资产规划 run 的失败原因（error_code，如 rate_limited）。 */
+  latest_asset_plan_run: { failure_reason: string | null } | null;
 }
 
 export interface AssetPlanningApi {
@@ -127,10 +129,18 @@ export function createFetchAssetPlanningApi(baseUrl = ""): AssetPlanningApi {
   return {
     async loadProject(projectId) {
       const data = await apiFetch<Record<string, unknown>>(`${baseUrl}/api/projects/${projectId}`);
+      const latestRun = (data.trace_summary as Record<string, unknown> | undefined)
+        ?.latest_asset_plan_run as Record<string, unknown> | undefined;
       return {
         current_status: data.current_status ?? null,
         active_asset_plan: data.active_asset_plan ?? null,
         active_asset_plan_record_id: data.active_asset_plan_record_id ?? null,
+        latest_asset_plan_run: latestRun
+          ? {
+              failure_reason:
+                typeof latestRun.failure_reason === "string" ? latestRun.failure_reason : null,
+            }
+          : null,
       };
     },
     async generateAssetPlan(projectId) {
@@ -148,6 +158,16 @@ function toErrorMessage(error: unknown): string {
     return error.message;
   }
   return "asset_plan_load_failed";
+}
+
+/** 2026-08-25：资产规划失败原因 → 用户可读文案（rate_limited 等透传自后端 error_code）。 */
+const ASSET_PLAN_FAILURE_LABELS: Record<string, string> = {
+  rate_limited: "LLM 限流，请稍后重试",
+};
+
+function assetPlanFailureText(reason: string | null | undefined): string {
+  if (!reason) return "资产规划生成失败";
+  return ASSET_PLAN_FAILURE_LABELS[reason] ?? `资产规划生成失败（${reason}）`;
 }
 
 export function isAssetPlanSnapshotGenerating(
@@ -264,7 +284,7 @@ export function createAssetPlanningStore(
         const s = state.snapshot;
         if (hasReadyAssetPlanSnapshot(s)) break; // plan is ready
         if (s?.current_status === "asset_plan_failed") {
-          state.loadError = "资产规划生成失败";
+          state.loadError = assetPlanFailureText(s.latest_asset_plan_run?.failure_reason);
           break;
         }
         // If POST errored early and no plan appeared after a few polls, give up

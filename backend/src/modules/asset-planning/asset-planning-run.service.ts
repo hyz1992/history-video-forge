@@ -479,6 +479,8 @@ const ASSET_PLANNING_ERROR_CODES = new Set([
   "asset_legacy_chunk_patch_coercion_failed",
   "asset_legacy_audio_timing_rebind_ambiguous",
   "asset_plan_compiler_invariant_failed",
+  // 2026-08-25：provider 限流失败透传为 rate_limited（前端可显示"LLM 限流"）
+  "rate_limited",
   "internal_server_error",
 ]);
 
@@ -1310,6 +1312,8 @@ export async function runAssetPlanningGeneration(
         : "storyboard_ready";
       input.project.updatedAt = new Date();
     }
+    // 失败 trace 同步到项目级（与成功路径对称），快照即可暴露 failure_reason
+    input.project.latestAssetPlanRunTraceJson = failureTraceSummary as never;
     await input.db.firstAggregateWriter?.syncProject(input.project).catch(() => {
       console.warn("[asset-planning] project_sync_failed");
     });

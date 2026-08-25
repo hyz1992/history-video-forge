@@ -22,6 +22,9 @@ function summarizeTraceRun(trace: Record<string, unknown> | null | undefined) {
       latestStep && typeof latestStep === "object" && latestStep
         ? ((latestStep as Record<string, unknown>).step_name as string | undefined) ?? null
         : null,
+    // 2026-08-25：失败 run 的 error_code 透传（如 rate_limited），供前端显示具体原因
+    failure_reason:
+      typeof trace.error_code === "string" ? trace.error_code : null,
   };
 }
 

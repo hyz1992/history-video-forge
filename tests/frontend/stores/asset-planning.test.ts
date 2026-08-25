@@ -28,6 +28,7 @@ function makeSnapshot(input: {
       runtime_diagnostics: null,
     },
     active_asset_plan_record_id: "asset_plan_placeholder",
+    latest_asset_plan_run: null,
   };
 }
 
