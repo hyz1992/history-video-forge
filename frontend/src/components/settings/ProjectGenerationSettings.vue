@@ -44,7 +44,7 @@ const draft = reactive({
   // S2-2B 创作偏好
   voiceProfileId: null as string | null,
   artStylePresetId: null as string | null,
-  subtitlePresetId: null as string | null,
+  // 2026-08-25：字幕样式不再提供预设选择，固定系统默认 + 参数覆盖
   subtitleOverrides: {} as Record<string, unknown>,
   // S2-2C Provider/Model 高级选择（五槽；保存时携带完整五槽）
   capabilities: {} as CapabilitySlotSelectionMap,
@@ -56,7 +56,8 @@ function draftCreative(): CreativePreferenceInput {
   return {
     voice_profile_id: draft.voiceProfileId,
     art_style_preset_id: draft.artStylePresetId,
-    subtitle_style_preset_id: draft.subtitlePresetId,
+    // 2026-08-25：预设选择已移除，统一系统默认 + 参数覆盖
+    subtitle_style_preset_id: null,
     subtitle_style_overrides: draft.subtitleOverrides,
   };
 }
@@ -75,7 +76,6 @@ function applyServerData() {
   draft.apiQuality = data.configuration.video.api_quality;
   draft.voiceProfileId = data.configuration.creative.voice_profile_id;
   draft.artStylePresetId = data.configuration.creative.art_style_preset_id;
-  draft.subtitlePresetId = data.configuration.creative.subtitle_style_preset_id;
   draft.subtitleOverrides = { ...(data.configuration.creative.subtitle_style_overrides ?? {}) };
   draft.capabilities = { ...(data.configuration.capabilities ?? {}) };
 }
@@ -254,9 +254,7 @@ function playPreviewAudio(uri: string): void {
             :disabled="configState?.saving"
           />
           <CreativeSubtitleSettings
-            v-model="draft.subtitlePresetId"
             :overrides="draft.subtitleOverrides"
-            :presets="creativeStore.state.subtitlePresets"
             :disabled="configState?.saving"
             @update:overrides="(value: Record<string, unknown>) => (draft.subtitleOverrides = value)"
           />

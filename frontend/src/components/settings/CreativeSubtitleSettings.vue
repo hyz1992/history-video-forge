@@ -1,155 +1,238 @@
 <script setup lang="ts">
 import { computed } from "vue";
 
-import type { CreativePresetDto } from "../../stores/creative-presets";
-import { resolveSubtitleStylePreview } from "../../stores/creative-presets";
+import {
+  resolveSubtitleStylePreview,
+  SUBTITLE_STYLE_BASE_PREVIEW,
+} from "../../stores/creative-presets";
 
 /**
- * S2-2B 任务 9：字幕样式设置区。
- * preset 选择 + 有限安全参数覆盖（白名单字段渲染）+ 实时预览框。
+ * S2-2B 任务 9：字幕样式设置区（2026-08-25 重设计）。
+ * - 不再提供预设选择：直接编辑参数项（默认值预填），修改即实时生效；
+ * - 新增文字颜色与描边颜色；
+ * - 「恢复默认」一键回到系统默认样式（清空全部覆盖）。
  * style_id / 字体族 / 安全区不可覆盖（平台边界）。
  */
 const props = defineProps<{
-  modelValue: string | null;
   overrides: Record<string, unknown>;
-  presets: CreativePresetDto[];
   disabled?: boolean;
 }>();
 
 const emit = defineEmits<{
-  (e: "update:modelValue", value: string | null): void;
   (e: "update:overrides", value: Record<string, unknown>): void;
 }>();
 
-const selectedPreset = computed(
-  () => props.presets.find((preset) => preset.preset_id === props.modelValue) ?? null,
-);
+interface NumberField {
+  key: string;
+  label: string;
+  type: "number";
+  default: number;
+  min: number;
+  max: number;
+  step: number;
+}
 
-const preview = computed(() => resolveSubtitleStylePreview(props.selectedPreset, props.overrides));
+interface SelectField {
+  key: string;
+  label: string;
+  type: "select";
+  default: string;
+  options: Array<{ value: string; label: string }>;
+}
 
-function setOverride(field: string, value: unknown) {
+interface ColorField {
+  key: string;
+  label: string;
+  type: "color";
+  default: string;
+}
+
+type ParamField = NumberField | SelectField | ColorField;
+
+/** 参数表单：默认值与后端 SubtitleStyleOverrideSet 边界一致。 */
+const paramFields: ParamField[] = [
+  { key: "font_size_px", label: "字号", type: "number", default: 46, min: 18, max: 96, step: 1 },
+  { key: "font_weight", label: "字重", type: "number", default: 700, min: 100, max: 900, step: 100 },
+  { key: "text_color", label: "颜色", type: "color", default: "#ffffff" },
+  { key: "stroke_width_px", label: "描边宽度", type: "number", default: 2.5, min: 0, max: 12, step: 0.5 },
+  { key: "stroke_color", label: "描边颜色", type: "color", default: "#000000" },
+  {
+    key: "shadow",
+    label: "阴影",
+    type: "select",
+    default: "soft",
+    options: [
+      { value: "none", label: "无" },
+      { value: "soft", label: "柔和" },
+      { value: "strong", label: "强烈" },
+    ],
+  },
+  {
+    key: "position",
+    label: "位置",
+    type: "select",
+    default: "bottom",
+    options: [
+      { value: "bottom", label: "底部" },
+      { value: "middle", label: "居中" },
+      { value: "top", label: "顶部" },
+    ],
+  },
+  { key: "background_opacity", label: "背景透明度", type: "number", default: 0, min: 0, max: 1, step: 0.1 },
+  { key: "bottom_margin_px", label: "底部边距", type: "number", default: 120, min: 0, max: 360, step: 1 },
+  { key: "max_lines", label: "最大行数", type: "number", default: 2, min: 1, max: 4, step: 1 },
+];
+
+function currentValue(field: ParamField): string | number {
+  const value = props.overrides[field.key];
+  if (field.type === "select") return typeof value === "string" ? value : field.default;
+  if (field.type === "color") return typeof value === "string" ? value : field.default;
+  return typeof value === "number" && Number.isFinite(value) ? value : field.default;
+}
+
+/** 与默认值一致时不写覆盖（保持覆盖集合最小）；清空同样移除。 */
+function setOverride(field: ParamField, value: unknown) {
   const next = { ...props.overrides };
-  if (value === null || value === undefined || value === "") {
-    delete next[field];
+  if (value === null || value === undefined || value === "" || value === field.default) {
+    delete next[field.key];
   } else {
-    next[field] = value;
+    next[field.key] = value;
   }
   emit("update:overrides", next);
 }
 
-/** 覆盖表单字段（白名单子集；数值边界与后端 schema 一致）。 */
-const overrideFields = [
-  { key: "font_size_px", label: "字号", type: "number", min: 18, max: 96 },
-  { key: "font_weight", label: "字重", type: "number", min: 100, max: 900 },
-  { key: "max_lines", label: "最大行数", type: "number", min: 1, max: 4 },
-  { key: "stroke_width_px", label: "描边宽度", type: "number", min: 0, max: 12, step: 0.5 },
-  { key: "bottom_margin_px", label: "底部边距", type: "number", min: 0, max: 360 },
-  { key: "background_opacity", label: "背景透明度", type: "number", min: 0, max: 1, step: 0.1 },
-] as const;
+function onNumberInput(field: NumberField, event: Event) {
+  const raw = (event.target as HTMLInputElement).value;
+  if (raw === "") {
+    setOverride(field, null);
+    return;
+  }
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed)) return;
+  setOverride(field, parsed);
+}
 
-const enumFields = [
-  { key: "position", label: "位置", options: ["bottom", "middle", "top"] },
-  { key: "text_align", label: "对齐", options: ["left", "center", "right"] },
-  { key: "shadow", label: "阴影", options: ["none", "soft", "strong"] },
-] as const;
+function onColorInput(field: ColorField, event: Event) {
+  const value = (event.target as HTMLInputElement).value;
+  setOverride(field, value || null);
+}
+
+function onSelectChange(field: SelectField, event: Event) {
+  const value = (event.target as HTMLSelectElement).value;
+  setOverride(field, value || null);
+}
+
+function resetToDefault() {
+  emit("update:overrides", {});
+}
+
+const preview = computed(() => resolveSubtitleStylePreview(null, props.overrides));
+
+const hasOverrides = computed(() => Object.keys(props.overrides).length > 0);
+
+/** 预览帧内字幕纵向定位（bottom/middle/top）。 */
+const previewFrameStyle = computed(() => {
+  const justify =
+    preview.value.position === "bottom"
+      ? "flex-end"
+      : preview.value.position === "top"
+        ? "flex-start"
+        : "center";
+  return { justifyContent: justify };
+});
+
+function hexToRgba(hex: string, alpha: number): string | null {
+  const match = /^#([0-9a-fA-F]{6})$/.exec(hex.trim());
+  if (!match) return null;
+  const value = parseInt(match[1]!, 16);
+  return `rgba(${(value >> 16) & 255}, ${(value >> 8) & 255}, ${value & 255}, ${alpha})`;
+}
+
+const previewTextStyle = computed(() => {
+  const p = preview.value;
+  const backgroundVisible = p.background_opacity > 0;
+  const backgroundColor = backgroundVisible
+    ? hexToRgba(p.background_color, p.background_opacity) ?? undefined
+    : undefined;
+  return {
+    fontSize: `${p.font_size_px}px`,
+    fontWeight: String(p.font_weight),
+    lineHeight: String(p.line_height),
+    color: p.text_color,
+    WebkitTextStroke: `${p.stroke_width_px}px ${p.stroke_color}`,
+    paintOrder: "stroke fill",
+    textShadow: p.shadow === "none" ? undefined : p.shadow,
+    backgroundColor,
+    padding: backgroundVisible ? "2px 6px" : undefined,
+    textAlign: p.text_align,
+    maxWidth: `${Math.round(p.max_width_pct * 100)}%`,
+  };
+});
 </script>
 
 <template>
   <section class="creative-subtitle" data-testid="creative-subtitle-settings">
     <h3 class="creative-title">字幕样式</h3>
-    <p class="creative-hint">选择版本化字幕预设；支持有限安全参数覆盖（字体族与安全区为平台固定项，不可修改）。</p>
-    <div class="subtitle-cards">
-      <button
-        type="button"
-        class="subtitle-card"
-        :class="{ active: modelValue === null }"
-        :disabled="disabled"
-        data-testid="subtitle-none"
-        @click="emit('update:modelValue', null)"
-      >
-        <span class="subtitle-card-name">系统默认样式</span>
-        <span class="subtitle-card-desc">竖屏默认（居中大字、细描边）</span>
-      </button>
-      <button
-        v-for="preset in presets"
-        :key="preset.preset_id"
-        type="button"
-        class="subtitle-card"
-        :class="{ active: modelValue === preset.preset_id }"
-        :disabled="disabled"
-        :data-testid="`subtitle-${preset.preset_id}`"
-        @click="emit('update:modelValue', preset.preset_id)"
-      >
-        <span class="subtitle-card-name">{{ preset.display_name }}（{{ preset.preset_version }}）</span>
-        <span class="subtitle-card-desc">{{ preset.description }}</span>
-      </button>
+    <p class="creative-hint">直接调整字幕参数，修改即时生效；点击「恢复默认」回到系统默认样式。</p>
+
+    <div class="subtitle-param-grid" data-testid="subtitle-overrides">
+      <label v-for="field in paramFields" :key="field.key" class="param-field">
+        <span class="param-label">{{ field.label }}</span>
+        <input
+          v-if="field.type === 'number'"
+          type="number"
+          :min="field.min"
+          :max="field.max"
+          :step="field.step"
+          :value="currentValue(field)"
+          :disabled="disabled"
+          :data-testid="`override-${field.key}`"
+          @input="(event: Event) => onNumberInput(field, event)"
+        />
+        <select
+          v-else-if="field.type === 'select'"
+          :value="currentValue(field)"
+          :disabled="disabled"
+          :data-testid="`override-${field.key}`"
+          @change="(event: Event) => onSelectChange(field, event)"
+        >
+          <option v-for="option in field.options" :key="option.value" :value="option.value">
+            {{ option.label }}
+          </option>
+        </select>
+        <input
+          v-else
+          type="color"
+          :value="currentValue(field)"
+          :disabled="disabled"
+          :data-testid="`override-${field.key}`"
+          @input="(event: Event) => onColorInput(field, event)"
+        />
+      </label>
     </div>
 
-    <div v-if="selectedPreset" class="subtitle-overrides" data-testid="subtitle-overrides">
-      <h4 class="subtitle-overrides-title">安全参数覆盖</h4>
-      <div class="subtitle-override-grid">
-        <label v-for="field in overrideFields" :key="field.key" class="override-field">
-          <span class="override-label">{{ field.label }}</span>
-          <input
-            type="number"
-            :min="field.min"
-            :max="field.max"
-            :step="'step' in field ? field.step : 1"
-            :value="(overrides[field.key] as number | undefined) ?? ''"
-            :disabled="disabled"
-            :data-testid="`override-${field.key}`"
-            @change="
-              (event) => {
-                const raw = (event.target as HTMLInputElement).value;
-                const parsed = Number(raw);
-                if (raw === '' || Number.isNaN(parsed)) {
-                  setOverride(field.key, null);
-                } else {
-                  setOverride(field.key, parsed);
-                }
-              }
-            "
-          />
-        </label>
-        <label v-for="field in enumFields" :key="field.key" class="override-field">
-          <span class="override-label">{{ field.label }}</span>
-          <select
-            :value="(overrides[field.key] as string | undefined) ?? ''"
-            :disabled="disabled"
-            :data-testid="`override-${field.key}`"
-            @change="
-              (event) => {
-                const value = (event.target as HTMLSelectElement).value;
-                setOverride(field.key, value === '' ? null : value);
-              }
-            "
-          >
-            <option value="">（不覆盖）</option>
-            <option v-for="option in field.options" :key="option" :value="option">{{ option }}</option>
-          </select>
-        </label>
-      </div>
+    <div class="subtitle-actions">
+      <button
+        type="button"
+        class="subtitle-reset-btn"
+        data-testid="subtitle-reset"
+        :disabled="disabled || !hasOverrides"
+        @click="resetToDefault"
+      >
+        恢复默认
+      </button>
+      <span v-if="hasOverrides" class="subtitle-modified-hint" data-testid="subtitle-modified-hint">
+        已修改 {{ Object.keys(overrides).length }} 项
+      </span>
     </div>
 
     <div class="subtitle-preview" data-testid="subtitle-preview">
-      <span
-        class="subtitle-preview-text"
-        data-testid="subtitle-preview-text"
-        :style="{
-          fontSize: `${preview.font_size_px}px`,
-          fontWeight: String(preview.font_weight),
-          lineHeight: String(preview.line_height),
-          color: preview.text_color,
-          WebkitTextStroke: `${preview.stroke_width_px}px ${preview.stroke_color}`,
-          textShadow: preview.shadow,
-          backgroundColor: preview.background_color,
-          opacity: preview.background_opacity > 0 ? 1 : undefined,
-          textAlign: preview.text_align,
-        }"
-      >
-        示例字幕：刀兵还没到阶下，诏令就先出了宫门。
-      </span>
-      <p class="subtitle-preview-note">预览为示意渲染；实际样式由渲染器按最终解析值消费。</p>
+      <div class="subtitle-preview-frame" :style="previewFrameStyle">
+        <span class="subtitle-preview-text" data-testid="subtitle-preview-text" :style="previewTextStyle">
+          示例字幕：刀兵还没到阶下，诏令就先出了宫门。
+        </span>
+      </div>
+      <p class="subtitle-preview-note">预览实时反映参数效果；实际渲染由渲染器按最终解析值消费。</p>
     </div>
   </section>
 </template>
@@ -158,7 +241,7 @@ const enumFields = [
 .creative-subtitle {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
   padding: 14px 16px;
   border: 1px solid rgba(201, 162, 39, 0.14);
   border-radius: 10px;
@@ -178,83 +261,25 @@ const enumFields = [
   color: #a89f94;
 }
 
-.subtitle-cards {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.subtitle-card {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  align-items: flex-start;
-  padding: 10px 12px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.012);
-  color: inherit;
-  font-family: inherit;
-  cursor: pointer;
-  text-align: left;
-}
-
-.subtitle-card.active {
-  border-color: rgba(201, 162, 39, 0.55);
-  background: rgba(201, 162, 39, 0.07);
-}
-
-.subtitle-card:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
-.subtitle-card-name {
-  font-size: 13px;
-  font-weight: 650;
-  color: #f0e9dd;
-}
-
-.subtitle-card-desc {
-  font-size: 11px;
-  color: #a89f94;
-}
-
-.subtitle-overrides {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 10px 12px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
-}
-
-.subtitle-overrides-title {
-  margin: 0;
-  font-size: 12px;
-  font-weight: 700;
-  color: #a89f94;
-}
-
-.subtitle-override-grid {
+.subtitle-param-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 8px;
+  gap: 10px;
 }
 
-.override-field {
+.param-field {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
 }
 
-.override-label {
+.param-label {
   font-size: 11px;
   color: #a89f94;
 }
 
-.override-field input,
-.override-field select {
+.param-field input[type="number"],
+.param-field select {
   height: 30px;
   padding: 0 8px;
   border-radius: 6px;
@@ -265,19 +290,68 @@ const enumFields = [
   font-family: inherit;
 }
 
+.param-field input[type="color"] {
+  width: 100%;
+  height: 30px;
+  padding: 2px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+}
+
+.subtitle-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.subtitle-reset-btn {
+  height: 30px;
+  padding: 0 14px;
+  border-radius: 6px;
+  border: 1px solid rgba(201, 162, 39, 0.3);
+  background: rgba(201, 162, 39, 0.1);
+  color: #f0e9dd;
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.subtitle-reset-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.subtitle-modified-hint {
+  font-size: 11px;
+  color: #e8c84a;
+}
+
 .subtitle-preview {
   display: flex;
   flex-direction: column;
-  gap: 4px;
   align-items: center;
-  padding: 14px 10px;
-  border-radius: 8px;
-  background: linear-gradient(180deg, #2a2620, #171410);
+  gap: 8px;
+  padding-top: 4px;
+}
+
+.subtitle-preview-frame {
+  width: 100%;
+  max-width: 200px;
+  aspect-ratio: 9 / 16;
+  display: flex;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background:
+    radial-gradient(ellipse at 50% 26%, rgba(184, 115, 51, 0.3) 0%, transparent 56%),
+    linear-gradient(180deg, #2a2118 0%, #151310 58%, #0d0c0b 100%);
   overflow: hidden;
 }
 
 .subtitle-preview-text {
-  max-width: 90%;
+  text-align: center;
 }
 
 .subtitle-preview-note {

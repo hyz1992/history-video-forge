@@ -81,17 +81,6 @@ const artPresets = [
   },
 ];
 
-const subtitlePresets = [
-  {
-    preset_id: "subtitle_style_bold_stroke",
-    preset_version: "v1",
-    display_name: "粗描边醒目",
-    description: "粗描边",
-    overridable_fields: ["font_size_px", "position", "shadow", "text_color"],
-    summary: "subtitle_style_bold_stroke",
-  },
-];
-
 describe("CreativeVoiceSettings", () => {
   it("默认选中自动匹配；点击档案选中并 emit；cached 试听直接播放", async () => {
     const play = vi.fn(async () => undefined);
@@ -136,31 +125,85 @@ describe("CreativeArtStyleSettings", () => {
 });
 
 describe("CreativeSubtitleSettings", () => {
-  it("preset 选择 + 安全覆盖表单 emit + 预览框随覆盖更新", async () => {
+  it("不提供预设选择；参数项直接预填默认值（含颜色与描边颜色）", () => {
     const wrapper = mount(CreativeSubtitleSettings, {
-      props: { modelValue: null, overrides: {}, presets: subtitlePresets },
+      props: { overrides: {} },
       global: { plugins: [ElementPlus] },
     });
 
-    await wrapper.find('[data-testid="subtitle-subtitle_style_bold_stroke"]').trigger("click");
-    expect(wrapper.emitted("update:modelValue")?.[0]).toEqual(["subtitle_style_bold_stroke"]);
+    expect(wrapper.find('[data-testid="subtitle-none"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="subtitle-subtitle_style_bold_stroke"]').exists()).toBe(false);
 
-    // 选择后覆盖表单可见
-    await wrapper.setProps({ modelValue: "subtitle_style_bold_stroke" });
-    expect(wrapper.find('[data-testid="subtitle-overrides"]').exists()).toBe(true);
+    expect((wrapper.find('[data-testid="override-font_size_px"]').element as HTMLInputElement).value).toBe("46");
+    expect((wrapper.find('[data-testid="override-font_weight"]').element as HTMLInputElement).value).toBe("700");
+    expect((wrapper.find('[data-testid="override-text_color"]').element as HTMLInputElement).value).toBe("#ffffff");
+    expect((wrapper.find('[data-testid="override-stroke_color"]').element as HTMLInputElement).value).toBe("#000000");
+    expect((wrapper.find('[data-testid="override-stroke_width_px"]').element as HTMLInputElement).value).toBe("2.5");
+    expect((wrapper.find('[data-testid="override-shadow"]').element as HTMLSelectElement).value).toBe("soft");
+  });
 
-    // 字号覆盖 → emit overrides + 预览字号更新
+  it("修改参数实时 emit 覆盖并同步预览", async () => {
+    const wrapper = mount(CreativeSubtitleSettings, {
+      props: { overrides: {} },
+      global: { plugins: [ElementPlus] },
+    });
+
     const fontInput = wrapper.find('[data-testid="override-font_size_px"]');
     await fontInput.setValue("60");
-    await fontInput.trigger("change");
-    const emittedOverrides = wrapper.emitted("update:overrides")?.[0]?.[0] as Record<string, unknown>;
-    expect(emittedOverrides.font_size_px).toBe(60);
+    const emitted = wrapper.emitted("update:overrides")?.[0]?.[0] as Record<string, unknown>;
+    expect(emitted.font_size_px).toBe(60);
 
-    await wrapper.setProps({ overrides: emittedOverrides });
-    const previewText = wrapper.find('[data-testid="subtitle-preview-text"]');
-    expect(previewText.attributes("style")).toContain("font-size: 60px");
+    await wrapper.setProps({ overrides: emitted });
+    const previewStyle = wrapper.find('[data-testid="subtitle-preview-text"]').attributes("style") ?? "";
+    expect(previewStyle).toContain("font-size: 60px");
+  });
 
-    // style_id / 字体族不可编辑（表单中不存在对应字段）
+  it("颜色与描边颜色可修改并实时进入预览", async () => {
+    const wrapper = mount(CreativeSubtitleSettings, {
+      props: { overrides: {} },
+      global: { plugins: [ElementPlus] },
+    });
+
+    await wrapper.find('[data-testid="override-text_color"]').setValue("#ffcc00");
+    await wrapper.find('[data-testid="override-stroke_color"]').setValue("#0033ff");
+    const events = wrapper.emitted("update:overrides");
+    const merged = {
+      ...((events?.[0]?.[0] as Record<string, unknown>) ?? {}),
+      ...((events?.[1]?.[0] as Record<string, unknown>) ?? {}),
+    };
+    expect(merged.text_color).toBe("#ffcc00");
+    expect(merged.stroke_color).toBe("#0033ff");
+
+    await wrapper.setProps({ overrides: merged });
+    const previewStyle = wrapper.find('[data-testid="subtitle-preview-text"]').attributes("style") ?? "";
+    expect(previewStyle).toMatch(/color:\s*(#ffcc00|rgb\(255,\s*204,\s*0\))/i);
+    expect(previewStyle).toContain("-webkit-text-stroke");
+  });
+
+  it("改回默认值时移除覆盖；恢复默认清空全部覆盖", async () => {
+    const wrapper = mount(CreativeSubtitleSettings, {
+      props: { overrides: { font_size_px: 60, text_color: "#ff0000" } },
+      global: { plugins: [ElementPlus] },
+    });
+
+    // 改回默认字号 → 该项覆盖被移除
+    await wrapper.find('[data-testid="override-font_size_px"]').setValue("46");
+    const afterRevert = wrapper.emitted("update:overrides")?.[0]?.[0] as Record<string, unknown>;
+    expect(afterRevert.font_size_px).toBeUndefined();
+    expect(afterRevert.text_color).toBe("#ff0000");
+
+    // 恢复默认 → 全部覆盖清空
+    await wrapper.setProps({ overrides: afterRevert });
+    await wrapper.find('[data-testid="subtitle-reset"]').trigger("click");
+    const lastEvent = wrapper.emitted("update:overrides")?.at(-1)?.[0];
+    expect(lastEvent).toEqual({});
+  });
+
+  it("style_id / 字体族 / 安全区不可编辑", () => {
+    const wrapper = mount(CreativeSubtitleSettings, {
+      props: { overrides: {} },
+      global: { plugins: [ElementPlus] },
+    });
     expect(wrapper.find('[data-testid="override-style_id"]').exists()).toBe(false);
     expect(wrapper.find('[data-testid="override-font_family"]').exists()).toBe(false);
     expect(wrapper.find('[data-testid="override-safe_area_top_px"]').exists()).toBe(false);

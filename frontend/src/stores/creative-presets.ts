@@ -201,26 +201,30 @@ export interface SubtitleStylePreview {
   text_align: "left" | "center" | "right";
 }
 
+/** 系统默认字幕样式（DEFAULT_SUBTITLE_STYLE 的展示层投影）：参数表单默认值
+ * 与预览骨架同源，避免两处维护漂移。 */
+export const SUBTITLE_STYLE_BASE_PREVIEW: SubtitleStylePreview = {
+  font_size_px: 46,
+  font_weight: 700,
+  line_height: 1.5,
+  max_lines: 2,
+  text_color: "#ffffff",
+  stroke_color: "#000000",
+  stroke_width_px: 2.5,
+  shadow: "0 2px 8px rgba(0,0,0,0.6)",
+  background_color: "#000000",
+  background_opacity: 0,
+  position: "bottom",
+  max_width_pct: 0.9,
+  text_align: "center",
+};
+
 /** 解析后的字幕样式预览（后端 applySubtitleStyleOverrides 的展示层投影）。 */
 export function resolveSubtitleStylePreview(
   preset: CreativePresetDto | null,
   overrides: Record<string, unknown>,
 ): SubtitleStylePreview {
-  const base: SubtitleStylePreview = {
-    font_size_px: 46,
-    font_weight: 700,
-    line_height: 1.5,
-    max_lines: 2,
-    text_color: "#ffffff",
-    stroke_color: "#000000",
-    stroke_width_px: 2.5,
-    shadow: "0 2px 8px rgba(0,0,0,0.6)",
-    background_color: "#000000",
-    background_opacity: 0,
-    position: "bottom",
-    max_width_pct: 0.9,
-    text_align: "center",
-  };
+  const base: SubtitleStylePreview = { ...SUBTITLE_STYLE_BASE_PREVIEW };
   void preset; // 预设具体样式值由后端解析冻结；预览框使用默认骨架 + 覆盖值
   // 数值边界与后端 SubtitleStyleOverrideSet 一致（预览层投影同源钳制）
   const clamp = (value: unknown, min: number, max: number): number | undefined =>
