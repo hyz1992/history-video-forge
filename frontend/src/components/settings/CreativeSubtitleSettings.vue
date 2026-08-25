@@ -130,15 +130,16 @@ const preview = computed(() => resolveSubtitleStylePreview(null, props.overrides
 
 const hasOverrides = computed(() => Object.keys(props.overrides).length > 0);
 
-/** 预览帧内字幕纵向定位（bottom/middle/top）。 */
+/** 预览帧内字幕定位：水平始终居中，垂直按 bottom/middle/top 分布
+ * （flex row：justify-content 控制水平，align-items 控制垂直）。 */
 const previewFrameStyle = computed(() => {
-  const justify =
+  const align =
     preview.value.position === "bottom"
       ? "flex-end"
       : preview.value.position === "top"
         ? "flex-start"
         : "center";
-  return { justifyContent: justify };
+  return { justifyContent: "center", alignItems: align };
 });
 
 function hexToRgba(hex: string, alpha: number): string | null {
@@ -338,7 +339,7 @@ const previewTextStyle = computed(() => {
 
 .subtitle-preview-frame {
   width: 100%;
-  height: 130px;
+  min-height: 130px;
   display: flex;
   padding: 12px 16px;
   border-radius: 8px;
