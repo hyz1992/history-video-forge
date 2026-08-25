@@ -158,7 +158,7 @@ function goBack() {
             :disabled="store.state.userPreference.saving"
             @click="save"
           >
-            {{ store.state.userPreference.saving ? "保存中…" : "保存默认设置" }}
+            {{ store.state.userPreference.saving ? "保存中…" : "保存设置" }}
           </button>
         </div>
 
