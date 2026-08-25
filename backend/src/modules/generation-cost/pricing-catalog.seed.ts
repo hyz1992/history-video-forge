@@ -385,8 +385,9 @@ function buildLlmSeedEntries(
     }),
   ];
 
-  // S2-2C §7.1：每个候选种入 smart/flash 两个槽位（非默认条目）；
-  // 与槽位默认（tier 解析结果）重合的候选去重，不重复种入。
+  // S2-2C §7.1：每个候选种入其声明槽位（缺省两槽；2026-08-25 起 DeepSeek
+  // 按档位拆分：v4-pro 仅 smart、v4-flash 仅 flash）；与槽位默认（tier 解析
+  // 结果）重合的候选去重，不重复种入。
   if (llm.candidates && llm.candidates.length > 0) {
     const slotTargets: Array<{ slot: "llm.smart" | "llm.flash"; target: { providerKey: string; modelId: string } }> = [
       { slot: "llm.smart", target: smart },
@@ -394,6 +395,9 @@ function buildLlmSeedEntries(
     ];
     for (const { slot, target } of slotTargets) {
       for (const candidate of llm.candidates) {
+        if (candidate.slots && !candidate.slots.includes(slot)) {
+          continue; // 候选声明不适用该槽位
+        }
         if (
           candidate.providerKey === target.providerKey &&
           candidate.modelId === target.modelId

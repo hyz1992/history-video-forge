@@ -80,7 +80,8 @@ describe("LLM 候选表 seed（S2-2C §7.1）", () => {
       expect(new Set(keys).size, slot).toBe(keys.length);
     }
     // smart 默认 = deepseek-v4-pro（tier），候选 = glm-4；
-    // flash 默认 = glm-4（tier），候选 = deepseek-v4-pro。
+    // flash 默认 = glm-4（tier），候选 = deepseek-v4-flash（2026-08-25：
+    // DeepSeek 按档位拆分，flash 槽不再出现 v4-pro）。
     const smartDefault = seed.find((e) => e.capability === "llm.smart" && e.isDefault)!;
     expect(smartDefault.providerKey).toBe("deepseek");
     expect(smartDefault.modelId).toBe("deepseek-v4-pro");
@@ -91,7 +92,12 @@ describe("LLM 候选表 seed（S2-2C §7.1）", () => {
     expect(flashDefault.providerKey).toBe("zhipu");
     expect(flashDefault.modelId).toBe("glm-4");
     const flashCandidate = seed.find((e) => e.capability === "llm.flash" && !e.isDefault)!;
-    expect(flashCandidate.modelId).toBe("deepseek-v4-pro");
+    expect(flashCandidate.providerKey).toBe("deepseek");
+    expect(flashCandidate.modelId).toBe("deepseek-v4-flash");
+    // 回归：flash 槽不得再出现 deepseek-v4-pro
+    expect(
+      seed.find((e) => e.capability === "llm.flash" && e.modelId === "deepseek-v4-pro"),
+    ).toBeUndefined();
   });
 
   it("目录元数据合同：同一模型跨槽位 displayName/qualityTier/speedTier 一致且来自候选声明", () => {
@@ -99,19 +105,20 @@ describe("LLM 候选表 seed（S2-2C §7.1）", () => {
       llm: { ...RESOLVED_LLM, candidates: LLM_MODEL_CANDIDATES_V1 },
       media: { deploymentScope: "cn-beijing" },
     });
-    // deepseek-v4-pro 同时是 smart 默认与 flash 候选——元数据必须一致且来自候选声明
+    // deepseek-v4-pro 是 smart 默认——元数据来自候选声明
     const smartDefault = seed.find(
       (e) => e.capability === "llm.smart" && e.isDefault && e.modelId === "deepseek-v4-pro",
     )!;
-    const flashCandidate = seed.find(
-      (e) => e.capability === "llm.flash" && !e.isDefault && e.modelId === "deepseek-v4-pro",
-    )!;
-    expect(flashCandidate.displayName).toBe("DeepSeek V4 Pro");
-    expect(smartDefault.displayName).toBe(flashCandidate.displayName);
-    expect(smartDefault.qualityTier).toBe(flashCandidate.qualityTier);
+    expect(smartDefault.displayName).toBe("DeepSeek V4 Pro");
     expect(smartDefault.qualityTier).toBe("high");
-    expect(smartDefault.speedTier).toBe(flashCandidate.speedTier);
     expect(smartDefault.speedTier).toBe("slow");
+    // deepseek-v4-flash 是 flash 候选——元数据来自候选声明
+    const flashCandidate = seed.find(
+      (e) => e.capability === "llm.flash" && !e.isDefault && e.modelId === "deepseek-v4-flash",
+    )!;
+    expect(flashCandidate.displayName).toBe("DeepSeek V4 Flash");
+    expect(flashCandidate.qualityTier).toBe("standard");
+    expect(flashCandidate.speedTier).toBe("fast");
     // glm-4 同时是 flash 默认与 smart 候选——元数据一致
     const flashDefault = seed.find(
       (e) => e.capability === "llm.flash" && e.isDefault && e.modelId === "glm-4",
@@ -216,7 +223,7 @@ describe("候选预解析（S2-2C §7.1 bootstrap 层）", () => {
       resolveCandidateModel: (candidate) =>
         candidate.providerKey === "deepseek" ? { ok: true } : { ok: false },
     });
-    expect(input.llmCandidates).toEqual([LLM_MODEL_CANDIDATES_V1[0]!]);
+    expect(input.llmCandidates).toEqual([LLM_MODEL_CANDIDATES_V1[0]!, LLM_MODEL_CANDIDATES_V1[1]!]);
   });
 
   it("stub 模式忽略候选（不预解析、不种入）", () => {
@@ -278,9 +285,11 @@ describe("readiness 分层校验（S2-2C §7.3）", () => {
     const flashDefault = seed.find((e) => e.capability === "llm.flash" && e.isDefault)!;
     expect(result.items[flashDefault.id]?.issues).toContain("llm_tier_mismatch");
     expect(result.items[flashDefault.id]?.quotable).toBe(false);
+    // 非默认候选（flash 槽的 deepseek-v4-flash）不受 tier mismatch 影响
     const flashCandidate = seed.find(
-      (e) => e.capability === "llm.flash" && !e.isDefault && e.modelId === "deepseek-v4-pro",
+      (e) => e.capability === "llm.flash" && !e.isDefault && e.modelId === "deepseek-v4-flash",
     )!;
+    expect(flashCandidate).toBeDefined();
     expect(result.items[flashCandidate.id]?.issues).not.toContain("llm_tier_mismatch");
     expect(result.items[flashCandidate.id]?.quotable).toBe(true);
   });
