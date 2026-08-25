@@ -278,8 +278,14 @@ function goBack() {
 }
 
 .settings-actions {
+  position: sticky;
+  bottom: 0;
   display: flex;
   gap: 12px;
+  padding: 14px 0 8px;
+  margin-top: 4px;
+  background: linear-gradient(180deg, rgba(11, 11, 10, 0) 0%, rgba(13, 12, 11, 0.94) 30%);
+  z-index: 5;
 }
 
 .btn {
