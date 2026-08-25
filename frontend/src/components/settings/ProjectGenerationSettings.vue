@@ -207,7 +207,7 @@ function playPreviewAudio(uri: string): void {
   <el-dialog
     :model-value="open"
     title="项目生成设置"
-    width="680px"
+    width="960px"
     @update:model-value="(value: boolean) => !value && emit('close')"
   >
     <div class="project-settings">
