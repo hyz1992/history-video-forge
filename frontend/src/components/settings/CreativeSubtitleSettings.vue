@@ -67,17 +67,6 @@ const paramFields: ParamField[] = [
       { value: "strong", label: "强烈" },
     ],
   },
-  {
-    key: "position",
-    label: "位置",
-    type: "select",
-    default: "bottom",
-    options: [
-      { value: "bottom", label: "底部" },
-      { value: "middle", label: "居中" },
-      { value: "top", label: "顶部" },
-    ],
-  },
   { key: "background_opacity", label: "背景透明度", type: "number", default: 0, min: 0, max: 1, step: 0.1 },
   { key: "bottom_margin_px", label: "底部边距", type: "number", default: 120, min: 0, max: 360, step: 1 },
   { key: "max_lines", label: "最大行数", type: "number", default: 2, min: 1, max: 4, step: 1 },
@@ -130,17 +119,11 @@ const preview = computed(() => resolveSubtitleStylePreview(null, props.overrides
 
 const hasOverrides = computed(() => Object.keys(props.overrides).length > 0);
 
-/** 预览帧内字幕定位：水平始终居中，垂直按 bottom/middle/top 分布
- * （flex row：justify-content 控制水平，align-items 控制垂直）。 */
-const previewFrameStyle = computed(() => {
-  const align =
-    preview.value.position === "bottom"
-      ? "flex-end"
-      : preview.value.position === "top"
-        ? "flex-start"
-        : "center";
-  return { justifyContent: "center", alignItems: align };
-});
+/** 预览帧内字幕始终水平与垂直居中（模拟屏幕中央的字幕条）。 */
+const previewFrameStyle = computed(() => ({
+  justifyContent: "center",
+  alignItems: "center",
+}));
 
 function hexToRgba(hex: string, alpha: number): string | null {
   const match = /^#([0-9a-fA-F]{6})$/.exec(hex.trim());
