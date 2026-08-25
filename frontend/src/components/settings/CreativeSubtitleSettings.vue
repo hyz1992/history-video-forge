@@ -338,10 +338,9 @@ const previewTextStyle = computed(() => {
 
 .subtitle-preview-frame {
   width: 100%;
-  max-width: 320px;
-  aspect-ratio: 16 / 9;
+  height: 130px;
   display: flex;
-  padding: 10px 14px;
+  padding: 12px 16px;
   border-radius: 8px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background:
