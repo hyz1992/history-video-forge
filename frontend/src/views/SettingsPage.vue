@@ -191,13 +191,38 @@ function goBack() {
 
 .settings-page {
   min-height: 100vh;
-  background: #101010;
-  color: #f5f0e8;
+  /* 与项目工作区同一背景：暖黑渐变 + 径向暖光，正文 #d8cec0 */
+  background:
+    radial-gradient(ellipse at 18% 16%, rgba(184, 115, 51, 0.16) 0%, transparent 44%),
+    radial-gradient(ellipse at 84% 20%, rgba(201, 162, 39, 0.11) 0%, transparent 42%),
+    linear-gradient(180deg, #0b0b0a 0%, #0d0d0d 38%, #130f0d 100%);
+  color: #d8cec0;
   display: flex;
   flex-direction: column;
+  position: relative;
+}
+
+/* 与工作区一致的点阵网格纹理（顶部径向渐隐） */
+.settings-page::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.12;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.018) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: radial-gradient(circle at 50% 0%, black 0%, transparent 82%);
+  z-index: 0;
 }
 
 .settings-header {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 932px;
+  margin: 0 auto;
   padding: 22px 36px 14px;
   border-bottom: 1px solid rgba(201, 162, 39, 0.14);
   display: flex;
@@ -210,6 +235,7 @@ function goBack() {
   margin: 0;
   font-size: 20px;
   font-weight: 750;
+  color: #f5f0e8;
 }
 
 .settings-subtitle {
@@ -219,8 +245,12 @@ function goBack() {
 }
 
 .settings-body {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 932px;
+  margin: 0 auto;
   padding: 26px 36px 48px;
-  max-width: 860px;
   display: flex;
   flex-direction: column;
   gap: 18px;
