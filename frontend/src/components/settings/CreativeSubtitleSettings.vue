@@ -338,11 +338,11 @@ const previewTextStyle = computed(() => {
 
 .subtitle-preview-frame {
   width: 100%;
-  max-width: 200px;
-  aspect-ratio: 9 / 16;
+  max-width: 320px;
+  aspect-ratio: 16 / 9;
   display: flex;
-  padding: 12px;
-  border-radius: 10px;
+  padding: 10px 14px;
+  border-radius: 8px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background:
     radial-gradient(ellipse at 50% 26%, rgba(184, 115, 51, 0.3) 0%, transparent 56%),
