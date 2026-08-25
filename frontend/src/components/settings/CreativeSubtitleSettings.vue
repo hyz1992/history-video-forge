@@ -272,6 +272,14 @@ const previewTextStyle = computed(() => {
   color: #f0e9dd;
   font-size: 12px;
   font-family: inherit;
+  /* 指示浏览器以深色渲染表单控件（含展开的选项面板） */
+  color-scheme: dark;
+}
+
+/* 展开的选项面板：深色底浅色字（原生下拉面板默认跟随系统浅色） */
+.param-field select option {
+  background-color: #1a1512;
+  color: #f0e9dd;
 }
 
 .param-field input[type="color"] {
