@@ -262,14 +262,26 @@ const previewTextStyle = computed(() => {
   color: #a89f94;
 }
 
-.param-field input[type="number"],
-.param-field select {
+.param-field input[type="number"] {
   height: 30px;
   padding: 0 8px;
   border-radius: 6px;
   border: 1px solid rgba(255, 255, 255, 0.14);
   background: rgba(0, 0, 0, 0.25);
   color: #f0e9dd;
+  font-size: 12px;
+  font-family: inherit;
+}
+
+/* 下拉列表用浅色底深色字：原生选项面板是系统浅色，
+   深底浅字会让展开的选项看不清（2026-08-25 修复）。 */
+.param-field select {
+  height: 30px;
+  padding: 0 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: #ece5d8;
+  color: #241f18;
   font-size: 12px;
   font-family: inherit;
 }
