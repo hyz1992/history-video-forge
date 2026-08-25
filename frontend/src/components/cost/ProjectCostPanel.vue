@@ -61,11 +61,24 @@ const STAGE_LABELS: Record<string, string> = {
 
 const STAGE_ORDER = ["topic", "script", "storyboard", "asset", "compose-render", "publish", "other"];
 
-/** 行：媒体记录原样展示；LLM 记录按阶段合并（同 capability/model 多次调用合为一行）。 */
+/**
+ * 行：
+ * - 媒体记录原样展示；
+ * - LLM 记录逐条列举并标注具体用处（选题/文案等多次调用是不同的角色）；
+ * - 资产阶段 LLM 记录按模型合并为一行（分段规划对同一 prompt 多次调用）。
+ */
 type StageRow =
   | { kind: "media"; key: string; record: ProjectCostRecordDto }
   | {
       kind: "llm";
+      key: string;
+      record: ProjectCostRecordDto;
+      roleLabel: string | null;
+      /** 该记录属于同阶段同模型的非首次运行（用户重新生成过）。 */
+      isRerun: boolean;
+    }
+  | {
+      kind: "llm-group";
       key: string;
       capability: string;
       modelId: string;
@@ -132,22 +145,16 @@ const stageGroups = computed<StageGroup[]>(() => {
   return STAGE_ORDER.filter((key) => byStage.has(key)).map((key) => {
     const list = byStage.get(key) ?? [];
     const rows: StageRow[] = [];
-    const llmGroups = new Map<
-      string,
-      { records: ProjectCostRecordDto[]; roles: string[]; runIds: Set<string> }
-    >();
+    const llmByGroup = new Map<string, ProjectCostRecordDto[]>();
     let estimated = 0n;
     let actual = 0n;
     let priced = false;
     for (const record of list) {
       if (isLlm(record)) {
         const groupKey = `${record.capability}|${record.provider_key}|${record.model_id}`;
-        const group = llmGroups.get(groupKey) ?? { records: [], roles: [], runIds: new Set<string>() };
-        group.records.push(record);
-        if (record.run_id) group.runIds.add(record.run_id);
-        const label = llmRoleLabel(record.operation_name);
-        if (label && !group.roles.includes(label)) group.roles.push(label);
-        llmGroups.set(groupKey, group);
+        const group = llmByGroup.get(groupKey) ?? [];
+        group.push(record);
+        llmByGroup.set(groupKey, group);
         continue;
       }
       priced = true;
@@ -155,33 +162,58 @@ const stageGroups = computed<StageGroup[]>(() => {
       if (record.actual_cost_cny !== null) actual += BigInt(record.actual_cost_cny.replace(".", ""));
       rows.push({ kind: "media", key: record.id, record });
     }
-    // 同一阶段的 LLM 调用合并为一行（多次调用通常是同一 run 内的分段/多角色调用，
-    // 而非重试；重跑以不同 run 计数标注）。
-    for (const [groupKey, group] of llmGroups) {
+    for (const [groupKey, group] of llmByGroup) {
       const [capability, , modelId] = groupKey.split("|");
-      const inputUnits = group.records.some((r) => r.input_units !== null)
-        ? group.records.reduce((sum, r) => sum + (r.input_units ?? 0), 0)
-        : null;
-      const outputUnits = group.records.some((r) => r.output_units !== null)
-        ? group.records.reduce((sum, r) => sum + (r.output_units ?? 0), 0)
-        : null;
-      const statusCounts = new Map<string, number>();
-      for (const r of group.records) statusCounts.set(r.status, (statusCounts.get(r.status) ?? 0) + 1);
-      const statusText = [...statusCounts.entries()]
-        .map(([status, count]) => `${status} ×${count}`)
-        .join(" · ");
-      rows.push({
-        kind: "llm",
-        key: `llm:${groupKey}`,
-        capability: capability!,
-        modelId: modelId!,
-        calls: group.records.length,
-        inputUnits,
-        outputUnits,
-        roles: group.roles,
-        rerunCount: Math.max(0, group.runIds.size - 1),
-        statusText,
-      });
+      if (key === "asset") {
+        // 资产阶段：规划对同一 prompt 按分段多次调用，合并为一行；
+        // 重跑以不同 run 计数标注。
+        const roles: string[] = [];
+        const runIds = new Set<string>();
+        for (const r of group) {
+          if (r.run_id) runIds.add(r.run_id);
+          const label = llmRoleLabel(r.operation_name);
+          if (label && !roles.includes(label)) roles.push(label);
+        }
+        const inputUnits = group.some((r) => r.input_units !== null)
+          ? group.reduce((sum, r) => sum + (r.input_units ?? 0), 0)
+          : null;
+        const outputUnits = group.some((r) => r.output_units !== null)
+          ? group.reduce((sum, r) => sum + (r.output_units ?? 0), 0)
+          : null;
+        const statusCounts = new Map<string, number>();
+        for (const r of group) statusCounts.set(r.status, (statusCounts.get(r.status) ?? 0) + 1);
+        const statusText = [...statusCounts.entries()]
+          .map(([status, count]) => `${status} ×${count}`)
+          .join(" · ");
+        rows.push({
+          kind: "llm-group",
+          key: `llm:${groupKey}`,
+          capability: capability!,
+          modelId: modelId!,
+          calls: group.length,
+          inputUnits,
+          outputUnits,
+          roles,
+          rerunCount: Math.max(0, runIds.size - 1),
+          statusText,
+        });
+      } else {
+        // 其他阶段：逐条列举并标注具体用处（如选题候选生成/选题筛选），
+        // 非首次运行的记录标注重跑。
+        const firstRunId = group.find((r) => r.run_id)?.run_id ?? null;
+        for (const record of group) {
+          rows.push({
+            kind: "llm",
+            key: record.id,
+            record,
+            roleLabel: llmRoleLabel(record.operation_name),
+            isRerun:
+              firstRunId !== null &&
+              record.run_id !== null &&
+              record.run_id !== firstRunId,
+          });
+        }
+      }
     }
     const micros = (value: bigint) => {
       const sign = value < 0n ? "-" : "";
@@ -241,8 +273,19 @@ function recordTitle(record: ProjectCostRecordDto): string {
   return `${capability} · ${record.model_id}${unitText !== "—" ? ` · ${unitText}` : ""}`;
 }
 
-/** 合并后的 LLM 行标题：模型 + 调用次数 + 角色 + 合计 token。 */
-function llmGroupTitle(row: Extract<StageRow, { kind: "llm" }>): string {
+/** 单条 LLM 行标题：调用角色（具体用处）+ 模型 + token。 */
+function llmRecordTitle(record: ProjectCostRecordDto, roleLabel: string | null): string {
+  const capability = CAPABILITY_LABELS[record.capability] ?? record.capability;
+  const units: string[] = [];
+  if (record.input_units !== null) units.push(`${record.input_units}token 输入`);
+  if (record.output_units !== null) units.push(`${record.output_units}token 输出`);
+  const unitText = units.length > 0 ? ` · ${units.join(" · ")}` : "";
+  const prefix = roleLabel ? `${roleLabel} · ${record.model_id}` : `${capability} · ${record.model_id}`;
+  return `${prefix}${unitText}`;
+}
+
+/** 合并后的资产阶段 LLM 行标题：模型 + 调用次数 + 角色 + 合计 token。 */
+function llmGroupTitle(row: Extract<StageRow, { kind: "llm-group" }>): string {
   const capability = CAPABILITY_LABELS[row.capability] ?? row.capability;
   const units: string[] = [];
   if (row.inputUnits !== null) units.push(`${row.inputUnits}token 输入`);
@@ -318,13 +361,21 @@ const runStatusSummary = computed(() => {
           <li v-for="row in group.rows" :key="row.key" class="cost-record" data-testid="cost-record">
             <div class="cost-record-main">
               <span class="cost-record-title">
-                <template v-if="row.kind === 'llm'">{{ llmGroupTitle(row) }}</template>
+                <template v-if="row.kind === 'llm'">{{ llmRecordTitle(row.record, row.roleLabel) }}</template>
+                <template v-else-if="row.kind === 'llm-group'">{{ llmGroupTitle(row) }}</template>
                 <template v-else>{{ recordTitle(row.record) }}</template>
               </span>
               <span class="cost-record-status">
-                {{ row.kind === "llm" ? row.statusText : row.record.status }}
+                {{ row.kind === "llm-group" ? row.statusText : row.record.status }}
                 <span
-                  v-if="row.kind === 'llm' && row.rerunCount > 0"
+                  v-if="row.kind === 'llm' && row.isRerun"
+                  class="cost-record-retry"
+                  data-testid="cost-record-rerun"
+                >
+                  重跑
+                </span>
+                <span
+                  v-if="row.kind === 'llm-group' && row.rerunCount > 0"
                   class="cost-record-retry"
                   data-testid="cost-record-rerun"
                 >
@@ -332,7 +383,7 @@ const runStatusSummary = computed(() => {
                 </span>
               </span>
             </div>
-            <div v-if="row.kind === 'llm'" class="cost-record-amounts">
+            <div v-if="row.kind === 'llm' || row.kind === 'llm-group'" class="cost-record-amounts">
               <span class="cost-record-unpriced" data-testid="cost-record-unpriced">—</span>
             </div>
             <div v-else class="cost-record-amounts">

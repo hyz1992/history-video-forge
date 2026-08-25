@@ -143,10 +143,49 @@ function createMockCostStore(): GenerationCostStore {
             duration_ms: 900,
             created_at: "2026-08-20T08:00:00.000Z",
             operation_name: null,
-
+          },
+          {
+            id: "usage_4",
+            run_id: "run_2",
+            run_status: "succeeded",
+            snapshot_id: "snap_2",
+            operation: "asset_plan.generate",
+            capability: "llm.smart",
+            provider_key: "deepseek",
+            model_id: "deepseek-v4-pro",
+            status: "succeeded",
+            unit_type: "token",
+            input_units: 1000,
+            output_units: 500,
+            estimated_cost_cny: "0.100000",
+            actual_cost_cny: "0.100000",
+            cost_basis: "provider_usage",
+            duration_ms: 3000,
+            created_at: "2026-08-20T07:00:00.000Z",
+            operation_name: "asset-planning.planner",
+          },
+          {
+            id: "usage_5",
+            run_id: "run_2",
+            run_status: "succeeded",
+            snapshot_id: "snap_2",
+            operation: "asset_plan.generate",
+            capability: "llm.smart",
+            provider_key: "deepseek",
+            model_id: "deepseek-v4-pro",
+            status: "succeeded",
+            unit_type: "token",
+            input_units: 800,
+            output_units: 400,
+            estimated_cost_cny: "0.080000",
+            actual_cost_cny: "0.080000",
+            cost_basis: "provider_usage",
+            duration_ms: 2600,
+            created_at: "2026-08-20T07:01:00.000Z",
+            operation_name: "asset-planning.segment-intent-planner",
           },
         ],
-        total: 5,
+        total: 7,
       },
       loading: false,
       error: null,
@@ -209,26 +248,37 @@ describe("ProjectCostPanel（费用清单面板）", () => {
     expect(groups[1]!.text()).toContain("qwen3-tts-instruct-flash");
   });
 
-  it("LLM 记录按阶段合并为一行：标注调用次数、角色与重跑", async () => {
+  it("LLM 记录逐条列举并标注具体用处，非首次运行标注重跑", async () => {
     const store = createMockCostStore();
     const wrapper = mountPanel(store);
     await flushPromises();
 
-    // 文案阶段 3 条 LLM 记录合并为 1 行
+    // 文案阶段 3 条 LLM 记录（2 次首次运行调用 + 1 次重跑）
     const scriptGroup = wrapper.findAll('[data-testid="cost-stage-group"]')[0]!;
     const llmRows = scriptGroup.findAll('[data-testid="cost-record"]');
-    expect(llmRows.length).toBe(1);
-    const llmText = llmRows[0]!.text();
-    expect(llmText).toContain("×3 次调用");
-    expect(llmText).toContain("剧本写作");
-    expect(llmText).toContain("语义审校");
-    // 合并后 token 合计：500+300+120 输入，300+200+60 输出
-    expect(llmText).toContain("920token 输入");
-    expect(llmText).toContain("560token 输出");
+    expect(llmRows.length).toBe(3);
+    expect(llmRows[0]!.text()).toContain("剧本写作");
+    expect(llmRows[0]!.text()).toContain("500token 输入 · 300token 输出");
+    expect(llmRows[1]!.text()).toContain("语义审校");
+    // 重跑（run_3）单独标注
+    expect(llmRows[2]!.text()).toContain("剧本写作");
+    expect(llmRows[2]!.text()).toContain("重跑");
+    expect(scriptGroup.findAll('[data-testid="cost-record-rerun"]').length).toBe(1);
+  });
 
-    // 第二次运行（run_3）单独标注重跑
-    expect(llmText).toContain("重跑 1 次");
-    expect(scriptGroup.find('[data-testid="cost-record-rerun"]').exists()).toBe(true);
+  it("资产阶段 LLM 记录合并为一行：标注调用次数与角色", async () => {
+    const store = createMockCostStore();
+    const wrapper = mountPanel(store);
+    await flushPromises();
+
+    const assetGroup = wrapper.findAll('[data-testid="cost-stage-group"]')[1]!;
+    const text = assetGroup.text();
+    expect(text).toContain("×2 次调用");
+    expect(text).toContain("资产全局规划");
+    expect(text).toContain("分段意图规划");
+    // 合并后 token 合计：1000+800 输入，500+400 输出
+    expect(text).toContain("1800token 输入");
+    expect(text).toContain("900token 输出");
   });
 
   it("LLM 消费只展示用量不展示金额，其余记录区分 provider actual 与估算", async () => {
@@ -237,8 +287,8 @@ describe("ProjectCostPanel（费用清单面板）", () => {
     await flushPromises();
 
     const text = wrapper.text();
-    // LLM 行金额占位 "—"，不出现 LLM 金额
-    expect(wrapper.findAll('[data-testid="cost-record-unpriced"]').length).toBe(1);
+    // LLM 行金额占位 "—"，不出现 LLM 金额（文案 3 行 + 资产合并 1 行）
+    expect(wrapper.findAll('[data-testid="cost-record-unpriced"]').length).toBe(4);
     expect(text).not.toContain("¥2.2");
     expect(text).not.toContain("¥1.3");
     // 媒体行保留 basis 标注
