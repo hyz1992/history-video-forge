@@ -281,6 +281,27 @@ describe("ProjectCostPanel（费用清单面板）", () => {
     expect(text).toContain("900token 输出");
   });
 
+  it("展示每条记录耗时与阶段总耗时", async () => {
+    const store = createMockCostStore();
+    const wrapper = mountPanel(store);
+    await flushPromises();
+
+    const scriptGroup = wrapper.findAll('[data-testid="cost-stage-group"]')[0]!;
+    const scriptText = scriptGroup.text();
+    expect(scriptText).toContain("3.4秒"); // 剧本写作
+    expect(scriptText).toContain("2.1秒"); // 语义审校
+    expect(scriptText).toContain("900毫秒"); // 重跑记录（<1s 用毫秒）
+    // 文案阶段总耗时 3400+2100+900=6400ms
+    expect(scriptText).toContain("耗时 6.4秒");
+
+    const assetGroup = wrapper.findAll('[data-testid="cost-stage-group"]')[1]!;
+    const assetText = assetGroup.text();
+    // 资产合并行合计 3000+2600=5600ms
+    expect(assetText).toContain("5.6秒");
+    // 资产阶段总耗时 1200+900+3000+2600=7700ms
+    expect(assetText).toContain("耗时 7.7秒");
+  });
+
   it("LLM 消费只展示用量不展示金额，其余记录区分 provider actual 与估算", async () => {
     const store = createMockCostStore();
     const wrapper = mountPanel(store);

@@ -86,6 +86,8 @@ type StageRow =
       inputUnits: number | null;
       outputUnits: number | null;
       roles: string[];
+      /** 合并行的合计耗时（毫秒）；全部缺耗时信息时为 null。 */
+      durationMs: number | null;
       /** 同阶段同模型的多次运行数（不同 run）减一；>0 表示用户重新生成过。 */
       rerunCount: number;
       statusText: string;
@@ -99,6 +101,8 @@ interface StageGroup {
   priced: boolean;
   estimated: string;
   actual: string;
+  /** 阶段总耗时（毫秒）；全部记录缺耗时信息时为 null。 */
+  durationMs: number | null;
 }
 
 /** LLM token 消费只展示用量（模型/token），不展示金额：
@@ -180,6 +184,9 @@ const stageGroups = computed<StageGroup[]>(() => {
         const outputUnits = group.some((r) => r.output_units !== null)
           ? group.reduce((sum, r) => sum + (r.output_units ?? 0), 0)
           : null;
+        const durationMs = group.some((r) => r.duration_ms !== null)
+          ? group.reduce((sum, r) => sum + (r.duration_ms ?? 0), 0)
+          : null;
         const statusCounts = new Map<string, number>();
         for (const r of group) statusCounts.set(r.status, (statusCounts.get(r.status) ?? 0) + 1);
         const statusText = [...statusCounts.entries()]
@@ -194,6 +201,7 @@ const stageGroups = computed<StageGroup[]>(() => {
           inputUnits,
           outputUnits,
           roles,
+          durationMs,
           rerunCount: Math.max(0, runIds.size - 1),
           statusText,
         });
@@ -220,7 +228,18 @@ const stageGroups = computed<StageGroup[]>(() => {
       const abs = value < 0n ? -value : value;
       return `${sign}${abs.toString().slice(0, -6) || "0"}.${abs.toString().slice(-6).padStart(6, "0")}`;
     };
-    return { key, label: STAGE_LABELS[key] ?? key, rows, priced, estimated: micros(estimated), actual: micros(actual) };
+    const stageDurationMs = list.some((r) => r.duration_ms !== null)
+      ? list.reduce((sum, r) => sum + (r.duration_ms ?? 0), 0)
+      : null;
+    return {
+      key,
+      label: STAGE_LABELS[key] ?? key,
+      rows,
+      priced,
+      estimated: micros(estimated),
+      actual: micros(actual),
+      durationMs: stageDurationMs,
+    };
   });
 });
 
@@ -282,6 +301,26 @@ function llmRecordTitle(record: ProjectCostRecordDto, roleLabel: string | null):
   const unitText = units.length > 0 ? ` · ${units.join(" · ")}` : "";
   const prefix = roleLabel ? `${roleLabel} · ${record.model_id}` : `${capability} · ${record.model_id}`;
   return `${prefix}${unitText}`;
+}
+
+/** 耗时展示：<1s 用毫秒，<1min 用秒（≥10s 取整），≥1min 用"X分Y秒"。 */
+function formatDurationMs(ms: number | null): string | null {
+  if (ms === null || !Number.isFinite(ms) || ms < 0) return null;
+  if (ms < 1000) return `${Math.round(ms)}毫秒`;
+  if (ms < 60_000) {
+    const seconds = ms / 1000;
+    const text = seconds >= 10 ? seconds.toFixed(0) : seconds.toFixed(1);
+    return `${text.replace(/\.0$/, "")}秒`;
+  }
+  const minutes = Math.floor(ms / 60_000);
+  const seconds = Math.round((ms % 60_000) / 1000);
+  return `${minutes}分${seconds}秒`;
+}
+
+/** 行的耗时（单条记录取自身耗时，合并行取合计耗时）。 */
+function rowDurationMs(row: StageRow): number | null {
+  if (row.kind === "media" || row.kind === "llm") return row.record.duration_ms;
+  return row.durationMs;
 }
 
 /** 合并后的资产阶段 LLM 行标题：模型 + 调用次数 + 角色 + 合计 token。 */
@@ -351,11 +390,14 @@ const runStatusSummary = computed(() => {
       <section v-for="group in stageGroups" :key="group.key" class="cost-stage" data-testid="cost-stage-group">
         <header class="cost-stage-header">
           <span class="cost-stage-name">{{ group.label }}</span>
-          <span v-if="group.priced" class="cost-stage-total">
-            预计 ¥{{ microsDecimalToCnyDisplay(group.estimated) }}
-            <template v-if="group.actual !== '0.000000'"> · 实际 ¥{{ microsDecimalToCnyDisplay(group.actual) }}</template>
+          <span class="cost-stage-total">
+            <template v-if="group.priced">
+              预计 ¥{{ microsDecimalToCnyDisplay(group.estimated) }}
+              <template v-if="group.actual !== '0.000000'"> · 实际 ¥{{ microsDecimalToCnyDisplay(group.actual) }}</template>
+            </template>
+            <template v-else>—</template>
+            <template v-if="group.durationMs !== null"> · 耗时 {{ formatDurationMs(group.durationMs) }}</template>
           </span>
-          <span v-else class="cost-stage-total">—</span>
         </header>
         <ul class="cost-stage-records">
           <li v-for="row in group.rows" :key="row.key" class="cost-record" data-testid="cost-record">
@@ -367,6 +409,9 @@ const runStatusSummary = computed(() => {
               </span>
               <span class="cost-record-status">
                 {{ row.kind === "llm-group" ? row.statusText : row.record.status }}
+                <template v-if="rowDurationMs(row) !== null">
+                  · 耗时 {{ formatDurationMs(rowDurationMs(row)) }}
+                </template>
                 <span
                   v-if="row.kind === 'llm' && row.isRerun"
                   class="cost-record-retry"
