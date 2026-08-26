@@ -25,6 +25,7 @@ import {
 } from "../../runtime/trace/project-storage.js";
 import { createBillingInteractionLogWriter, type LlmBillingContext } from "../generation-cost/llm-billing-writer.js";
 import { LlmOutputError } from "../../runtime/llm/llm-output-error.js";
+import { ExternalServiceError } from "../../runtime/llm/external-errors.js";
 import { getValidatedRuntimeEnv } from "../../config/env.js";
 import {
   generateAssetPlan,
@@ -488,7 +489,10 @@ function classifyAssetPlanningErrorCode(error: unknown): string {
   if (
     error instanceof LlmOutputError ||
     error instanceof LegacyChunkResilienceError ||
-    error instanceof AssetPlanCompilerInvariantError
+    error instanceof AssetPlanCompilerInvariantError ||
+    // 2026-08-26：provider 异常（限流/超时/服务不可用等）按 code 透传，
+    // 避免 chunk 限流失败被降级为笼统的 internal_server_error
+    error instanceof ExternalServiceError
   ) {
     return ASSET_PLANNING_ERROR_CODES.has(error.code)
       ? error.code
