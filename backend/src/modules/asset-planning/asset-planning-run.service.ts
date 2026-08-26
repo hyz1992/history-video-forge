@@ -1303,13 +1303,25 @@ export async function runAssetPlanningGeneration(
         );
       });
     }
+    // 状态回退（2026-08-26 加固）：无条件回退到生成前状态，绝不把
+    // asset_plan_generating 写回。入口快照存在时恢复它，但其 status 若已是
+    // generating（历史失败滚动继承的脏状态）按 active 记录推导回退——
+    // 避免一次失败卡住后所有后续失败都继承 generating。
+    const fallbackStatus =
+      previousProjectStatus === "asset_plan_generating"
+        ? previousActiveAssetPlanRecordId
+          ? "asset_plan_ready"
+          : "storyboard_ready"
+        : previousProjectStatus;
     if (activationProjectSnapshot) {
-      Object.assign(input.project, activationProjectSnapshot);
+      Object.assign(input.project, {
+        ...activationProjectSnapshot,
+        status: fallbackStatus,
+      });
+      input.project.updatedAt = new Date();
     } else {
       input.project.activeAssetPlanRecordId = previousActiveAssetPlanRecordId;
-      input.project.status = previousActiveAssetPlanRecordId
-        ? "asset_plan_ready"
-        : "storyboard_ready";
+      input.project.status = fallbackStatus;
       input.project.updatedAt = new Date();
     }
     // 失败 trace 同步到项目级（与成功路径对称），快照即可暴露 failure_reason
