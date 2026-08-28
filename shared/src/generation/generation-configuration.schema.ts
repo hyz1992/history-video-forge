@@ -31,6 +31,25 @@ export const ApiVideoQuality = z.enum(["standard_720p", "high_1080p"]);
 export type ApiVideoQuality = z.infer<typeof ApiVideoQuality>;
 
 /**
+ * api_quality ↔ DashScope 视频分辨率参数的双向机械映射。
+ * 2026-08-28 修复：video_clip 执行分辨率曾由意图编译器硬编码 1080P，
+ * 与用户配置（快照 api_quality）及计价档位脱节；此后执行与计价
+ * 都以快照 api_quality 为单一真相源，经本映射落到 DashScope 参数
+ * 与 pricing 目录的 quality key。未知值一律回退 720p（保守计价档）。
+ */
+export function apiQualityToDashscopeResolution(
+  quality: string | null | undefined,
+): "720P" | "1080P" {
+  return quality === "high_1080p" ? "1080P" : "720P";
+}
+
+export function dashscopeResolutionToApiQuality(
+  resolution: string | null | undefined,
+): ApiVideoQuality {
+  return resolution === "1080P" ? "high_1080p" : "standard_720p";
+}
+
+/**
  * Storyboard 分镜适配度。LLM/stub 只输出这四档，不自行决定付费调用。
  * 适配度到实际路线的映射由纯函数 resolver 完成（见 generation-configuration-resolver.ts）。
  */

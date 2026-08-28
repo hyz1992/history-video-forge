@@ -356,4 +356,164 @@ describe("assets execution engine", () => {
     );
     expect(route?.fallback_visual_artifact_id).toBe("artifact_img_001");
   });
+
+  it("视频计价与执行同源：任务参数 resolution=1080P 优先于快照 api_quality（修复 1080P 按 720p 低估）", async () => {
+    const db = createDbClient();
+    const runId = "assets_run_paid_video_001";
+    const snapshotId = "snapshot_paid_video_001";
+    db.generationRuns.set(runId, {
+      runConfigurationSnapshotId: snapshotId,
+    } as never);
+    db.runConfigurationSnapshots.set(snapshotId, {
+      id: snapshotId,
+      // 快照声称 720p，但任务参数（执行真相源）冻结的是 1080P——
+      // 计价必须跟参数走（2026-08-28 回归：生产 5 条视频记录被按 720p 低估）
+      resolvedConfigurationJson: {
+        effective: { video: { api_quality: "standard_720p" } },
+      },
+    } as never);
+    const now = new Date();
+    db.providerModelCatalog.set("video.image_to_video.dashscope.wan2.7-i2v-2026-04-25", {
+      id: "video.image_to_video.dashscope.wan2.7-i2v-2026-04-25",
+      capability: "video.image_to_video",
+      providerKey: "dashscope",
+      modelId: "wan2.7-i2v-2026-04-25",
+      modelVersion: null,
+      displayName: "wan2.7 图生视频",
+      qualityTier: null,
+      speedTier: null,
+      parameterCapabilitiesJson: {
+        api_video_qualities: ["standard_720p", "high_1080p"],
+        min_duration_seconds_per_task: 2,
+        max_duration_seconds_per_task: 15,
+      },
+      pricingVersion: "test-pricing-2026-08-17",
+      pricingJson: {
+        unit_type: "video_second",
+        currency: "CNY",
+        price_micros_per_second_by_quality: {
+          standard_720p: "600000",
+          high_1080p: "1000000",
+        },
+        source_note: "测试 fixture",
+      },
+      status: "active",
+      isDefault: false,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const manifest = makeManifest();
+    manifest.execution_options.enabled_provider_types = ["video"];
+    manifest.executions = [
+      {
+        execution_id: "exec_video_paid_001",
+        task_id: "task_video_paid_001",
+        task_type: "video_clip",
+        status: "planned",
+        origin: "provider",
+        started_at: null,
+        completed_at: null,
+        provider_id: null,
+        attempts: 0,
+        output_artifact_ids: [],
+        notes: [],
+      },
+    ];
+    manifest.artifacts = [
+      {
+        artifact_id: "artifact_img_paid_001",
+        artifact_type: "image",
+        origin: "provider",
+        file_uri: "generated://image.png",
+        created_at: "2026-05-16T00:00:00.000Z",
+        metadata: { width: 1080, height: 1920 },
+      },
+    ];
+    manifest.segment_routes[0] = {
+      ...manifest.segment_routes[0]!,
+      primary_visual_artifact_id: "artifact_img_paid_001",
+      visual_route_type: "image_with_motion",
+      fallback_visual_artifact_id: "artifact_img_paid_001",
+      readiness: "fallback_ready",
+    };
+
+    const assetPlan = makeAssetPlan();
+    assetPlan.tasks = [
+      {
+        task_id: "task_video_paid_001",
+        order: 0,
+        task_type: "video_clip",
+        source_segment_id: "sb_001",
+        source_excerpt: "video source excerpt",
+        production_intent: "Generate a 1080P video clip.",
+        recommended_mode: "auto",
+        provider_hint: "fake_paid_video",
+        prompt_draft: "slow push-in",
+        parameters: { duration_sec: 15, resolution: "1080P" },
+        manual_upload_policy: {
+          allowed: false,
+          required: false,
+          accepted_file_types: [],
+          acceptance_notes: [],
+        },
+        risk_notes: [],
+        cost_tier: "high",
+        initial_status: "planned",
+      },
+    ];
+
+    const adapter: AssetProviderAdapter = {
+      providerName: "fake_paid_video",
+      providerType: "video",
+      billing: {
+        capability: "video.image_to_video",
+        providerKey: "dashscope",
+        modelId: "wan2.7-i2v-2026-04-25",
+      },
+      canHandle: ({ taskType }) => taskType === "video_clip",
+      prepare: async () => ({ providerJobId: null, rawRequestJson: {} }),
+      submit: async () => ({
+        providerJobId: "job_paid_video_001",
+        rawResponseJson: {},
+      }),
+      poll: async () => ({ status: "completed", rawResponseJson: {} }),
+      download: async () => [
+        {
+          artifact_id: "artifact_video_paid_001",
+          artifact_type: "video",
+          origin: "provider",
+          file_uri: "generated://video.mp4",
+          created_at: "2026-05-16T00:01:00.000Z",
+          metadata: { duration_sec: 15, width: 1080, height: 1920, fps: 24 },
+        },
+      ],
+      normalizeResult: async ({ downloadedArtifacts }) => ({
+        artifacts: downloadedArtifacts,
+        notes: [],
+      }),
+      cancel: async () => undefined,
+    };
+
+    await executeAssetManifest({
+      db,
+      assetManifestRecordId: "manifest_paid_001",
+      assetRunId: runId,
+      manifest,
+      registry: createAssetProviderRegistry([adapter]),
+      assetPlan,
+      projectStorageRootDir: "unused",
+    });
+
+    const usage = [...db.usageCostRecords.values()].find(
+      (record) => record.unitType === "video_second",
+    );
+    expect(usage).toBeDefined();
+    // 15 秒 × ¥1/秒（high_1080p），而非 15 × ¥0.6（standard_720p）
+    expect(usage!.estimatedCostMicros).toBe("15000000");
+    expect(usage!.actualCostMicros).toBe("15000000");
+    expect(usage!.costBasis).toBe("estimate");
+    expect(usage!.outputUnits).toBe(15);
+    expect(usage!.unitDetailJson).toEqual({ quality: "high_1080p" });
+  });
 });

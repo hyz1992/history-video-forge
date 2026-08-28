@@ -47,6 +47,14 @@ export interface AssetPlanCompilerInput {
    * compiler 不读取 api_video_suitability 做语义推导，只按路线核对意图组合。
    */
   segmentVisualRoutes: ReadonlyMap<string, ResolvedSegmentVisualRoute>;
+  /**
+   * 2026-08-28：video_clip 任务的 DashScope 分辨率，来自快照
+   * effective.video.api_quality 的机械映射（standard_720p→720P、
+   * high_1080p→1080P）。此前硬编码 1080P 导致执行绕过用户配置、
+   * 且与计价档位（按快照 api_quality）脱节；缺省回退 720P 与
+   * adapter/计价目录的缺省档一致。
+   */
+  videoResolution?: "720P" | "1080P";
 }
 
 export type AssetPlanCompilerAction =
@@ -302,7 +310,7 @@ function motionRecipe(hint: StoryboardPlan["segments"][number]["motion_hint"]): 
   }
 }
 
-function createTask(item: NormalizedIntent, anchorId: string | undefined, globalDraft: GlobalPlanningCompilerDraft, order: number): AssetTask {
+function createTask(item: NormalizedIntent, anchorId: string | undefined, globalDraft: GlobalPlanningCompilerDraft, order: number, videoResolution: "720P" | "1080P"): AssetTask {
   const { intent, segment } = item;
   let promptDraft: string | null = null;
   let parameters: Record<string, unknown>;
@@ -314,7 +322,7 @@ function createTask(item: NormalizedIntent, anchorId: string | undefined, global
     case "video_clip":
       if (!anchorId) fail([{ code: "visual_anchor_missing", segment_id: segment.segment_id, task_id: taskId(item) }]);
       promptDraft = enrichAssetVisualPrompt({ taskType: "video_clip", promptDraft: intent.video_prompt, sourceSegmentId: segment.segment_id, storyboardSegments: [segment], artBible: globalDraft.art_bible });
-      parameters = { why_static_insufficient: intent.why_static_insufficient, static_fallback_task_id: anchorId, duration_sec: Math.max(1, segment.end_hint_sec - segment.start_hint_sec), resolution: "1080P" };
+      parameters = { why_static_insufficient: intent.why_static_insufficient, static_fallback_task_id: anchorId, duration_sec: Math.max(1, segment.end_hint_sec - segment.start_hint_sec), resolution: videoResolution };
       break;
     case "render_motion_cue":
       if (!anchorId) fail([{ code: "visual_anchor_missing", segment_id: segment.segment_id, task_id: taskId(item) }]);
@@ -370,7 +378,7 @@ export function compileAssetPlanFromIntents(input: AssetPlanCompilerInput): { pl
   }
 
   const tasks = [...structuredClone(input.audioSkeleton.tasks)];
-  normalized.forEach((item) => tasks.push(createTask(item, anchors.get(item.segment.segment_id), input.globalDraft, tasks.length)));
+  normalized.forEach((item) => tasks.push(createTask(item, anchors.get(item.segment.segment_id), input.globalDraft, tasks.length, input.videoResolution ?? "720P")));
   const ids = new Set(tasks.map((task) => task.task_id));
   if (ids.size !== tasks.length) fail([{ code: "task_id_collision" }]);
 

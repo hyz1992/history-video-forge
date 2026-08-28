@@ -298,6 +298,11 @@ export interface GenerateAssetPlanInput {
    * 生成服务只把路线投影进 prompt/校验/编译，不做语义推导。
    */
   segmentVisualRoutes: ReadonlyMap<string, ResolvedSegmentVisualRoute>;
+  /**
+   * 2026-08-28：video_clip 分辨率（快照 api_quality 的机械映射），
+   * 由编译器冻结进任务 parameters，执行与计价同源于此字段。
+   */
+  videoResolution?: "720P" | "1080P";
   llmGateway?: LlmGateway;
   interactionLogWriter?: LlmInteractionLogWriter;
   /**
@@ -542,6 +547,7 @@ export async function generateAssetPlan(
         audioSkeleton,
         chunks: chunkBatch.results,
         segmentVisualRoutes: input.segmentVisualRoutes,
+        videoResolution: input.videoResolution,
       });
     } catch (error) {
       for (const event of chunkBatch.events) {

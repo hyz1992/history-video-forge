@@ -3,7 +3,7 @@
  * selects registered provider adapters, and produces artifacts.
  */
 
-import { AssetArtifact } from "../../../../shared/src/index.js";
+import { AssetArtifact, dashscopeResolutionToApiQuality } from "../../../../shared/src/index.js";
 import type {
   AssetManifest,
   AssetPlan,
@@ -429,9 +429,9 @@ async function recordPaidUsage(
 
 /**
  * 任务类型 → 实测计量单位（确定性本地测量；与报价 workload 同一单位域）。
- * video_second 的质量档位取快照 resolved.effective.video.api_quality——
- * 与报价计价同源（diff 审查 I1：planTask 参数无人写入 api_quality，
- * 按参数取值恒落 standard_720p，1080P 项目费用会被系统性低估）。
+ * video_second 的质量档位与执行同源：优先 planTask.parameters.resolution
+ * （adapter 实际调用的取值），回退快照 resolved.effective.video.api_quality
+ * （2026-08-28：修复编译器硬编码 1080P 导致 1080P 执行被按 720p 计价）。
  */
 function measuredUnitsForTask(
   planTask: AssetPlan["tasks"][number],
@@ -456,16 +456,26 @@ function measuredUnitsForTask(
         typeof duration === "number" && Number.isFinite(duration) && duration > 0
           ? duration
           : DEFAULT_VIDEO_ESTIMATE_SECONDS;
+      // 2026-08-28 修复：计价 quality 与执行同源——adapter 实际调用的分辨率
+      // 就是 planTask.parameters.resolution（编译器按快照 api_quality 冻结写入，
+      // 历史上硬编码 1080P 而此处只读快照 api_quality，导致 1080P 执行被按
+      // 720p 计价系统性低估）。参数缺失（旧 plan/legacy 路线）时回退快照
+      // api_quality；都缺失则 undefined，由计价目录按 standard_720p 兜底。
+      const paramResolution =
+        typeof planTask.parameters["resolution"] === "string"
+          ? (planTask.parameters["resolution"] as string)
+          : undefined;
       const effective = (snapshot.resolvedConfigurationJson as Record<string, unknown>)["effective"] as
         | { video?: { api_quality?: string } }
         | undefined;
+      const quality = paramResolution
+        ? dashscopeResolutionToApiQuality(paramResolution)
+        : (effective?.video?.api_quality ?? undefined);
       return {
         unitType: "video_second",
         count,
-        quality: effective?.video?.api_quality ?? undefined,
-        detail: effective?.video?.api_quality
-          ? { quality: effective.video.api_quality }
-          : undefined,
+        quality,
+        detail: quality ? { quality } : undefined,
       };
     }
     default:

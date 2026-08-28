@@ -85,6 +85,8 @@ export {
   ProjectGenerationConfigurationResponse,
   UserGenerationPreferenceResponse,
   RunConfigurationSnapshotV1,
+  apiQualityToDashscopeResolution,
+  dashscopeResolutionToApiQuality,
   SegmentVisualStrategyOverride,
   VideoGenerationStrategy,
 } from "./generation/generation-configuration.schema";

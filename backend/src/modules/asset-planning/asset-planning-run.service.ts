@@ -1,6 +1,7 @@
 import {
   ScriptDraftPackage,
   StoryboardPlan,
+  apiQualityToDashscopeResolution,
   resolveGenerationConfiguration,
   type AssetPlan,
   type AssetPlanningValidationResult,
@@ -988,6 +989,13 @@ export async function runAssetPlanningGeneration(
     artStylePreset: input.artStylePreset ?? null,
     // S2-2C（详细设计 §6.1）：单一真相源——从 billingContext.resolved 派生
     snapshotCapabilities: input.billingContext?.resolved.resolved_capabilities,
+    // 2026-08-28：video_clip 分辨率从快照 api_quality 机械映射（修复点：
+    // 编译器原硬编码 1080P，执行绕过用户配置且与计价档位脱节）
+    videoResolution: apiQualityToDashscopeResolution(
+      (
+        input.billingContext?.resolved as { effective?: { video?: { api_quality?: string } } }
+      )?.effective?.video?.api_quality,
+    ),
   });
   let localValidation = validateAssetPlan(
     buildValidationInput({

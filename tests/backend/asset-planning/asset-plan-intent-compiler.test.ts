@@ -258,6 +258,17 @@ describe("compileAssetPlanFromIntents", () => {
     expect(plan.tasks.find((task) => task.task_type === "bgm_cue")!.parameters).toEqual(expect.objectContaining({ required_tags: ["弦乐"], mood_tags: ["悬疑"], selection_label: "配乐选择", timing_basis: "tts", scope: "global", segment_ids: [], volume: 0.35, fade_in_sec: 0.5, fade_out_sec: 1.5 }));
   });
 
+  it("freezes video_clip resolution from the snapshot api_quality mapping (defaults 720P)", () => {
+    // 2026-08-28 修复回归：编译器曾硬编码 resolution "1080P"，导致执行绕过
+    // 用户配置（快照 api_quality）且计价按 720p 低估 1080P 实际费用。
+    const defaultPlan = compileAssetPlanFromIntents(makeInput(1)).plan;
+    expect(defaultPlan.tasks.find((task) => task.task_type === "video_clip")!.parameters.resolution).toBe("720P");
+    const hdInput = makeInput(1);
+    hdInput.chunks[0]!.draft.segments[0]!.intents = [image("anchor"), video(), motion(), sfx(), bgm("global", [])];
+    const hdPlan = compileAssetPlanFromIntents({ ...hdInput, videoResolution: "1080P" }).plan;
+    expect(hdPlan.tasks.find((task) => task.task_type === "video_clip")!.parameters.resolution).toBe("1080P");
+  });
+
   it("creates only legal deterministic dependencies and an exact cost summary", () => {
     const input = makeInput(1);
     input.chunks[0]!.draft.segments[0]!.intents = [image(), video(), motion(), sfx("tts"), sfx("none", "free"), bgm("global", [])];
