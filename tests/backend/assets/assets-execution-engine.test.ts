@@ -520,4 +520,176 @@ describe("assets execution engine", () => {
     expect(usage!.outputUnits).toBe(15);
     expect(usage!.unitDetailJson).toEqual({ quality: "high_1080p" });
   });
+
+  it("拆分任务：计费按 job 留痕总秒数（13s × 2 段），route primary 锁定首段", async () => {
+    const db = createDbClient();
+    const runId = "assets_run_split_video_001";
+    const snapshotId = "snapshot_split_video_001";
+    db.generationRuns.set(runId, {
+      runConfigurationSnapshotId: snapshotId,
+    } as never);
+    db.runConfigurationSnapshots.set(snapshotId, {
+      id: snapshotId,
+      resolvedConfigurationJson: {
+        effective: { video: { api_quality: "standard_720p" } },
+      },
+    } as never);
+    const now = new Date();
+    db.providerModelCatalog.set("video.image_to_video.dashscope.wan2.7-i2v-2026-04-25", {
+      id: "video.image_to_video.dashscope.wan2.7-i2v-2026-04-25",
+      capability: "video.image_to_video",
+      providerKey: "dashscope",
+      modelId: "wan2.7-i2v-2026-04-25",
+      modelVersion: null,
+      displayName: "wan2.7 图生视频",
+      qualityTier: null,
+      speedTier: null,
+      parameterCapabilitiesJson: {
+        api_video_qualities: ["standard_720p", "high_1080p"],
+        min_duration_seconds_per_task: 2,
+        max_duration_seconds_per_task: 15,
+      },
+      pricingVersion: "test-pricing-2026-08-17",
+      pricingJson: {
+        unit_type: "video_second",
+        currency: "CNY",
+        price_micros_per_second_by_quality: {
+          standard_720p: "600000",
+          high_1080p: "1000000",
+        },
+        source_note: "测试 fixture",
+      },
+      status: "active",
+      isDefault: false,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const manifest = makeManifest();
+    manifest.execution_options.enabled_provider_types = ["video"];
+    manifest.executions = [
+      {
+        execution_id: "exec_video_split_001",
+        task_id: "task_video_split_001",
+        task_type: "video_clip",
+        status: "planned",
+        origin: "provider",
+        started_at: null,
+        completed_at: null,
+        provider_id: null,
+        attempts: 0,
+        output_artifact_ids: [],
+        notes: [],
+      },
+    ];
+    manifest.artifacts = [
+      {
+        artifact_id: "artifact_img_split_001",
+        artifact_type: "image",
+        origin: "provider",
+        file_uri: "generated://image.png",
+        created_at: "2026-05-16T00:00:00.000Z",
+        metadata: { width: 1080, height: 1920 },
+      },
+    ];
+    manifest.segment_routes[0] = {
+      ...manifest.segment_routes[0]!,
+      primary_visual_artifact_id: "artifact_img_split_001",
+      visual_route_type: "image_with_motion",
+      fallback_visual_artifact_id: "artifact_img_split_001",
+      readiness: "fallback_ready",
+    };
+
+    const assetPlan = makeAssetPlan();
+    assetPlan.tasks = [
+      {
+        task_id: "task_video_split_001",
+        order: 0,
+        task_type: "video_clip",
+        source_segment_id: "sb_001",
+        source_excerpt: "video source excerpt",
+        production_intent: "Generate a 26s video in two splits.",
+        recommended_mode: "auto",
+        provider_hint: "fake_split_video",
+        prompt_draft: "slow push-in",
+        parameters: { duration_sec: 25, resolution: "1080P" },
+        manual_upload_policy: {
+          allowed: false,
+          required: false,
+          accepted_file_types: [],
+          acceptance_notes: [],
+        },
+        risk_notes: [],
+        cost_tier: "high",
+        initial_status: "planned",
+      },
+    ];
+
+    const splitArtifacts = [0, 1].map((index) => ({
+      artifact_id: `artifact_video_split_${index}`,
+      artifact_type: "video" as const,
+      origin: "provider" as const,
+      file_uri: `generated://video_${index}.mp4`,
+      created_at: "2026-05-16T00:01:00.000Z",
+      metadata: {
+        duration_sec: 13,
+        width: 1080,
+        height: 1920,
+        fps: 24,
+        video_split_of_task: "task_video_split_001",
+        video_split_index: index,
+        video_split_total: 2,
+      },
+    }));
+
+    const adapter: AssetProviderAdapter = {
+      providerName: "fake_split_video",
+      providerType: "video",
+      billing: {
+        capability: "video.image_to_video",
+        providerKey: "dashscope",
+        modelId: "wan2.7-i2v-2026-04-25",
+      },
+      canHandle: ({ taskType }) => taskType === "video_clip",
+      // 模拟真实 adapter 的 prepare 留痕：25 秒拆 2 段、每段 13 秒
+      prepare: async () => ({
+        providerJobId: null,
+        rawRequestJson: { split_total: 2, split_index: 0, duration_sec: 13 },
+      }),
+      submit: async () => ({ providerJobId: "job_split_001", rawResponseJson: {} }),
+      poll: async () => ({ status: "completed", rawResponseJson: {} }),
+      download: async () => splitArtifacts,
+      normalizeResult: async ({ downloadedArtifacts }) => ({
+        artifacts: downloadedArtifacts,
+        notes: [],
+      }),
+      cancel: async () => undefined,
+    };
+
+    const result = await executeAssetManifest({
+      db,
+      assetManifestRecordId: "manifest_split_001",
+      assetRunId: runId,
+      manifest,
+      registry: createAssetProviderRegistry([adapter]),
+      assetPlan,
+      projectStorageRootDir: "unused",
+    });
+
+    const usage = [...db.usageCostRecords.values()].find(
+      (record) => record.unitType === "video_second",
+    );
+    expect(usage).toBeDefined();
+    // 2 段 × 13 秒 × ¥1（high_1080p）= ¥26——按执行留痕计，不按参数 25 秒
+    expect(usage!.outputUnits).toBe(26);
+    expect(usage!.estimatedCostMicros).toBe("26000000");
+    expect(usage!.actualCostMicros).toBe("26000000");
+    expect(usage!.unitDetailJson).toEqual({ quality: "high_1080p" });
+
+    // route primary 锁定首段（compose 按首段锚定时间线，后续段按 index 追加）
+    const route = result.manifest.segment_routes.find((item) => item.segment_id === "sb_001");
+    expect(route?.visual_route_type).toBe("video_clip");
+    expect(route?.primary_visual_artifact_id).toBe("artifact_video_split_0");
+    expect(result.manifest.artifacts.filter((a) => a.artifact_type === "video")).toHaveLength(2);
+  });
 });

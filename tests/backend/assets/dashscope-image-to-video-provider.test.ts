@@ -278,4 +278,98 @@ describe("DashScope image-to-video provider payload", () => {
     expect(calls.some((url) => url.includes("/video-synthesis"))).toBe(true);
     expect(existsSync(normalized.artifacts[0]!.file_uri)).toBe(true);
   });
+
+  it("拆分超过 15 秒的显式时长：25 秒 → 2 段各 13 秒，artifact 带 split 元数据且首段 index 0", async () => {
+    tempDir = join(tmpdir(), `dashscope-i2v-split-${Date.now()}`);
+    let taskSeq = 0;
+    vi.stubGlobal("fetch", vi.fn(async (url: string | URL) => {
+      const urlText = String(url);
+
+      if (urlText.endsWith("/video-synthesis")) {
+        return new Response(JSON.stringify({
+          output: { task_id: `task_i2v_split_${++taskSeq}` },
+        }), { status: 200 });
+      }
+
+      const taskMatch = urlText.match(/\/api\/v1\/tasks\/(task_i2v_split_\d+)$/);
+      if (taskMatch) {
+        return new Response(JSON.stringify({
+          output: {
+            task_id: taskMatch[1],
+            task_status: "SUCCEEDED",
+            video_url: `https://dashscope-result.test/${taskMatch[1]}.mp4`,
+          },
+        }), { status: 200 });
+      }
+
+      if (urlText.startsWith("https://dashscope-result.test/")) {
+        return new Response("fake mp4 part", { status: 200 });
+      }
+
+      return new Response("unexpected", { status: 500 });
+    }));
+
+    const adapter = createDashscopeImageToVideoProvider({
+      apiKey: "test-key",
+      baseUrl: "https://dashscope.test",
+      model: "wan2.7-i2v-2026-04-25",
+      pollIntervalMs: 0,
+      maxPollAttempts: 1,
+    });
+
+    const ctx = makeVideoProviderContextWithImageArtifact(tempDir);
+    ctx.planTask.parameters = { duration_sec: 25, resolution: "1080P" };
+    const prepared = await adapter.prepare(ctx);
+    const requestMeta = prepared.rawRequestJson as {
+      split_total?: number;
+      split_index?: number;
+      duration_sec?: number;
+    };
+    expect(requestMeta.split_total).toBe(2);
+    expect(requestMeta.split_index).toBe(0);
+    expect(requestMeta.duration_sec).toBe(13);
+    const payloadParams = (prepared.rawRequestJson.payload as {
+      parameters: { duration: number; resolution: string };
+    }).parameters;
+    expect(payloadParams.duration).toBe(13);
+    expect(payloadParams.resolution).toBe("1080P");
+
+    const submitted = await adapter.submit(ctx, prepared);
+    const polled = await adapter.poll(ctx, submitted);
+    expect(polled.status).toBe("completed");
+    const downloaded = await adapter.download(ctx, polled);
+    expect(downloaded).toHaveLength(2);
+    const splitMetaList = downloaded.map((a) => {
+      const m = a.metadata as Record<string, unknown>;
+      return {
+        index: m.video_split_index,
+        total: m.video_split_total,
+        of: m.video_split_of_task,
+        duration: m.duration_sec,
+      };
+    });
+    expect(splitMetaList).toEqual([
+      { index: 0, total: 2, of: "task_video_001", duration: 13 },
+      { index: 1, total: 2, of: "task_video_001", duration: 13 },
+    ]);
+  });
+
+  it("不超过 15 秒的显式时长不拆分", async () => {
+    tempDir = join(tmpdir(), `dashscope-i2v-nosplit-${Date.now()}`);
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("unexpected", { status: 500 })));
+
+    const adapter = createDashscopeImageToVideoProvider({
+      apiKey: "test-key",
+      baseUrl: "https://dashscope.test",
+      model: "wan2.7-i2v-2026-04-25",
+    });
+    const ctx = makeVideoProviderContextWithImageArtifact(tempDir);
+    ctx.planTask.parameters = { duration_sec: 15, resolution: "720P" };
+    const prepared = await adapter.prepare(ctx);
+    expect(prepared.rawRequestJson.split_total).toBeUndefined();
+    const payloadParams = (prepared.rawRequestJson.payload as {
+      parameters: { duration: number };
+    }).parameters;
+    expect(payloadParams.duration).toBe(15);
+  });
 });

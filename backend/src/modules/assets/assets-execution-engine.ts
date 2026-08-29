@@ -385,7 +385,7 @@ async function recordPaidUsage(
 ): Promise<void> {
   if (!paidUsageContext) return;
   const { snapshot, billing } = paidUsageContext;
-  const measuredUnits = measuredUnitsForTask(planTask, snapshot);
+  const measuredUnits = measuredUnitsForTask(planTask, snapshot, jobRecord);
   if (!measuredUnits) return;
   // 记账引用真实 provider job 记录（Prisma 态 assetProviderJobRecordId 外键
   // 强制；providerRequestKey/attemptIndex 与 job 同一身份三元组）
@@ -430,13 +430,14 @@ async function recordPaidUsage(
 
 /**
  * 任务类型 → 实测计量单位（确定性本地测量；与报价 workload 同一单位域）。
- * video_second 的质量档位与执行同源：优先 planTask.parameters.resolution
- * （adapter 实际调用的取值），回退快照 resolved.effective.video.api_quality
- * （2026-08-28：修复编译器硬编码 1080P 导致 1080P 执行被按 720p 计价）。
+ * video_second：质量档位优先 planTask.parameters.resolution（adapter 实际
+ * 消费值，回退快照 api_quality）；秒数优先 job 留痕（单段 clamp / 拆分
+ * 总秒数，回退 planTask.duration_sec 的 clamp）——全部与执行同源。
  */
 function measuredUnitsForTask(
   planTask: AssetPlan["tasks"][number],
   snapshot: import("../../db/client.js").RunConfigurationSnapshotRecord,
+  jobRecord: import("../../db/client.js").AssetProviderJobRecord | null,
 ): { unitType: "image" | "video_second" | "tts_character"; count: number; quality?: string; detail?: Record<string, unknown> } | null {
   switch (planTask.task_type) {
     case "tts_audio":
@@ -459,15 +460,33 @@ function measuredUnitsForTask(
       };
     }
     case "video_clip": {
-      // 2026-08-29：计价秒数与执行同源——adapter 对显式 duration_sec 施加
-      // 2..15 秒 clamp（DashScope 单任务上限），超过 15 秒的任务实际只生成
-      // 15 秒；计价若按原参数秒数会系统性高估（如 25s 任务记 ¥25 实付 ¥15）。
-      // 因此用同一 clamp 函数取执行秒数。
-      const duration = planTask.parameters["duration_sec"];
+      // 2026-08-29：计价秒数与执行完全同源——job 留痕（prepare 写入的
+      // rawRequestJson）是执行真相源：
+      // - 拆分任务（split_total>1）：count = 单段秒数 × 段数。TTS 驱动的
+      //   拆分没有 planTask.duration_sec，只有 job 留痕能反映真实总秒数
+      //   （此前按 DEFAULT 7 秒记账严重低估）；
+      // - 单段任务：planTask.duration_sec 经与 adapter 相同的 2..15 clamp
+      //   （超 15 秒任务实际只生成 15 秒，按原参数计价会系统性高估）。
+      const rawRequest = (jobRecord?.rawRequestJson ?? {}) as {
+        split_total?: number;
+        duration_sec?: number;
+      };
+      const splitTotal =
+        typeof rawRequest.split_total === "number" && rawRequest.split_total > 1
+          ? rawRequest.split_total
+          : 1;
+      const executedSec =
+        typeof rawRequest.duration_sec === "number" && rawRequest.duration_sec > 0
+          ? rawRequest.duration_sec
+          : null;
+      const paramDuration = planTask.parameters["duration_sec"];
       const count =
-        typeof duration === "number" && Number.isFinite(duration) && duration > 0
-          ? clampDashscopeImageToVideoDuration(duration)
-          : DEFAULT_VIDEO_ESTIMATE_SECONDS;
+        splitTotal > 1 && executedSec !== null
+          ? executedSec * splitTotal
+          : executedSec ??
+            (typeof paramDuration === "number" && Number.isFinite(paramDuration) && paramDuration > 0
+              ? clampDashscopeImageToVideoDuration(paramDuration)
+              : DEFAULT_VIDEO_ESTIMATE_SECONDS);
       // 2026-08-28 修复：计价 quality 与执行同源——adapter 实际调用的分辨率
       // 就是 planTask.parameters.resolution（编译器按快照 api_quality 冻结写入，
       // 历史上硬编码 1080P 而此处只读快照 api_quality，导致 1080P 执行被按
@@ -718,6 +737,15 @@ function applyArtifactRoutes(
           (item) => item.segment_id === segmentId,
         );
         if (!route) break;
+
+        // 拆分多段（video_split_index）：compose-timeline-builder 以
+        // primary（首段）为时间线锚点、按 video_split_of_task/index 追加
+        // 后续段——primary 必须锁定 index 0，后续段不得覆盖（否则拼接
+        // 顺序错乱）。单段视频（无 split 元数据）行为不变。
+        const meta = artifact.metadata as Record<string, unknown> | undefined;
+        const splitIndex =
+          typeof meta?.video_split_index === "number" ? meta.video_split_index : null;
+        if (splitIndex !== null && splitIndex > 0) break;
 
         if (!route.fallback_visual_artifact_id && route.primary_visual_artifact_id) {
           route.fallback_visual_artifact_id = route.primary_visual_artifact_id;

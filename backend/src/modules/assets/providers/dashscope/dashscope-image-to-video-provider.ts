@@ -246,10 +246,17 @@ export function createDashscopeImageToVideoProvider(
           ? ctx.planTask.parameters.watermark
           : options.watermark ?? false;
 
+      // 2026-08-29 修复：显式时长超过单任务上限时也必须拆分多段——
+      // 此前仅 TTS 驱动时长（无显式 duration_sec）会拆分，intent_compiler
+      // 主链路总写入显式 duration_sec，导致 25s 任务被 clamp 静默截断成
+      // 15s（口播对不上、卡帧）。computeSplitPlan 对 ≤15s 返回 null，
+      // 不影响正常单段任务。
       const splitPlan =
-        explicitDurationSec === undefined && typeof ttsDurationSec === "number" && ttsDurationSec > 0
-          ? computeSplitPlan(ttsDurationSec)
-          : null;
+        explicitDurationSec !== undefined
+          ? computeSplitPlan(explicitDurationSec)
+          : typeof ttsDurationSec === "number" && ttsDurationSec > 0
+            ? computeSplitPlan(ttsDurationSec)
+            : null;
 
       if (splitPlan) {
         splitJobs = [];

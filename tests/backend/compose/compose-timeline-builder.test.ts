@@ -687,4 +687,86 @@ describe("buildComposeTimeline", () => {
       subtitle_clip_ids: ["clip_subtitle"],
     });
   });
+
+  it("拆分视频：首段锚定时间线，次段按 split_index 顺序补齐段时长", () => {
+    const manifest = makeArtifactManifest();
+    // 段时长驱动为 25 秒（模拟长分镜：TTS 口播 25 秒）
+    const chunk = manifest.artifacts[0]! as TtsChunkArtifact;
+    chunk.metadata = { ...chunk.metadata, duration_sec: 25 };
+    const merged = manifest.artifacts[1]! as TtsMergedArtifact;
+    merged.metadata = { ...merged.metadata, duration_sec: 25 };
+    manifest.audio_summary.tts_total_duration_sec = 25;
+    manifest.artifacts.push(
+      {
+        artifact_id: "artifact_video_split_0",
+        artifact_type: "video",
+        origin: "provider",
+        file_uri: "memory://video-split-0.mp4",
+        created_at: "2026-08-29T00:00:00.000Z",
+        metadata: {
+          duration_sec: 13,
+          width: 1080,
+          height: 1920,
+          fps: 30,
+          video_split_of_task: "task_video_001",
+          video_split_index: 0,
+          video_split_total: 2,
+        },
+      },
+      {
+        artifact_id: "artifact_video_split_1",
+        artifact_type: "video",
+        origin: "provider",
+        file_uri: "memory://video-split-1.mp4",
+        created_at: "2026-08-29T00:00:00.000Z",
+        metadata: {
+          duration_sec: 13,
+          width: 1080,
+          height: 1920,
+          fps: 30,
+          video_split_of_task: "task_video_001",
+          video_split_index: 1,
+          video_split_total: 2,
+        },
+      },
+    );
+    manifest.segment_routes[0] = {
+      ...manifest.segment_routes[0]!,
+      primary_visual_artifact_id: "artifact_video_split_0",
+      fallback_visual_artifact_id: "artifact_img_001",
+      visual_route_type: "video_clip",
+      motion_artifact_id: null,
+    };
+
+    const timeline = buildComposeTimeline({
+      assetManifestRecordId: "asset_manifest_record_001",
+      assetPlanRecordId: "asset_plan_record_001",
+      storyboardRecordId: "storyboard_record_001",
+      scriptRecordId: "script_record_001",
+      manifest,
+    });
+
+    const visualClips = timeline.tracks.find(
+      (track) => track.track_type === "visual",
+    )?.clips!;
+    expect(visualClips).toHaveLength(2);
+    // 段时长 = 口播 25s + 尾部缓冲 3s = 28s。首段 clip 覆盖整段（视频
+    // 13s 放完后末帧定格，由渲染端处理），次段 clip 叠加覆盖 13-26s。
+    expect(visualClips[0]).toMatchObject({
+      artifact_id: "artifact_video_split_0",
+      start_sec: 0,
+      duration_sec: 28,
+      clip_kind: "video",
+    });
+    expect(visualClips[1]).toMatchObject({
+      artifact_id: "artifact_video_split_1",
+      start_sec: 13,
+      duration_sec: 13,
+      clip_id: "clip_visual_sb_001_split_1",
+    });
+    // 拼接后剩余 2 秒（26-28s）由末帧定格补齐
+    expect(timeline.notes.join("\n")).toContain(
+      "compose_video_last_frame_hold:sb_001 hold=2.0s (after splits)",
+    );
+  });
 });
