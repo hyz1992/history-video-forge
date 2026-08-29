@@ -15,6 +15,7 @@ import { createAssetProviderJobRecord } from "./asset-provider-job.repository.js
 import { recordProviderJobUsage } from "../generation-cost/usage-cost-recorder.js";
 import { DEFAULT_VIDEO_ESTIMATE_SECONDS } from "../generation-cost/generation-cost.service.js";
 import { readDashscopeConfig } from "./assets-run.service.js";
+import { clampDashscopeImageToVideoDuration } from "./providers/dashscope/dashscope-image-to-video-provider.js";
 import type {
   AssetProviderAdapter,
   AssetProviderContext,
@@ -443,18 +444,29 @@ function measuredUnitsForTask(
     case "image_still": {
       // 2026-08-23：图片规格（分辨率）来自执行端实际使用的 DashScope 配置，
       // 进入 usage 明细供费用清单展示（规格/数量/模型/价格）。
+      // 2026-08-29：与执行同源——adapter 优先消费任务参数 size（编译器冻结），
+      // env imageSize 仅在参数缺失时兜底；计价按张不分档，此处只影响明细展示。
       const dashscope = readDashscopeConfig(undefined);
+      const paramSize =
+        typeof planTask.parameters["size"] === "string"
+          ? (planTask.parameters["size"] as string)
+          : undefined;
+      const actualSize = paramSize ?? dashscope.imageSize;
       return {
         unitType: "image",
         count: 1,
-        detail: dashscope.imageSize ? { resolution: dashscope.imageSize } : undefined,
+        detail: actualSize ? { resolution: actualSize } : undefined,
       };
     }
     case "video_clip": {
+      // 2026-08-29：计价秒数与执行同源——adapter 对显式 duration_sec 施加
+      // 2..15 秒 clamp（DashScope 单任务上限），超过 15 秒的任务实际只生成
+      // 15 秒；计价若按原参数秒数会系统性高估（如 25s 任务记 ¥25 实付 ¥15）。
+      // 因此用同一 clamp 函数取执行秒数。
       const duration = planTask.parameters["duration_sec"];
       const count =
         typeof duration === "number" && Number.isFinite(duration) && duration > 0
-          ? duration
+          ? clampDashscopeImageToVideoDuration(duration)
           : DEFAULT_VIDEO_ESTIMATE_SECONDS;
       // 2026-08-28 修复：计价 quality 与执行同源——adapter 实际调用的分辨率
       // 就是 planTask.parameters.resolution（编译器按快照 api_quality 冻结写入，

@@ -450,7 +450,10 @@ describe("assets execution engine", () => {
         recommended_mode: "auto",
         provider_hint: "fake_paid_video",
         prompt_draft: "slow push-in",
-        parameters: { duration_sec: 15, resolution: "1080P" },
+        // 25 秒超出 DashScope 单任务上限：执行端 clamp 为 15 秒，
+        // 计价必须同 clamp（否则按 25 秒高估）；同时验证 resolution
+        // 参数优先于快照 api_quality（2026-08-28 回归）。
+        parameters: { duration_sec: 25, resolution: "1080P" },
         manual_upload_policy: {
           allowed: false,
           required: false,
@@ -509,7 +512,8 @@ describe("assets execution engine", () => {
       (record) => record.unitType === "video_second",
     );
     expect(usage).toBeDefined();
-    // 15 秒 × ¥1/秒（high_1080p），而非 15 × ¥0.6（standard_720p）
+    // duration_sec=25 被 clamp 为 15 秒执行与计价：15 × ¥1（high_1080p），
+    // 既不是 25 × ¥1（高估），也不是 15 × ¥0.6（720p 低估）
     expect(usage!.estimatedCostMicros).toBe("15000000");
     expect(usage!.actualCostMicros).toBe("15000000");
     expect(usage!.costBasis).toBe("estimate");
