@@ -792,6 +792,9 @@ describe("asset planning api", () => {
     expect(response.statusCode).toBe(500);
     expect(response.json()).toMatchObject({ error: "internal_server_error" });
     expect(response.json()).not.toHaveProperty("message");
+    // 2026-08-26 合同：失败后项目状态与激活指针全部回滚到入口前快照，
+    // 但 latestAssetPlanRunTraceJson 特意记录本次失败 run（含 error_code，
+    // 供前端资产页展示失败原因），不再保留旧 trace；updatedAt 反映回写。
     expect(prepared.project).toMatchObject({
       status: "render_ready",
       activeAssetPlanRecordId: "asset_plan_old",
@@ -799,12 +802,19 @@ describe("asset planning api", () => {
       activeComposeRecordId: "compose_old",
       activeRenderJobRecordId: "render_old",
       activePublishPackageRecordId: "publish_old",
-      latestAssetPlanRunTraceJson: oldAssetPlanTrace,
       latestAssetsRunTraceJson: oldAssetsTrace,
       latestComposeRunTraceJson: oldComposeTrace,
       latestRenderRunTraceJson: oldRenderTrace,
     });
-    expect(prepared.project.updatedAt).toEqual(oldUpdatedAt);
+    expect(prepared.project.latestAssetPlanRunTraceJson).toEqual(
+      expect.objectContaining({
+        phase: "asset_planning",
+        run_id: expect.any(String),
+        error_code: "internal_server_error",
+      }),
+    );
+    expect(prepared.project.latestAssetPlanRunTraceJson).not.toEqual(oldAssetPlanTrace);
+    expect(prepared.project.updatedAt).not.toEqual(oldUpdatedAt);
   });
 
   it("persists redacted successful intent chunk diagnostics in API, DB, and service trace", async () => {
