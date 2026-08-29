@@ -1,6 +1,7 @@
 import {
   existsSync,
   mkdirSync,
+  readFileSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -303,7 +304,8 @@ describe("DashScope image-to-video provider payload", () => {
       }
 
       if (urlText.startsWith("https://dashscope-result.test/")) {
-        return new Response("fake mp4 part", { status: 200 });
+        // 两段内容互异：验证独立落盘（审查 P1——此前固定文件名互相覆盖）
+        return new Response(`fake mp4 ${urlText.split("/").pop()}`, { status: 200 });
       }
 
       return new Response("unexpected", { status: 500 });
@@ -352,6 +354,24 @@ describe("DashScope image-to-video provider payload", () => {
       { index: 0, total: 2, of: "task_video_001", duration: 13 },
       { index: 1, total: 2, of: "task_video_001", duration: 13 },
     ]);
+
+    // 审查 P1 回归：各段独立落盘——文件名含段序、URI 互异、内容互异、
+    // hash 互异，两份文件同时存在且未被覆盖
+    const [part0, part1] = downloaded;
+    expect(part0.file_uri).not.toBe(part1.file_uri);
+    expect(part0.file_uri).toContain("task_video_001_part1.mp4");
+    expect(part1.file_uri).toContain("task_video_001_part2.mp4");
+    expect(part0.artifact_id).not.toBe(part1.artifact_id);
+    expect(existsSync(part0.file_uri)).toBe(true);
+    expect(existsSync(part1.file_uri)).toBe(true);
+    expect(readFileSync(part0.file_uri, "utf-8")).not.toBe(
+      readFileSync(part1.file_uri, "utf-8"),
+    );
+    const hash0 = (part0.metadata as Record<string, unknown>).file_hash;
+    const hash1 = (part1.metadata as Record<string, unknown>).file_hash;
+    expect(hash0).toBeTruthy();
+    expect(hash1).toBeTruthy();
+    expect(hash0).not.toBe(hash1);
   });
 
   it("不超过 15 秒的显式时长不拆分", async () => {

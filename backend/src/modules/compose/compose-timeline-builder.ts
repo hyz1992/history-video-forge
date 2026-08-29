@@ -252,11 +252,18 @@ function createVisualTrack(input: {
     }
 
     const videoDurationSec = artifact.metadata.duration_sec ?? 0;
-    if (videoDurationSec > 0 && timing.durationSec > videoDurationSec + 0.001) {
+    // 拆分首段（video_split_total>1）不适用"视频短于段"的末帧定格标注：
+    // 它的溢出区间由后续 split 段图层覆盖，标注会产生误导（审查 P2）。
+    const splitMetaEarly = artifact.metadata as Record<string, unknown> | undefined;
+    const isSplitPrimary =
+      typeof splitMetaEarly?.video_split_of_task === "string" &&
+      typeof splitMetaEarly?.video_split_total === "number" &&
+      (splitMetaEarly.video_split_total as number) > 1;
+    if (!isSplitPrimary && videoDurationSec > 0 && timing.durationSec > videoDurationSec + 0.001) {
       const holdSec = timing.durationSec - videoDurationSec;
       notes.push(`compose_video_last_frame_hold:${route.segment_id} hold=${holdSec.toFixed(1)}s`);
       clip.notes.push(`compose_video_last_frame_hold: hold=${holdSec.toFixed(1)}s`);
-    } else if (videoDurationSec > 0 && videoDurationSec > timing.durationSec + 0.001) {
+    } else if (!isSplitPrimary && videoDurationSec > 0 && videoDurationSec > timing.durationSec + 0.001) {
       const excessSec = videoDurationSec - timing.durationSec;
       notes.push(`compose_video_duration_exceeds_segment:${route.segment_id} excess=${excessSec.toFixed(1)}s`);
       clip.notes.push(`compose_video_duration_exceeds_segment: excess=${excessSec.toFixed(1)}s`);
@@ -290,22 +297,27 @@ function createVisualTrack(input: {
           (splitArtifact.metadata as Record<string, unknown> | undefined)
             ?.duration_sec as number ?? 0;
         const remainSec = timing.startSec + timing.durationSec - offsetSec;
-        const useDur = Math.min(splitDur, Math.max(0, remainSec));
+        // 审查 P2：最后一段延长到段末——媒体短于 clip 的区间由渲染端
+        // 末帧定格兜底，保证尾部暴露的是最后一段的画面而非首段图层。
+        const isLastSplit = i === splitArtifacts.length - 1;
+        const useDur = isLastSplit
+          ? Math.max(0, remainSec)
+          : Math.min(splitDur, Math.max(0, remainSec));
         clips.push({
           ...clip,
           clip_id: `clip_visual_${route.segment_id}_split_${i + 1}`,
           artifact_id: splitArtifact.artifact_id,
           start_sec: offsetSec,
           duration_sec: useDur,
-          notes: [`compose_video_split: index=${i + 1}`],
+          notes: [
+            `compose_video_split: index=${i + 1}`,
+            ...(isLastSplit && useDur > splitDur + 0.001
+              ? [`compose_video_last_frame_hold: hold=${(useDur - splitDur).toFixed(1)}s (last split)`]
+              : []),
+          ],
         });
         offsetSec += useDur;
         if (offsetSec >= timing.startSec + timing.durationSec - 0.001) break;
-      }
-
-      if (offsetSec < timing.startSec + timing.durationSec - 0.001) {
-        const tailHold = timing.startSec + timing.durationSec - offsetSec;
-        notes.push(`compose_video_last_frame_hold:${route.segment_id} hold=${tailHold.toFixed(1)}s (after splits)`);
       }
     }
   }

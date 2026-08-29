@@ -750,23 +750,26 @@ describe("buildComposeTimeline", () => {
       (track) => track.track_type === "visual",
     )?.clips!;
     expect(visualClips).toHaveLength(2);
-    // 段时长 = 口播 25s + 尾部缓冲 3s = 28s。首段 clip 覆盖整段（视频
-    // 13s 放完后末帧定格，由渲染端处理），次段 clip 叠加覆盖 13-26s。
+    // 段时长 = 口播 25s + 尾部缓冲 3s = 28s。首段 clip 覆盖整段（不标注
+    // hold——溢出区间由次段图层覆盖）；最后一段延长到段末（13-28s），
+    // 媒体短于 clip 的 2 秒由渲染端末帧定格兜底，尾部暴露的是次段画面
+    // 而非首段图层（审查 P2）。
     expect(visualClips[0]).toMatchObject({
       artifact_id: "artifact_video_split_0",
       start_sec: 0,
       duration_sec: 28,
       clip_kind: "video",
+      notes: [],
     });
     expect(visualClips[1]).toMatchObject({
       artifact_id: "artifact_video_split_1",
       start_sec: 13,
-      duration_sec: 13,
+      duration_sec: 15,
       clip_id: "clip_visual_sb_001_split_1",
+      notes: [
+        "compose_video_split: index=1",
+        "compose_video_last_frame_hold: hold=2.0s (last split)",
+      ],
     });
-    // 拼接后剩余 2 秒（26-28s）由末帧定格补齐
-    expect(timeline.notes.join("\n")).toContain(
-      "compose_video_last_frame_hold:sb_001 hold=2.0s (after splits)",
-    );
   });
 });

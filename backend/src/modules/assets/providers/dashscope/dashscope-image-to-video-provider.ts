@@ -488,10 +488,18 @@ export function createDashscopeImageToVideoProvider(
           projectStorageRootDir: ctx.projectStorageRootDir,
           runId: ctx.assetRunId,
         });
+        // 2026-08-29 修复（审查 P1）：拆分多段必须各自独立落盘——
+        // writeAssetFile 覆盖写，此前固定文件名会让后段覆盖前段，
+        // 所有 artifact 指向同一份最后下载的视频。
+        const splitIndex =
+          typeof pr.rawResponseJson?.split_index === "number"
+            ? pr.rawResponseJson.split_index
+            : null;
+        const splitSuffix = splitIndex !== null ? `_part${splitIndex + 1}` : "";
         const written = await writeAssetFile({
           storage,
           category: "videos",
-          fileName: `dashscope_${ctx.execution.task_id}.mp4`,
+          fileName: `dashscope_${ctx.execution.task_id}${splitSuffix}.mp4`,
           data: buffer,
         });
         const resolution = String(
@@ -504,7 +512,7 @@ export function createDashscopeImageToVideoProvider(
             : clampDashscopeImageToVideoDuration(options.durationSec);
 
         return {
-          artifact_id: `artifact_video_${ctx.execution.task_id}_${Date.now().toString(36)}`,
+          artifact_id: `artifact_video_${ctx.execution.task_id}${splitSuffix}_${Date.now().toString(36)}`,
           artifact_type: "video",
           origin: "provider",
           file_uri: written.fileUri,
