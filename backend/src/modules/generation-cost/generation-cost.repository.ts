@@ -514,6 +514,7 @@ function toUsageRecord(row: {
   estimatedCostMicros: string;
   actualCostMicros: string | null;
   costBasis: string;
+  unitDetailJson: unknown;
   durationMs: number | null;
   createdAt: Date;
   updatedAt: Date;
@@ -535,7 +536,9 @@ function toUsageRecord(row: {
     estimatedCostMicros: row.estimatedCostMicros,
     actualCostMicros: row.actualCostMicros,
     costBasis: row.costBasis as UsageCostRecordRecord["costBasis"],
-    unitDetailJson: null,
+    // 2026-08-30 修复：此前硬编码 null，Prisma 直查路径永远丢规格档位
+    // （费用清单视频 1080P/720P、图片分辨率），且 null 会回写覆盖内存镜像
+    unitDetailJson: (row.unitDetailJson ?? null) as Record<string, unknown> | null,
     durationMs: row.durationMs,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,

@@ -76,6 +76,8 @@ type StageRow =
       providerKey: string;
       modelId: string;
       unitType: string;
+      /** 展示用的规格档位：视频 1080P/720P、图片分辨率（如 1080*1920）；缺省 null。 */
+      specLabel: string | null;
       inputUnits: number | null;
       outputUnits: number | null;
       /** 单件记录数（合并条数）。 */
@@ -167,6 +169,25 @@ function microsToDecimalString(value: bigint): string {
   return `${sign}${abs.toString().slice(0, -6) || "0"}.${abs.toString().slice(-6).padStart(6, "0")}`;
 }
 
+/** unit_detail → 展示规格档位：视频画质（1080P/720P）、图片分辨率。 */
+const QUALITY_LABELS: Record<string, string> = {
+  standard_720p: "720P",
+  high_1080p: "1080P",
+};
+
+function unitDetailSpecLabel(unitType: string, unitDetail: Record<string, unknown> | null): string | null {
+  if (!unitDetail) return null;
+  if (unitType === "video_second") {
+    const quality = unitDetail.quality;
+    return typeof quality === "string" ? QUALITY_LABELS[quality] ?? quality : null;
+  }
+  if (unitType === "image") {
+    const resolution = unitDetail.resolution;
+    return typeof resolution === "string" && resolution.length > 0 ? resolution : null;
+  }
+  return null;
+}
+
 const stageGroups = computed<StageGroup[]>(() => {
   const byStage = new Map<string, ProjectCostRecordDto[]>();
   for (const record of records.value) {
@@ -194,14 +215,17 @@ const stageGroups = computed<StageGroup[]>(() => {
       priced = true;
       estimated += BigInt(record.estimated_cost_cny.replace(".", ""));
       if (record.actual_cost_cny !== null) actual += BigInt(record.actual_cost_cny.replace(".", ""));
-      const groupKey = `${record.capability}|${record.provider_key}|${record.model_id}|${record.unit_type}`;
+      // 分组键含规格档位（视频画质/图片分辨率）：不同档位单价不同，
+      // 不得合并成一行（2026-08-30：1080P 与 720P 分行展示）。
+      const specLabel = unitDetailSpecLabel(record.unit_type, record.unit_detail);
+      const groupKey = `${record.capability}|${record.provider_key}|${record.model_id}|${record.unit_type}|${specLabel ?? ""}`;
       const group = mediaByGroup.get(groupKey) ?? [];
       group.push(record);
       mediaByGroup.set(groupKey, group);
     }
     // 媒体同类项合并：数量/单价/总价/总耗时一行展示。
     for (const [groupKey, group] of mediaByGroup) {
-      const [capability, , modelId, unitType] = groupKey.split("|");
+      const [capability, , modelId, unitType, spec] = groupKey.split("|");
       const inputUnits = group.some((r) => r.input_units !== null)
         ? group.reduce((sum, r) => sum + (r.input_units ?? 0), 0)
         : null;
@@ -237,6 +261,7 @@ const stageGroups = computed<StageGroup[]>(() => {
         providerKey: group[0]!.provider_key,
         modelId: modelId!,
         unitType: unitType!,
+        specLabel: spec || null,
         inputUnits,
         outputUnits,
         count: group.length,
@@ -353,9 +378,10 @@ const CAPABILITY_LABELS: Record<string, string> = {
   "tts.synthesize": "TTS 口播",
 };
 
-/** 合并后的媒体行标题：类型 + 模型 + 数量（图片张数/视频秒数/字数）。 */
+/** 合并后的媒体行标题：类型 + 模型 + 规格档位 + 数量（图片张数/视频秒数/字数）。 */
 function mediaGroupTitle(row: Extract<StageRow, { kind: "media-group" }>): string {
   const capability = CAPABILITY_LABELS[row.capability] ?? row.capability;
+  const specText = row.specLabel ? ` · ${row.specLabel}` : "";
   const units: string[] = [];
   if (row.inputUnits !== null && row.inputUnits > 0) {
     units.push(`${row.inputUnits}${UNIT_LABELS[row.unitType] ?? ""} 输入`);
@@ -364,7 +390,7 @@ function mediaGroupTitle(row: Extract<StageRow, { kind: "media-group" }>): strin
     units.push(`${row.outputUnits}${UNIT_LABELS[row.unitType] ?? ""} 输出`);
   }
   const unitText = units.length > 0 ? ` · ${units.join(" · ")}` : "";
-  return `${capability} · ${row.modelId}${unitText}`;
+  return `${capability} · ${row.modelId}${specText}${unitText}`;
 }
 
 /** 单条 LLM 行标题：调用角色（具体用处）+ 模型 + token。 */

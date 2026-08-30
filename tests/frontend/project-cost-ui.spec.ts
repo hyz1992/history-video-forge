@@ -321,6 +321,88 @@ describe("ProjectCostPanel（费用清单面板）", () => {
     expect(assetGroup.findAll('[data-testid="cost-record-unit-price"]').length).toBe(1);
   });
 
+  it("视频行标注画质档位（1080P/720P），不同档位不合并且各自计价", async () => {
+    const state = reactive({
+      costSummary: {
+        data: {
+          currency: "CNY",
+          total_estimated_cost_cny: "17.000000",
+          total_actual_cost_cny: "17.000000",
+          run_count: 1,
+          run_status_counts: { pending_dispatch: 0, running: 0, succeeded: 1, failed: 0, needs_reconciliation: 0 },
+          capability_breakdown: [],
+        },
+        loading: false,
+        error: null,
+      },
+      costRecords: {
+        data: {
+          records: [
+            {
+              id: "usage_v1080",
+              run_id: "run_v",
+              run_status: "succeeded",
+              snapshot_id: "snap_v",
+              operation: "assets.generate",
+              capability: "video.image_to_video",
+              provider_key: "dashscope",
+              model_id: "wan2.7-i2v-2026-04-25",
+              status: "succeeded",
+              unit_type: "video_second",
+              input_units: null,
+              output_units: 11,
+              estimated_cost_cny: "11.000000",
+              actual_cost_cny: "11.000000",
+              cost_basis: "estimate",
+              duration_ms: 109_000,
+              created_at: "2026-08-30T10:00:00.000Z",
+              operation_name: null,
+              unit_detail: { quality: "high_1080p" },
+            },
+            {
+              id: "usage_v720",
+              run_id: "run_v",
+              run_status: "succeeded",
+              snapshot_id: "snap_v",
+              operation: "assets.generate",
+              capability: "video.image_to_video",
+              provider_key: "dashscope",
+              model_id: "wan2.7-i2v-2026-04-25",
+              status: "succeeded",
+              unit_type: "video_second",
+              input_units: null,
+              output_units: 10,
+              estimated_cost_cny: "6.000000",
+              actual_cost_cny: "6.000000",
+              cost_basis: "estimate",
+              duration_ms: 60_000,
+              created_at: "2026-08-30T10:01:00.000Z",
+              operation_name: null,
+              unit_detail: { quality: "standard_720p" },
+            },
+          ],
+          total: 2,
+        },
+        loading: false,
+        error: null,
+      },
+    });
+    const store: GenerationCostStore = {
+      state,
+      async loadCostSummary() {},
+      async loadCostRecords() {},
+    };
+    const wrapper = mountPanel(store);
+    await flushPromises();
+
+    const text = wrapper.text();
+    // 档位显示在标题里，两档分行且各自计价（不合并）
+    expect(text).toContain("视频 · wan2.7-i2v-2026-04-25 · 1080P · 11秒 输出");
+    expect(text).toContain("视频 · wan2.7-i2v-2026-04-25 · 720P · 10秒 输出");
+    expect(text).toContain("单价 ¥1");
+    expect(text).toContain("单价 ¥0.6");
+  });
+
   it("展示每条记录耗时与阶段总耗时", async () => {
     const store = createMockCostStore();
     const wrapper = mountPanel(store);
