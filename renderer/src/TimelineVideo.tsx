@@ -101,7 +101,6 @@ function renderVisualClip(clip: RenderVisualClipProp, fps: number) {
       <Sequence from={sequence.from} durationInFrames={sequence.durationInFrames}>
         <OffthreadVideo
           src={src}
-          muted
           style={{
             width: "100%",
             height: "100%",
