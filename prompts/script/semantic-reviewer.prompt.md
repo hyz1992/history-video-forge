@@ -1,6 +1,6 @@
 ---
 id: script.semantic-reviewer
-version: v1.0.0
+version: v1.0.1
 stage: script
 language: zh-CN
 consumes:
@@ -33,6 +33,7 @@ status: active
   - `patch_targets`
   - `summary`
   - `confidence`
+- `hard_issues` / `soft_issues` 的每个条目必须自带内容：一句话中文描述（字符串，或含 `message` 字段的对象，可附 `severity`）；只写 `severity` 没有描述的空条目不允许输出，宁可把内容并入 `summary` 也要保证条目可读
 - 决策只允许：
   - `pass`
   - `patch_once`
