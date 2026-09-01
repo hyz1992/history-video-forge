@@ -33,15 +33,22 @@ export interface DashScopeImageToVideoPayloadInput {
 
 export interface DashScopeImageToVideoPayload {
   model: string;
-  input: {
-    prompt: string;
-    media: Array<{ type: "first_frame"; url: string }>;
-  };
+  input:
+    | {
+        prompt: string;
+        media: Array<{ type: "first_frame"; url: string }>;
+      }
+    | {
+        prompt: string;
+        img_url: string;
+      };
   parameters: {
     resolution: string;
     duration: number;
     prompt_extend: boolean;
     watermark: boolean;
+    /** wan2.6 系列显式有声（audio=false 为无声版）；wan2.7 无此参数（默认有声）。 */
+    audio?: boolean;
   };
 }
 
@@ -64,21 +71,33 @@ export function clampDashscopeImageToVideoDuration(
   return Math.min(15, Math.max(2, normalized));
 }
 
+/**
+ * wan2.6 系列（wan2.6-i2v-flash 等）与 wan2.7 的请求体结构不同：
+ * - wan2.6 用 `input.img_url` 传首帧图，`parameters.audio` 控制有声（true 有声 / false 无声）。
+ * - wan2.7 用 `input.media: [{type:"first_frame",url}]`，无 audio 参数（默认有声）。
+ * 未知模型按 wan2.7 格式构造（fail-safe 到已验证路径）。
+ */
+export function isWan26ImageToVideoModel(model: string): boolean {
+  return model.includes("wan2.6");
+}
+
 export function buildDashscopeImageToVideoPayload(
   input: DashScopeImageToVideoPayloadInput,
 ): DashScopeImageToVideoPayload {
+  const useWan26Input = isWan26ImageToVideoModel(input.model);
+  const parameters: DashScopeImageToVideoPayload["parameters"] = {
+    resolution: input.resolution ?? "720P",
+    duration: clampDashscopeImageToVideoDuration(input.durationSec),
+    prompt_extend: input.promptExtend ?? true,
+    watermark: input.watermark ?? false,
+    ...(useWan26Input ? { audio: true } : {}),
+  };
   return {
     model: input.model,
-    input: {
-      prompt: input.prompt,
-      media: [{ type: "first_frame", url: input.sourceImageUrl }],
-    },
-    parameters: {
-      resolution: input.resolution ?? "720P",
-      duration: clampDashscopeImageToVideoDuration(input.durationSec),
-      prompt_extend: input.promptExtend ?? true,
-      watermark: input.watermark ?? false,
-    },
+    input: useWan26Input
+      ? { prompt: input.prompt, img_url: input.sourceImageUrl }
+      : { prompt: input.prompt, media: [{ type: "first_frame", url: input.sourceImageUrl }] },
+    parameters,
   };
 }
 

@@ -205,6 +205,33 @@ describe("DashScope image-to-video provider payload", () => {
     expect(clampDashscopeImageToVideoDuration(30)).toBe(15);
   });
 
+  it("builds a wan2.6-i2v-flash payload with img_url and explicit audio=true", () => {
+    const payload = buildDashscopeImageToVideoPayload({
+      model: "wan2.6-i2v-flash",
+      prompt: "A tense historical close-up, slow push-in.",
+      sourceImageUrl: "data:image/png;base64,abc",
+      resolution: "720P",
+      durationSec: 5,
+      promptExtend: true,
+      watermark: false,
+    });
+
+    expect(payload).toEqual({
+      model: "wan2.6-i2v-flash",
+      input: {
+        prompt: "A tense historical close-up, slow push-in.",
+        img_url: "data:image/png;base64,abc",
+      },
+      parameters: {
+        resolution: "720P",
+        duration: 5,
+        prompt_extend: true,
+        watermark: false,
+        audio: true,
+      },
+    });
+  });
+
   it("submits, polls, downloads, and normalizes a video artifact", async () => {
     tempDir = join(tmpdir(), `dashscope-i2v-provider-${Date.now()}`);
     const calls: string[] = [];
