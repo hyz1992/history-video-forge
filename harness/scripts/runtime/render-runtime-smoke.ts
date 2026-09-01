@@ -5,7 +5,6 @@ import { pathToFileURL } from "node:url";
 
 import { buildApp } from "../../../backend/src/app";
 import { saveAssetPlanRecord } from "../../../backend/src/modules/asset-planning/asset-plan-record.repository";
-import { DEFAULT_AUDIO_LIBRARY_ITEMS } from "../../../backend/src/modules/assets/default-audio-library";
 import { loadLightweightBgmCatalogItems } from "../../../backend/src/modules/assets/lightweight-audio-catalog-loader";
 import { saveMediaLibraryItem } from "../../../backend/src/modules/assets/media-library.repository";
 import { createFakeRenderAdapter } from "../../../backend/src/modules/render/fake-render-adapter";
@@ -417,10 +416,6 @@ async function seedSmokeMediaLibrary(
         volume: smokeBgm.volumeHint ?? 0.25,
       };
     }
-  }
-
-  for (const item of DEFAULT_AUDIO_LIBRARY_ITEMS) {
-    await saveMediaLibraryItem(app.db, item);
   }
 
   return { bgmCue };

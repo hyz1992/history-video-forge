@@ -6,7 +6,6 @@ import { pathToFileURL } from "node:url";
 import { buildApp, type AppInstance } from "../../../backend/src/app";
 import type { ProjectRecord } from "../../../backend/src/db/client";
 import { saveAssetPlanRecord } from "../../../backend/src/modules/asset-planning/asset-plan-record.repository";
-import { DEFAULT_AUDIO_LIBRARY_ITEMS } from "../../../backend/src/modules/assets/default-audio-library";
 import { loadLightweightBgmCatalogItems } from "../../../backend/src/modules/assets/lightweight-audio-catalog-loader";
 import { saveMediaLibraryItem } from "../../../backend/src/modules/assets/media-library.repository";
 import { createLocalRemotionRenderAdapter } from "../../../backend/src/modules/render/local-remotion-render-adapter";
@@ -543,9 +542,6 @@ export async function seedAcceptanceMediaLibrary(
 
   for (const entry of loadedItems) {
     await saveMediaLibraryItem(app.db, entry.item);
-  }
-  for (const item of DEFAULT_AUDIO_LIBRARY_ITEMS) {
-    await saveMediaLibraryItem(app.db, item);
   }
 
   if (

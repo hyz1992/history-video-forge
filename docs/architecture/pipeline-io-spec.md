@@ -270,7 +270,7 @@ Asset Planning v1 消费 active `StoryboardRecord` 及其来源 `ScriptRecord` /
 
 ## 5. Assets v1 阶段（2026-05-18 已同步后端执行基础）
 
-Assets v1 消费 active `AssetPlanRecord` 及其来源 `StoryboardRecord` / `ScriptRecord` / `TopicPackage`，输出可持久化的资产执行结果清单。当前后端已覆盖 manifest builder、本地 validator、fake/local provider 执行、本地文件存储、provider job 记录、manual artifact metadata registration / accept、media library 基础、默认音频素材库 seed 合同、全局音色库解析、本地 BGM/SFX 素材选择与 deterministic WAV fixture 物化，以及显式 DashScope TTS/文生图/image-to-video 路径。它不实现 compose timeline，也不负责最终视频导出。
+Assets v1 消费 active `AssetPlanRecord` 及其来源 `StoryboardRecord` / `ScriptRecord` / `TopicPackage`，输出可持久化的资产执行结果清单。当前后端已覆盖 manifest builder、本地 validator、fake/local provider 执行、本地文件存储、provider job 记录、manual artifact metadata registration / accept、media library 基础、全局音色库解析、本地 BGM/SFX 素材选择与 deterministic WAV fixture 物化，以及显式 DashScope TTS/文生图/image-to-video 路径。它不实现 compose timeline，也不负责最终视频导出。
 
 输入：
 
@@ -298,7 +298,7 @@ Assets v1 消费 active `AssetPlanRecord` 及其来源 `StoryboardRecord` / `Scr
 
 - `buildInitialAssetManifest` 从执行期 `AssetPlan` 确定性构建：为每个 plan task 创建 `AssetTaskExecution`，为 `render_motion_cue` 创建 inline artifact，为 TTS chunk 创建占位 artifact，构建 `SegmentAssetRoute` 和 `AssetAudioSummary`。
 - `bgm_cue` / `sfx_cue` 第一版只走离线本地媒体库：选择 `approved_for_use` 且 `commercial_use_allowed` 的素材，按显式 `library_item_id` 或 required/mood tags 选中条目，再物化为本地 render-ready WAV artifact。缺失可选 BGM/SFX 只记录 notes/warnings，不阻塞 assets。
-- 默认音频素材库 seed 当前是 metadata-first / license-evidence-first：它保存 `source_url`、license、hash、tags、mood tags、duration 与 approval 状态；真实音频下载或用户提供文件必须在后续单独 import-check 中替换真实 SHA-256，并保留具体素材来源页和授权证据。
+- BGM/SFX 素材库当前为空（`storage/media-library/catalog.json` 不存在时选择器优雅降级、不产出 artifact）；缺失可选 BGM/SFX 只记录 notes/warnings，不阻塞 assets。历史代码中的"默认音频素材库 seed"（`default-audio-library.ts`）已于 2026-08-31 删除：它只是元数据示例集，从未被运行时消费，真实素材必须通过 `catalog.json` import-check 引入（metadata-first / license-evidence-first：保存 `source_url`、license、hash、tags、mood tags、duration 与 approval 状态，真实音频下载或用户提供文件必须替换真实 SHA-256 并保留授权证据）。
 - `BgmPlacement.source_task_id` 是 `bgm_cue` task 到 placement 的稳定关联；compose/renderer 只消费已附着到 placement 的具体 `bgm_audio` artifact。`SegmentAssetRoute.bgm_placement_ids` 在当前 slice 仍保留但不写入，BGM 仍通过 `audio_summary.bgm_placements` 路由。
 - `sfx_cue` 使用 `AssetPlanTask.source_segment_id` 作为 segment route 归属，并只在有明确 tags 或显式素材 ID 时生成 `sfx_audio` artifact，避免无依据地滥用音效。
 - `bgm_audio` / `sfx_audio` artifact metadata 通过 shared schema passthrough 保留素材审计字段，例如 `library_item_id`、`selection_label`、`license_type`、`attribution_required`、`attribution_text`、`required_tags`、`matched_mood_tags` 与 `source_materialized_from`。

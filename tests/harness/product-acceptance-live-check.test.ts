@@ -19,6 +19,7 @@ import {
   seedAcceptanceMediaLibrary,
   seedProductAcceptanceProject,
 } from "../../harness/scripts/runtime/product-acceptance-live-check";
+import { saveMediaLibraryItem } from "../../backend/src/modules/assets/media-library.repository";
 import type { AssetPlan, AssetTask } from "../../shared/src/index";
 
 describe("product acceptance live-check harness", () => {
@@ -329,6 +330,27 @@ describe("product acceptance live-check harness", () => {
         storyboardPlan: makeStoryboardPlanFixture(),
       },
       outputDir: mkdtempSync(join(tmpdir(), "svf2-acceptance-media-")),
+    });
+
+    // 默认音频示例库已删除：显式 id 校验由测试自行 seed 一条素材验证。
+    await saveMediaLibraryItem(seeded.app.db, {
+      library_item_id: "bgm_solemn_historical_001",
+      type: "bgm",
+      file_uri: "library://audio/bgm/bgm_solemn_historical_001.wav",
+      mime_type: "audio/wav",
+      duration_sec: 12,
+      loopable: true,
+      tags: ["background"],
+      mood_tags: ["solemn"],
+      license: {
+        license_type: "cc0",
+        commercial_use_allowed: true,
+        attribution_required: false,
+        source_url: "https://example.com/bgm-solemn-historical",
+      },
+      file_hash: "sha256:test-bgm-solemn-historical",
+      imported_at: "2026-08-31T00:00:00.000Z",
+      approved_for_use: true,
     });
 
     await seedAcceptanceMediaLibrary(seeded.app, {
