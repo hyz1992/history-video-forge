@@ -754,6 +754,44 @@ describe("prompt runtime", () => {
     );
   });
 
+  it("drops reviewer issue entries that carry no code and no message (severity-only)", async () => {
+    const { reviewScriptSemantics } = await import(
+      "../../../backend/src/modules/script/script-semantic-review.service.js"
+    );
+    const { createOpenAiCompatibleProvider } = await import(
+      "../../../backend/src/runtime/llm/openai-compatible-provider.js"
+    );
+    // 真实案例（水淹七军 p_0669c1fa）：reviewer 只回 {severity:"low"}，
+    // 内容全在 summary——空条目渲染成空白行且让"有建议"判断失真。
+    const reviewerOutput = {
+      stage: "script_semantic_review",
+      decision: "pass",
+      patch_intent: null,
+      hard_issues: [{ severity: "high" }],
+      soft_issues: [{ severity: "low" }, "开头抓力可以更狠", { code: "pace_too_slow" }],
+      patch_targets: [],
+      summary: "存在三项轻微偏差，均属局部表达层面。",
+      confidence: 0.88,
+    };
+    const invokeApi = vi.fn(async () => ({ rawOutput: JSON.stringify(reviewerOutput), content: JSON.stringify(reviewerOutput), metadata: {} }));
+    const gateway = createLlmGateway({
+      registry: createPromptRegistry(),
+      provider: createOpenAiCompatibleProvider({
+        model: "glm-4.5",
+        invokeApi,
+      }),
+    });
+
+    const result = await reviewScriptSemantics({
+      bundle: { hard_lane: {}, soft_lane: {} },
+      draft: { script_text: "正文", opening_span: "正文", ending_span: "结尾" },
+      llmGateway: gateway,
+    } as any);
+
+    expect(result.soft_issues).toEqual(["开头抓力可以更狠", { code: "pace_too_slow" }]);
+    expect(result.hard_issues).toEqual([]);
+  });
+
   it("delegates invokeStructuredPrompt through the provider contract", async () => {
     const interactionLogWriter = {
       write: vi.fn(),

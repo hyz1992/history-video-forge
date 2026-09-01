@@ -134,6 +134,14 @@ function normalizeIssueList(value: unknown) {
       const record = item as Record<string, unknown>;
       const code = record.code ?? record.issue_type;
       const message = record.message ?? record.description;
+      // 结构过滤：既无 code 又无 message 的条目（如 reviewer 只回 {severity}）
+      // 对读者无信息量，渲染成空行且会让"有审校建议"的判断失真。
+      if (
+        !(typeof code === "string" && code.length > 0) &&
+        !(typeof message === "string" && message.length > 0)
+      ) {
+        return null;
+      }
       return {
         ...(typeof code === "string" && code.length > 0 ? { code } : {}),
         ...(typeof message === "string" && message.length > 0 ? { message } : {}),
