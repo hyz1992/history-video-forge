@@ -38,6 +38,7 @@ const MEDIA_READY = {
   registeredModels: [
     { capability: "image.generate" as const, providerKey: "dashscope", modelId: "wan2.6-t2i" },
     { capability: "video.image_to_video" as const, providerKey: "dashscope", modelId: "wan2.7-i2v-2026-04-25" },
+    { capability: "video.image_to_video" as const, providerKey: "dashscope", modelId: "wan2.6-i2v-flash" },
     { capability: "tts.synthesize" as const, providerKey: "dashscope", modelId: "qwen3-tts-instruct-flash" },
   ],
   credentialConfigured: true,

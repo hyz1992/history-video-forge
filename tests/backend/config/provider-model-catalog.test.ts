@@ -33,6 +33,7 @@ import { listPublicGenerationCapabilities } from "../../../backend/src/modules/g
 const DASHSCOPE_REGISTERED_MODELS = [
   { capability: "image.generate" as const, providerKey: "dashscope", modelId: "wan2.6-t2i" },
   { capability: "video.image_to_video" as const, providerKey: "dashscope", modelId: "wan2.7-i2v-2026-04-25" },
+  { capability: "video.image_to_video" as const, providerKey: "dashscope", modelId: "wan2.6-i2v-flash" },
   { capability: "tts.synthesize" as const, providerKey: "dashscope", modelId: "qwen3-tts-instruct-flash" },
 ];
 
@@ -58,7 +59,8 @@ const STUB_TIER_INPUT = {
 describe("pricing catalog seed", () => {
   it("provides DashScope catalog records for image, image-to-video and tts capabilities", () => {
     const seed = buildPricingCatalogSeed(REAL_TIER_INPUT);
-    const byCapability = new Map(seed.map((e) => [e.capability, e]));
+    // 每个能力可能有多条候选行，目录断言只针对 isDefault 的默认条目。
+    const byCapability = new Map(seed.filter((e) => e.isDefault).map((e) => [e.capability, e]));
 
     const image = byCapability.get("image.generate");
     expect(image?.providerKey).toBe("dashscope");
@@ -81,7 +83,7 @@ describe("pricing catalog seed", () => {
 
   it("maps llm.smart and llm.flash to the resolved real tier provider/model", () => {
     const seed = buildPricingCatalogSeed(REAL_TIER_INPUT);
-    const byCapability = new Map(seed.map((e) => [e.capability, e]));
+    const byCapability = new Map(seed.filter((e) => e.isDefault).map((e) => [e.capability, e]));
 
     expect(byCapability.get("llm.smart")?.providerKey).toBe("deepseek");
     expect(byCapability.get("llm.smart")?.modelId).toBe("deepseek-v4-pro");
@@ -96,7 +98,7 @@ describe("pricing catalog seed", () => {
 
   it("maps stub llm tiers to zero external cost", () => {
     const seed = buildPricingCatalogSeed(STUB_TIER_INPUT);
-    const byCapability = new Map(seed.map((e) => [e.capability, e]));
+    const byCapability = new Map(seed.filter((e) => e.isDefault).map((e) => [e.capability, e]));
     for (const slot of ["llm.smart", "llm.flash"] as const) {
       const entry = byCapability.get(slot)!;
       expect(entry.providerKey).toBe("stub");
@@ -119,7 +121,7 @@ describe("pricing catalog seed", () => {
       },
       media: { deploymentScope: "cn-beijing" },
     });
-    const byCapability = new Map(seed.map((e) => [e.capability, e]));
+    const byCapability = new Map(seed.filter((e) => e.isDefault).map((e) => [e.capability, e]));
     expect(byCapability.get("llm.flash")?.providerKey).toBe("deepseek");
     expect(byCapability.get("llm.flash")?.modelId).toBe("deepseek-v4-pro");
   });
@@ -592,7 +594,8 @@ describe("generation cost bootstrap", () => {
     expect(result.readiness.ok).toBe(true);
     expect(result.disabledProviderModelIds).toEqual([]);
     const entries = listProviderModelCatalog(db);
-    expect(entries.length).toBe(5);
+    // 媒体 3（image/video 默认 + video 候选 wan2.6-i2v-flash/tts）+ LLM 2。
+    expect(entries.length).toBe(6);
     for (const entry of entries) {
       expect(entry.status, entry.id).toBe("active");
     }
@@ -655,7 +658,7 @@ describe("generation cost bootstrap", () => {
     await bootstrapGenerationCostCatalog(db, REAL_TIER_INPUT);
     const second = await bootstrapGenerationCostCatalog(db, REAL_TIER_INPUT);
     expect(second.disabledProviderModelIds).toEqual([]);
-    expect(listProviderModelCatalog(db).length).toBe(5);
+    expect(listProviderModelCatalog(db).length).toBe(6);
   });
 
   it("restores active catalog rows when the environment recovers (demo then non-demo restart)", async () => {
@@ -666,15 +669,27 @@ describe("generation cost bootstrap", () => {
       ...REAL_TIER_INPUT,
       environment: { demoMode: true, testEnv: false },
     });
-    const videoId = listProviderModelCatalog(db).find(
-      (e) => e.capability === "video.image_to_video",
-    )!.id;
-    expect(db.providerModelCatalog.get(videoId)?.status).toBe("disabled");
+    const demoVideoIds = listProviderModelCatalog(db)
+      .filter((e) => e.capability === "video.image_to_video")
+      .map((e) => e.id);
+    expect(demoVideoIds.length).toBe(2);
+    for (const id of demoVideoIds) {
+      expect(db.providerModelCatalog.get(id)?.status).toBe("disabled");
+    }
 
     const recovered = await bootstrapGenerationCostCatalog(db, REAL_TIER_INPUT);
     expect(recovered.readiness.ok).toBe(true);
-    expect(db.providerModelCatalog.get(videoId)?.status).toBe("active");
-    expect(db.providerModelCatalog.get(videoId)?.isDefault).toBe(true);
+    const defaultVideoId = listProviderModelCatalog(db).find(
+      (e) => e.capability === "video.image_to_video" && e.isDefault,
+    )!.id;
+    expect(db.providerModelCatalog.get(defaultVideoId)?.status).toBe("active");
+    expect(db.providerModelCatalog.get(defaultVideoId)?.isDefault).toBe(true);
+    // 候选行恢复 active 且保持非默认（readiness 允许非默认候选与默认行并存）。
+    const candidateVideo = listProviderModelCatalog(db).find(
+      (e) => e.capability === "video.image_to_video" && e.modelId === "wan2.6-i2v-flash",
+    )!;
+    expect(candidateVideo.status).toBe("active");
+    expect(candidateVideo.isDefault).toBe(false);
   });
 });
 

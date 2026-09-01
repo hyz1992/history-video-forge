@@ -257,6 +257,46 @@ export function buildPricingCatalogSeed(input: {
       isDefault: true,
     }),
     toRecord({
+      id: `video.image_to_video.dashscope.${scope}.wan2.6-i2v-flash`,
+      capability: "video.image_to_video",
+      providerKey: "dashscope",
+      modelId: "wan2.6-i2v-flash",
+      displayName: "万相图生视频轻量版（wan2.6-i2v-flash，有声）",
+      qualityTier: "standard",
+      speedTier: "fast",
+      parameterCapabilitiesJson: {
+        deployment_scope: scope,
+        api_video_qualities: ["standard_720p", "high_1080p"],
+        min_duration_seconds_per_task: 2,
+        max_duration_seconds_per_task: 15,
+      },
+      pricingVersion: mediaPricingVersion(scope),
+      pricingJson:
+        scope === "singapore"
+          ? {
+              // dashscope-intl 新加坡 wan2.6-i2v-flash 有声价未核实：unpriced → unbounded。
+              unit_type: "video_second",
+              currency: "CNY",
+              unpriced: true,
+              effective_at: SEED_EFFECTIVE_AT,
+              source_note:
+                "dashscope-intl 新加坡 wan2.6-i2v-flash 有声价未核实：按 unbounded 处理，运营核实后登记",
+            }
+          : {
+              // 阿里云百炼北京价（2026-08-31 官方文档核实，有声档）：
+              // 720P ¥0.30/秒、1080P ¥0.50/秒（无声档 0.15/0.25 未入目录，仅有声支持）。
+              unit_type: "video_second",
+              currency: "CNY",
+              price_micros_per_second_by_quality: {
+                standard_720p: "300000",
+                high_1080p: "500000",
+              },
+              effective_at: SEED_EFFECTIVE_AT,
+              source_note: `${DASHSCOPE_MEDIA_SOURCE_NOTE}（wan2.6-i2v-flash 有声价，help.aliyun.com/zh/model-studio/wan2-6-i2v-flash）`,
+            },
+      isDefault: false,
+    }),
+    toRecord({
       id: `tts.synthesize.dashscope.${scope}.qwen3-tts-instruct-flash`,
       capability: "tts.synthesize",
       providerKey: "dashscope",

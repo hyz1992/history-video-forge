@@ -68,6 +68,7 @@ const CONFIGURED_MEDIA_INPUT = {
   registeredModels: [
     { capability: "image.generate" as const, providerKey: "dashscope", modelId: "wan2.6-t2i" },
     { capability: "video.image_to_video" as const, providerKey: "dashscope", modelId: "wan2.7-i2v-2026-04-25" },
+    { capability: "video.image_to_video" as const, providerKey: "dashscope", modelId: "wan2.6-i2v-flash" },
     { capability: "tts.synthesize" as const, providerKey: "dashscope", modelId: "qwen3-tts-instruct-flash" },
   ],
   credentialConfigured: true,
@@ -127,7 +128,7 @@ describe("generation cost catalog bootstrap (prisma)", () => {
     expect(mediaRow?.isDefault).toBe(true);
 
     const totalRows = await client.providerModelCatalog.count();
-    expect(totalRows).toBe(10); // 5 占位（disabled）+ 5 seed（active）
+    expect(totalRows).toBe(11); // 5 占位（disabled）+ 6 seed（active，含 wan2.6-i2v-flash 候选）
   });
 
   it("persists readiness-materialized disables for demo environments", async () => {
@@ -139,6 +140,7 @@ describe("generation cost catalog bootstrap (prisma)", () => {
     });
     expect(result.readiness.ok).toBe(false);
     expect(result.disabledProviderModelIds).toEqual([
+      "video.image_to_video.dashscope.cn-beijing.wan2.6-i2v-flash",
       "video.image_to_video.dashscope.cn-beijing.wan2.7-i2v-2026-04-25",
     ]);
 
