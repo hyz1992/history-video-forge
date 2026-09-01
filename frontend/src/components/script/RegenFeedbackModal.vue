@@ -34,11 +34,14 @@ function humanizeIssueCode(code: string) {
 
 const softIssues = computed(() => {
   const issues = props.script?.semantic_review?.soft_issues ?? [];
-  return issues.map((item) => {
-    if (typeof item === "string") return { code: "", message: item };
-    const rawCode = (item.code ?? "") as string;
-    return { code: humanizeIssueCode(rawCode), message: item.message ?? "" };
-  });
+  return issues
+    .map((item) => {
+      if (typeof item === "string") return { code: "", message: item };
+      const rawCode = (item.code ?? "") as string;
+      return { code: humanizeIssueCode(rawCode), message: item.message ?? "" };
+    })
+    // 兜底过滤：历史快照里存在只有 severity 没有内容的条目，渲染出来是空白行。
+    .filter((issue) => issue.code.length > 0 || issue.message.trim().length > 0);
 });
 
 const feedbackRequired = computed(() => softIssues.value.length === 0);
