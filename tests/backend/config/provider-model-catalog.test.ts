@@ -766,7 +766,13 @@ describe("resolve generation cost bootstrap input", () => {
 
     const intl = resolveGenerationCostBootstrapInput(makeDeps("https://dashscope-intl.aliyuncs.com"));
     expect(intl.media.deploymentScope).toBe("singapore");
-    expect(intl.media.registeredModels.length).toBe(3);
+    // env 默认 3 个媒体模型 + 内置媒体候选（DASHSCOPE_MEDIA_CANDIDATES_V1：wan2.6-i2v-flash）。
+    expect(intl.media.registeredModels.length).toBe(4);
+    expect(intl.media.registeredModels).toContainEqual({
+      capability: "video.image_to_video",
+      providerKey: "dashscope",
+      modelId: "wan2.6-i2v-flash",
+    });
 
     const unknown = resolveGenerationCostBootstrapInput(makeDeps("https://private.example.com"));
     expect(unknown.media.deploymentScope).toBe("unknown");

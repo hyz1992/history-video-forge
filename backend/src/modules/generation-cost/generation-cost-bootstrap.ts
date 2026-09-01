@@ -7,6 +7,7 @@ import { resolveTierModel } from "../../runtime/llm/tier-resolver.js";
 import { readDashscopeConfig } from "../assets/assets-run.service.js";
 import {
   buildPricingCatalogSeed,
+  DASHSCOPE_MEDIA_CANDIDATES_V1,
   resolveDashscopeDeploymentScope,
   type DashscopeDeploymentScope,
   type LlmTierSeedInput,
@@ -154,9 +155,14 @@ export function resolveGenerationCostBootstrapInput(
   }
   const media = deps.readDashscopeMediaConfig();
   const deploymentScope = resolveDashscopeDeploymentScope(media.baseUrl);
-  // S2-2C（§7.2）：registeredModels 扩展为候选集（env 默认 ∪ additionalModels），
+  // S2-2C（§7.2）：registeredModels 扩展为候选集（内置候选 ∪ env 默认 ∪ additionalModels），
   // 目录项与候选集精确匹配的 readiness 校验随目录多候选一起生效。
-  const additionalModels = deps.mediaAdditionalModels ?? [];
+  // 内置候选 DASHSCOPE_MEDIA_CANDIDATES_V1 与 seed 同源：不并入矩阵会出现
+  // "目录行被判未注册 → 物化 disabled → 前端候选不可见"（wan2.6-i2v-flash 回归）。
+  const additionalModels: MediaAdditionalModel[] = [
+    ...DASHSCOPE_MEDIA_CANDIDATES_V1,
+    ...(deps.mediaAdditionalModels ?? []),
+  ];
   return {
     llm,
     llmCandidates,

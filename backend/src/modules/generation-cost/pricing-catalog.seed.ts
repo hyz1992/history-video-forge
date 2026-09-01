@@ -54,6 +54,23 @@ export interface MediaAdditionalModel {
 }
 
 /**
+ * DashScope 媒体非默认候选（S2-2C §7.2 运营扩展，第一批真实条目）。
+ * 单一真相源：buildPricingCatalogSeed 的候选目录行与 bootstrap 生产绑定的
+ * registeredModels 都从这里派生——两边各自维护会出现"目录行被 readiness 判
+ * 未注册 → 物化 disabled → 前端候选不可见"的回归（wan2.6-i2v-flash 实例）。
+ */
+export const DASHSCOPE_MEDIA_CANDIDATES_V1: MediaAdditionalModel[] = [
+  {
+    capability: "video.image_to_video",
+    providerKey: "dashscope",
+    modelId: "wan2.6-i2v-flash",
+    displayName: "万相图生视频轻量版（wan2.6-i2v-flash，有声）",
+    qualityTier: "standard",
+    speedTier: "fast",
+  },
+];
+
+/**
  * tier → slot 目标解析的唯一实现（seed 与 readiness 共用，禁止各自复制一份）。
  * flash 未配置或声明 reusesSmart 时复用 smart；resolution_failed 由调用方处理。
  */
@@ -167,6 +184,33 @@ export function resolveDashscopeDeploymentScope(
 }
 
 /**
+ * 内置媒体候选的已核实价格（按 modelId 查表；只登记官方定价页可核实的档位）。
+ * 返回 null 表示该区域价格未核实 → unpriced。查无此表的外部候选一律 unpriced
+ * （unbounded，预算门禁必须显式授权）。
+ */
+const DASHSCOPE_MEDIA_CANDIDATE_PRICED_PRICING: Record<
+  string,
+  (scope: Exclude<DashscopeDeploymentScope, "unknown">) => Record<string, unknown> | null
+> = {
+  "wan2.6-i2v-flash": (scope) =>
+    scope === "singapore"
+      ? // dashscope-intl 新加坡 wan2.6-i2v-flash 有声价未核实：unpriced → unbounded。
+        null
+      : {
+          // 阿里云百炼北京价（2026-08-31 官方文档核实，有声档）：
+          // 720P ¥0.30/秒、1080P ¥0.50/秒（无声档 0.15/0.25 未入目录，仅有声支持）。
+          unit_type: "video_second",
+          currency: "CNY",
+          price_micros_per_second_by_quality: {
+            standard_720p: "300000",
+            high_1080p: "500000",
+          },
+          effective_at: SEED_EFFECTIVE_AT,
+          source_note: `${DASHSCOPE_MEDIA_SOURCE_NOTE}（wan2.6-i2v-flash 有声价，help.aliyun.com/zh/model-studio/wan2-6-i2v-flash）`,
+        },
+};
+
+/**
  * 构建五个 capability slot 的目录 seed。
  *
  * - 媒体三项（image / video / tts）固定映射当前真实 DashScope 模型
@@ -257,46 +301,6 @@ export function buildPricingCatalogSeed(input: {
       isDefault: true,
     }),
     toRecord({
-      id: `video.image_to_video.dashscope.${scope}.wan2.6-i2v-flash`,
-      capability: "video.image_to_video",
-      providerKey: "dashscope",
-      modelId: "wan2.6-i2v-flash",
-      displayName: "万相图生视频轻量版（wan2.6-i2v-flash，有声）",
-      qualityTier: "standard",
-      speedTier: "fast",
-      parameterCapabilitiesJson: {
-        deployment_scope: scope,
-        api_video_qualities: ["standard_720p", "high_1080p"],
-        min_duration_seconds_per_task: 2,
-        max_duration_seconds_per_task: 15,
-      },
-      pricingVersion: mediaPricingVersion(scope),
-      pricingJson:
-        scope === "singapore"
-          ? {
-              // dashscope-intl 新加坡 wan2.6-i2v-flash 有声价未核实：unpriced → unbounded。
-              unit_type: "video_second",
-              currency: "CNY",
-              unpriced: true,
-              effective_at: SEED_EFFECTIVE_AT,
-              source_note:
-                "dashscope-intl 新加坡 wan2.6-i2v-flash 有声价未核实：按 unbounded 处理，运营核实后登记",
-            }
-          : {
-              // 阿里云百炼北京价（2026-08-31 官方文档核实，有声档）：
-              // 720P ¥0.30/秒、1080P ¥0.50/秒（无声档 0.15/0.25 未入目录，仅有声支持）。
-              unit_type: "video_second",
-              currency: "CNY",
-              price_micros_per_second_by_quality: {
-                standard_720p: "300000",
-                high_1080p: "500000",
-              },
-              effective_at: SEED_EFFECTIVE_AT,
-              source_note: `${DASHSCOPE_MEDIA_SOURCE_NOTE}（wan2.6-i2v-flash 有声价，help.aliyun.com/zh/model-studio/wan2-6-i2v-flash）`,
-            },
-      isDefault: false,
-    }),
-    toRecord({
       id: `tts.synthesize.dashscope.${scope}.qwen3-tts-instruct-flash`,
       capability: "tts.synthesize",
       providerKey: "dashscope",
@@ -329,14 +333,30 @@ export function buildPricingCatalogSeed(input: {
   ];
 
   // S2-2C §7.2：媒体候选种入对应槽位（非默认；与默认行同 provider:model 去重）。
-  // 候选价格未核实 → unpriced（unbounded，预算门禁必须显式授权）。
+  // 内置候选 DASHSCOPE_MEDIA_CANDIDATES_V1 与 bootstrap 生产绑定的 registeredModels
+  // 同源；价格按已核实表给 priced，外部 additionalModels 一律 unpriced（unbounded，
+  // 预算门禁必须显式授权）。
   const defaultMediaKeys = new Set(
     entries.map((e) => `${e.capability}\u0000${e.providerKey}\u0000${e.modelId}`),
   );
-  for (const candidate of input.media.additionalModels ?? []) {
+  const seenCandidateKeys = new Set<string>();
+  const mergedCandidates: Array<{ candidate: MediaAdditionalModel; priced: boolean }> = [];
+  for (const candidate of [
+    ...DASHSCOPE_MEDIA_CANDIDATES_V1,
+    ...(input.media.additionalModels ?? []),
+  ]) {
     const key = `${candidate.capability}\u0000${candidate.providerKey}\u0000${candidate.modelId}`;
-    if (defaultMediaKeys.has(key)) continue;
-    defaultMediaKeys.add(key);
+    if (defaultMediaKeys.has(key) || seenCandidateKeys.has(key)) continue;
+    seenCandidateKeys.add(key);
+    mergedCandidates.push({
+      candidate,
+      priced: DASHSCOPE_MEDIA_CANDIDATE_PRICED_PRICING[candidate.modelId] !== undefined,
+    });
+  }
+  for (const { candidate, priced } of mergedCandidates) {
+    const pricedJson = priced
+      ? (DASHSCOPE_MEDIA_CANDIDATE_PRICED_PRICING[candidate.modelId]?.(scope) ?? null)
+      : null;
     entries.push(
       toRecord({
         id: `${candidate.capability}.${candidate.providerKey}.${scope}.${candidate.modelId}`,
@@ -346,21 +366,31 @@ export function buildPricingCatalogSeed(input: {
         displayName: candidate.displayName ?? `${candidate.providerKey}:${candidate.modelId}`,
         qualityTier: candidate.qualityTier ?? null,
         speedTier: candidate.speedTier ?? null,
-        parameterCapabilitiesJson: { deployment_scope: scope },
+        // 当前 i2v 候选与默认模型同参数面（720P/1080P、单任务 2-15 秒）。
+        parameterCapabilitiesJson:
+          candidate.capability === "video.image_to_video"
+            ? {
+                deployment_scope: scope,
+                api_video_qualities: ["standard_720p", "high_1080p"],
+                min_duration_seconds_per_task: 2,
+                max_duration_seconds_per_task: 15,
+              }
+            : { deployment_scope: scope },
         pricingVersion: `dashscope-media-${scope}-2026-08-17-candidate`,
-        pricingJson: {
-          unit_type:
-            candidate.capability === "image.generate"
-              ? "image"
-              : candidate.capability === "video.image_to_video"
-                ? "video_second"
-                : "tts_character",
-          currency: "CNY",
-          unpriced: true,
-          effective_at: SEED_EFFECTIVE_AT,
-          source_note:
-            "媒体候选模型价格未核实：按 unbounded 处理（预算门禁必须显式授权），运营核实后登记",
-        },
+        pricingJson:
+          pricedJson ?? {
+            unit_type:
+              candidate.capability === "image.generate"
+                ? "image"
+                : candidate.capability === "video.image_to_video"
+                  ? "video_second"
+                  : "tts_character",
+            currency: "CNY",
+            unpriced: true,
+            effective_at: SEED_EFFECTIVE_AT,
+            source_note:
+              "媒体候选模型价格未核实：按 unbounded 处理（预算门禁必须显式授权），运营核实后登记",
+          },
         isDefault: false,
       }),
     );
