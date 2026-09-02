@@ -137,6 +137,35 @@ export function estimatePlanCost(
   };
 }
 
+/**
+ * 从服务端目录解析当前图片模型的单价提示（client_preview_only）。
+ * 规则同 resolveVideoModelPricingHint：auto（null）解析到 is_default 条目，
+ * fixed 匹配目录条目 id；unpriced 返回 null。
+ */
+export function resolveImageModelPricingHint(
+  entries: CatalogModelEntryLike[],
+  currentEntryId: string | null,
+): { unitPrice: number; displayName: string; modelId: string } | null {
+  const imageEntries = entries.filter(
+    (entry) => entry.status === "active" && entry.availability === "enabled",
+  );
+  if (imageEntries.length === 0) return null;
+  const current =
+    (currentEntryId
+      ? imageEntries.find((entry) => entry.id === currentEntryId)
+      : null) ??
+    imageEntries.find((entry) => entry.is_default) ??
+    imageEntries[0]!;
+  const micros = current.pricing?.price_micros_per_image;
+  const unitPrice = typeof micros === "string" ? Number(micros) / 1_000_000 : NaN;
+  if (!Number.isFinite(unitPrice)) return null;
+  return {
+    unitPrice,
+    displayName: current.display_name,
+    modelId: current.model_id,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Granular cost hints (single-task, missing-only, upgrade-video)
 // ---------------------------------------------------------------------------
@@ -152,8 +181,9 @@ export function getTaskCostHint(taskType: string): string {
 
 /**
  * 服务端目录条目的前端投影（鸭子类型，避免 utils 反向依赖 store）。
+ * 图片与视频条目结构一致，共用此形状。
  */
-export interface CatalogVideoEntryLike {
+export interface CatalogModelEntryLike {
   id: string;
   model_id: string;
   display_name: string;
@@ -174,7 +204,7 @@ export type VideoApiQuality = "standard_720p" | "high_1080p";
  *   完全 unpriced 返回 null，由调用方回退通用文案，避免把 unbounded 显示成金额。
  */
 export function resolveVideoModelPricingHint(
-  entries: CatalogVideoEntryLike[],
+  entries: CatalogModelEntryLike[],
   currentEntryId: string | null,
   quality: VideoApiQuality = "standard_720p",
 ): { unitPricePerSec: number; displayName: string; modelId: string } | null {

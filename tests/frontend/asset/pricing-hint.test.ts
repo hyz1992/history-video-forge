@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { resolveVideoModelPricingHint } from "../../../frontend/src/utils/pricing.js";
+import {
+  resolveImageModelPricingHint,
+  resolveVideoModelPricingHint,
+} from "../../../frontend/src/utils/pricing.js";
 import type { PublicCapabilityEntryDto } from "../../../frontend/src/stores/generation-config.js";
 
 function videoEntry(overrides: Partial<PublicCapabilityEntryDto>): PublicCapabilityEntryDto {
@@ -29,6 +32,78 @@ function videoEntry(overrides: Partial<PublicCapabilityEntryDto>): PublicCapabil
     ...overrides,
   };
 }
+
+describe("resolveImageModelPricingHint", () => {
+  function imageEntry(overrides: Partial<PublicCapabilityEntryDto>): PublicCapabilityEntryDto {
+    return {
+      id: "image.generate.dashscope.cn-beijing.wan2.6-t2i",
+      capability: "image.generate",
+      provider_key: "dashscope",
+      model_id: "wan2.6-t2i",
+      model_version: null,
+      display_name: "万相文生图（wan2.6-t2i）",
+      quality_tier: "standard",
+      speed_tier: "standard",
+      parameter_capabilities: {},
+      pricing_version: "dashscope-media-cn-beijing-2026-08-17",
+      pricing: {
+        unit_type: "image",
+        currency: "CNY",
+        price_micros_per_image: "200000",
+      },
+      status: "active",
+      is_default: true,
+      availability: "enabled",
+      ...overrides,
+    };
+  }
+
+  it("auto（null）解析到 is_default 图片模型（wan2.6-t2i ¥0.20/张）", () => {
+    const entries = [
+      imageEntry({
+        id: "image.generate.dashscope.cn-beijing.other-t2i",
+        model_id: "other-t2i",
+        display_name: "其他文生图（other-t2i）",
+        is_default: false,
+        pricing: { price_micros_per_image: "100000" },
+      }),
+      imageEntry({}),
+    ];
+    expect(resolveImageModelPricingHint(entries, null)).toEqual({
+      unitPrice: 0.2,
+      displayName: "万相文生图（wan2.6-t2i）",
+      modelId: "wan2.6-t2i",
+    });
+  });
+
+  it("fixed 指向其他图片模型条目 id 时解析到该模型单价", () => {
+    const entries = [
+      imageEntry({
+        id: "image.generate.dashscope.cn-beijing.other-t2i",
+        model_id: "other-t2i",
+        display_name: "其他文生图（other-t2i）",
+        is_default: false,
+        pricing: { price_micros_per_image: "100000" },
+      }),
+      imageEntry({}),
+    ];
+    expect(
+      resolveImageModelPricingHint(entries, "image.generate.dashscope.cn-beijing.other-t2i"),
+    ).toEqual({
+      unitPrice: 0.1,
+      displayName: "其他文生图（other-t2i）",
+      modelId: "other-t2i",
+    });
+  });
+
+  it("unpriced 或无可用条目返回 null", () => {
+    const unpriced = [
+      imageEntry({ pricing: { unit_type: "image", currency: "CNY", unpriced: true } }),
+    ];
+    expect(resolveImageModelPricingHint(unpriced, null)).toBeNull();
+    expect(resolveImageModelPricingHint([], null)).toBeNull();
+  });
+});
 
 describe("resolveVideoModelPricingHint", () => {
   it("auto（currentEntryId=null）解析到 is_default 条目（wan2.7 ¥0.60/秒）", () => {

@@ -19,7 +19,7 @@ import StageLoadingBar from "../workspace/StageLoadingBar.vue";
 
 import SegmentAssetCard from "./SegmentAssetCard.vue";
 import StrictFallbackDialog from "./StrictFallbackDialog.vue";
-import { computeCostBreakdown, estimatePlanCost, getTaskCostHint, getVideoUpgradeCostHint, estimateBlockedItemsCost, resolveVideoModelPricingHint, PRICING, type PlanTaskLike } from "../../utils/pricing";
+import { computeCostBreakdown, estimatePlanCost, getTaskCostHint, getVideoUpgradeCostHint, estimateBlockedItemsCost, resolveVideoModelPricingHint, resolveImageModelPricingHint, PRICING, type PlanTaskLike } from "../../utils/pricing";
 import { createFetchGenerationConfigApi, type PublicCapabilityEntryDto } from "../../stores/generation-config";
 import { getAssetGeneratingView, type AssetGenerationProgress } from "../../utils/asset-generating-view";
 
@@ -937,16 +937,23 @@ async function handleGenerateMissing() {
   const count = blockedItems.value.length;
   const types = [...new Set(blockedItems.value.map(i => i.type))].join("、");
   const { imgCount, vidSec } = estimateBlockedItemsCost(blockedItems.value);
-  // 视频单价按项目当前配置模型估算；解析失败回退通用单价
-  const videoRate =
-    vidSec > 0 && projectId.value
-      ? (await resolveVideoPricingOnce(projectId.value))?.unitPricePerSec
-      : undefined;
+  // 图片/视频单价按项目当前配置模型估算；解析失败回退通用单价
+  const pricing = projectId.value ? await resolveGenerationPricingOnce(projectId.value) : null;
+  const videoRate = vidSec > 0 ? pricing?.video?.unitPricePerSec : undefined;
+  const imageRate = imgCount > 0 ? pricing?.image?.unitPrice : undefined;
   const estCost =
-    imgCount * PRICING.image.unitPrice +
+    imgCount * (imageRate ?? PRICING.image.unitPrice) +
     vidSec * (videoRate ?? PRICING.video720p.unitPricePerSec);
+  const rateSuffixParts: string[] = [];
+  if (videoRate !== undefined && videoRate !== PRICING.video720p.unitPricePerSec) {
+    rateSuffixParts.push(`视频 ¥${videoRate.toFixed(2)}/秒`);
+  }
+  if (imageRate !== undefined && imageRate !== PRICING.image.unitPrice) {
+    rateSuffixParts.push(`图片 ¥${imageRate.toFixed(2)}/张`);
+  }
+  const rateSuffix = rateSuffixParts.length > 0 ? `，${rateSuffixParts.join("，")}` : "";
   const costText = imgCount + vidSec > 0
-    ? `\n预估费用约 ¥${estCost.toFixed(2)}（${imgCount} 张图 + ${vidSec}s 视频${videoRate !== undefined ? `，视频 ¥${videoRate.toFixed(2)}/秒` : ""}）`
+    ? `\n预估费用约 ¥${estCost.toFixed(2)}（${imgCount} 张图 + ${vidSec}s 视频${rateSuffix}）`
     : "\n口播/字幕/音效费用较低，约 ¥1 以内";
   try {
     await ElMessageBox.confirm(
@@ -986,12 +993,11 @@ async function handleGenerateByType(taskType: string, typeLabel: string) {
   const { imgCount, vidSec } = estimateBlockedItemsCost(
     blockedItems.value.filter(i => taskIds.includes(i.taskId)),
   );
-  const videoRate =
-    vidSec > 0 && projectId.value
-      ? (await resolveVideoPricingOnce(projectId.value))?.unitPricePerSec
-      : undefined;
+  const pricing = projectId.value ? await resolveGenerationPricingOnce(projectId.value) : null;
+  const videoRate = vidSec > 0 ? pricing?.video?.unitPricePerSec : undefined;
+  const imageRate = imgCount > 0 ? pricing?.image?.unitPrice : undefined;
   const estCost =
-    imgCount * PRICING.image.unitPrice +
+    imgCount * (imageRate ?? PRICING.image.unitPrice) +
     vidSec * (videoRate ?? PRICING.video720p.unitPricePerSec);
   try {
     await ElMessageBox.confirm(
@@ -1025,12 +1031,11 @@ async function handleGenerateSelected() {
   if (ids.length === 0) return;
   const items = blockedItems.value.filter(i => ids.includes(i.taskId));
   const { imgCount, vidSec } = estimateBlockedItemsCost(items);
-  const videoRate =
-    vidSec > 0 && projectId.value
-      ? (await resolveVideoPricingOnce(projectId.value))?.unitPricePerSec
-      : undefined;
+  const pricing = projectId.value ? await resolveGenerationPricingOnce(projectId.value) : null;
+  const videoRate = vidSec > 0 ? pricing?.video?.unitPricePerSec : undefined;
+  const imageRate = imgCount > 0 ? pricing?.image?.unitPrice : undefined;
   const estCost =
-    imgCount * PRICING.image.unitPrice +
+    imgCount * (imageRate ?? PRICING.image.unitPrice) +
     vidSec * (videoRate ?? PRICING.video720p.unitPricePerSec);
   try {
     await ElMessageBox.confirm(
@@ -1094,47 +1099,69 @@ interface VideoPricingSnapshot {
   qualityLabel: "720P" | "1080P";
 }
 
-/**
- * 项目当前视频模型定价快照（client_preview_only，带模型名与档位）。
- * 目录 + 项目配置解析，按项目缓存（各生成入口共用同一结果）。
- * 任一环节失败/模型 unpriced 时返回 null，调用方回退本地通用文案。
- */
-const videoPricingCache = new Map<string, Promise<VideoPricingSnapshot | null>>();
+interface ImagePricingSnapshot {
+  unitPrice: number;
+  displayName: string;
+  modelId: string;
+}
 
-function resolveVideoPricingOnce(pid: string): Promise<VideoPricingSnapshot | null> {
-  const cached = videoPricingCache.get(pid);
+interface GenerationPricingSnapshot {
+  video: VideoPricingSnapshot | null;
+  image: ImagePricingSnapshot | null;
+}
+
+/**
+ * 项目当前视频/图片模型定价快照（client_preview_only，带模型名与档位）。
+ * 目录 + 项目配置一次解析，按项目缓存（各生成入口共用同一结果）。
+ * 任一环节失败/模型 unpriced 时对应槽为 null，调用方回退本地通用文案。
+ */
+const pricingSnapshotCache = new Map<string, Promise<GenerationPricingSnapshot>>();
+
+function resolveGenerationPricingOnce(pid: string): Promise<GenerationPricingSnapshot> {
+  const cached = pricingSnapshotCache.get(pid);
   if (cached) return cached;
-  const promise = (async () => {
+  const promise = (async (): Promise<GenerationPricingSnapshot> => {
     try {
       const api = createFetchGenerationConfigApi();
       const [capabilities, projectConfig] = await Promise.all([
         loadCapabilitiesOnce(),
         api.getProjectConfig(pid),
       ]);
-      const slot = projectConfig.configuration.capabilities?.["video.image_to_video"];
-      const currentEntryId =
-        slot && slot.mode === "fixed" ? (slot.provider_model_id ?? null) : null;
+      const slotOf = (capability: string) =>
+        projectConfig.configuration.capabilities?.[capability];
+      const videoSlot = slotOf("video.image_to_video");
+      const videoEntryId =
+        videoSlot && videoSlot.mode === "fixed" ? (videoSlot.provider_model_id ?? null) : null;
       const apiQuality =
         projectConfig.configuration.video?.api_quality === "high_1080p"
           ? ("high_1080p" as const)
           : ("standard_720p" as const);
-      const hint720 = resolveVideoModelPricingHint(capabilities, currentEntryId, "standard_720p");
-      if (!hint720) return null;
-      const hint1080 = resolveVideoModelPricingHint(capabilities, currentEntryId, "high_1080p");
+      const hint720 = resolveVideoModelPricingHint(capabilities, videoEntryId, "standard_720p");
+      const hint1080 = resolveVideoModelPricingHint(capabilities, videoEntryId, "high_1080p");
+      const imageSlot = slotOf("image.generate");
+      const imageEntryId =
+        imageSlot && imageSlot.mode === "fixed" ? (imageSlot.provider_model_id ?? null) : null;
+      const imageHint = resolveImageModelPricingHint(capabilities, imageEntryId);
       return {
-        unitPricePerSec:
-          apiQuality === "high_1080p" ? hint1080!.unitPricePerSec : hint720.unitPricePerSec,
-        unitPerSec720: hint720.unitPricePerSec,
-        unitPerSec1080: hint1080!.unitPricePerSec,
-        displayName: hint720.displayName,
-        modelId: hint720.modelId,
-        qualityLabel: apiQuality === "high_1080p" ? "1080P" : "720P",
+        video:
+          hint720 === null
+            ? null
+            : {
+                unitPricePerSec:
+                  apiQuality === "high_1080p" ? hint1080!.unitPricePerSec : hint720.unitPricePerSec,
+                unitPerSec720: hint720.unitPricePerSec,
+                unitPerSec1080: hint1080!.unitPricePerSec,
+                displayName: hint720.displayName,
+                modelId: hint720.modelId,
+                qualityLabel: apiQuality === "high_1080p" ? "1080P" : "720P",
+              },
+        image: imageHint,
       };
     } catch {
-      return null;
+      return { video: null, image: null };
     }
   })();
-  videoPricingCache.set(pid, promise);
+  pricingSnapshotCache.set(pid, promise);
   return promise;
 }
 
@@ -1146,11 +1173,12 @@ async function handleBatchUpgrade() {
   let rate = "";
   let estimatedSingle = 0;
   if (projectId.value) {
-    const pricing = await resolveVideoPricingOnce(projectId.value);
-    if (pricing) {
+    const pricing = await resolveGenerationPricingOnce(projectId.value);
+    const video = pricing.video;
+    if (video) {
       // 升级走后端默认 720P/5s，固定按 720P 档提示
-      rate = `约 ¥${pricing.unitPerSec720.toFixed(2)}/秒（720P），模型：${pricing.displayName}`;
-      estimatedSingle = Math.round(5 * pricing.unitPerSec720 * 100) / 100;
+      rate = `约 ¥${video.unitPerSec720.toFixed(2)}/秒（720P），模型：${video.displayName}`;
+      estimatedSingle = Math.round(5 * video.unitPerSec720 * 100) / 100;
     }
   }
   if (!rate) {
@@ -1183,11 +1211,13 @@ async function handleGenerateTask(taskId: string) {
   // Show cost hint for paid task types
   const taskLabel = task ? (TASK_TYPE_LABELS[task.task_type] ?? task.task_type) : taskId;
   let costHint = task ? getTaskCostHint(task.task_type) : "";
-  if (task?.task_type === "video_clip" && projectId.value) {
-    // 视频单价跟随项目当前配置的模型与质量档位（S2-2C 目录），提示同时给出模型名
-    const pricing = await resolveVideoPricingOnce(projectId.value);
-    if (pricing) {
-      costHint = `约 ¥${pricing.unitPricePerSec.toFixed(2)}/秒（${pricing.qualityLabel}），模型：${pricing.displayName}`;
+  if ((task?.task_type === "video_clip" || task?.task_type === "image_still") && projectId.value) {
+    // 单价跟随项目当前配置的模型与质量档位（S2-2C 目录），提示同时给出模型名
+    const pricing = await resolveGenerationPricingOnce(projectId.value);
+    if (task.task_type === "video_clip" && pricing.video) {
+      costHint = `约 ¥${pricing.video.unitPricePerSec.toFixed(2)}/秒（${pricing.video.qualityLabel}），模型：${pricing.video.displayName}`;
+    } else if (task.task_type === "image_still" && pricing.image) {
+      costHint = `约 ¥${pricing.image.unitPrice.toFixed(2)}/张，模型：${pricing.image.displayName}`;
     }
   }
   try {
@@ -1237,10 +1267,11 @@ async function handleUpgradeVideo(segmentId: string) {
   let rate = "";
   let estimatedTotal = 0;
   if (projectId.value) {
-    const pricing = await resolveVideoPricingOnce(projectId.value);
-    if (pricing) {
-      rate = `约 ¥${pricing.unitPerSec720.toFixed(2)}/秒（720P），模型：${pricing.displayName}`;
-      estimatedTotal = Math.round(5 * pricing.unitPerSec720 * 100) / 100;
+    const pricing = await resolveGenerationPricingOnce(projectId.value);
+    const video = pricing.video;
+    if (video) {
+      rate = `约 ¥${video.unitPerSec720.toFixed(2)}/秒（720P），模型：${video.displayName}`;
+      estimatedTotal = Math.round(5 * video.unitPerSec720 * 100) / 100;
     }
   }
   if (!rate) {
