@@ -19,7 +19,8 @@ import StageLoadingBar from "../workspace/StageLoadingBar.vue";
 
 import SegmentAssetCard from "./SegmentAssetCard.vue";
 import StrictFallbackDialog from "./StrictFallbackDialog.vue";
-import { computeCostBreakdown, estimatePlanCost, getTaskCostHint, getVideoUpgradeCostHint, estimateBlockedItemsCost, PRICING, type PlanTaskLike } from "../../utils/pricing";
+import { computeCostBreakdown, estimatePlanCost, getTaskCostHint, getVideoUpgradeCostHint, estimateBlockedItemsCost, resolveVideoModelPricingHint, PRICING, type PlanTaskLike } from "../../utils/pricing";
+import { createFetchGenerationConfigApi, type PublicCapabilityEntryDto } from "../../stores/generation-config";
 import { getAssetGeneratingView, type AssetGenerationProgress } from "../../utils/asset-generating-view";
 
 
@@ -1048,6 +1049,38 @@ function toggleBlockedItem(taskId: string) {
   }
 }
 
+// 目录缓存（本次会话）：目录是服务端权威价格源，会话内不会漂移。
+let cachedCapabilities: PublicCapabilityEntryDto[] | null = null;
+
+async function loadCapabilitiesOnce(): Promise<PublicCapabilityEntryDto[]> {
+  if (!cachedCapabilities) {
+    const { capabilities } = await createFetchGenerationConfigApi().listCapabilities();
+    cachedCapabilities = capabilities;
+  }
+  return cachedCapabilities;
+}
+
+/**
+ * 按项目当前配置的 video 模型解析单价提示（client_preview_only，带模型名）。
+ * 任一环节失败/模型 unpriced 时返回 null，调用方回退本地通用文案。
+ */
+async function resolveVideoCostHint(pid: string): Promise<string | null> {
+  try {
+    const [capabilities, projectConfig] = await Promise.all([
+      loadCapabilitiesOnce(),
+      createFetchGenerationConfigApi().getProjectConfig(pid),
+    ]);
+    const slot = projectConfig.configuration.capabilities?.video;
+    const currentModelId =
+      slot && slot.mode === "fixed" ? (slot.provider_model_id ?? null) : null;
+    const hint = resolveVideoModelPricingHint(capabilities, currentModelId);
+    if (!hint) return null;
+    return `约 ¥${hint.unitPricePerSec.toFixed(2)}/秒（${hint.displayName}）`;
+  } catch {
+    return null;
+  }
+}
+
 async function handleBatchUpgrade() {
   if (isAssetsBusy.value) return;
   if (checkDemoVisualBlock()) return;
@@ -1077,7 +1110,11 @@ async function handleGenerateTask(taskId: string) {
   if (task && (task.task_type === "image_still" || task.task_type === "video_clip") && checkDemoVisualBlock()) return;
   // Show cost hint for paid task types
   const taskLabel = task ? (TASK_TYPE_LABELS[task.task_type] ?? task.task_type) : taskId;
-  const costHint = task ? getTaskCostHint(task.task_type) : "";
+  let costHint = task ? getTaskCostHint(task.task_type) : "";
+  if (task?.task_type === "video_clip" && projectId.value) {
+    // 视频单价跟随项目当前配置的模型（S2-2C 目录），提示同时给出模型名
+    costHint = await resolveVideoCostHint(projectId.value) ?? costHint;
+  }
   try {
     if (costHint) {
       await ElMessageBox.confirm(

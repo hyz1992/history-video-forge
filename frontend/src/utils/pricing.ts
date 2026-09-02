@@ -150,6 +150,52 @@ export function getTaskCostHint(taskType: string): string {
   return "";
 }
 
+/**
+ * 服务端目录条目的前端投影（鸭子类型，避免 utils 反向依赖 store）。
+ */
+export interface CatalogVideoEntryLike {
+  model_id: string;
+  display_name: string;
+  status: string;
+  availability: string;
+  is_default: boolean;
+  pricing: Record<string, unknown>;
+}
+
+/**
+ * 从服务端目录解析当前视频模型的单价提示（client_preview_only）。
+ * - entries：目录 API 的 active 条目；currentModelId 为项目配置 fixed 的模型 id，
+ *   null 表示 auto（解析到 is_default 条目）。
+ * - 单价取 720P 档（当前默认 api_quality）；unpriced 条目返回 null，由调用方
+ *   回退通用文案，避免把 unbounded 显示成具体金额。
+ */
+export function resolveVideoModelPricingHint(
+  entries: CatalogVideoEntryLike[],
+  currentModelId: string | null,
+): { unitPricePerSec: number; displayName: string; modelId: string } | null {
+  const videoEntries = entries.filter(
+    (entry) => entry.status === "active" && entry.availability === "enabled",
+  );
+  if (videoEntries.length === 0) return null;
+  const current =
+    (currentModelId
+      ? videoEntries.find((entry) => entry.model_id === currentModelId)
+      : null) ??
+    videoEntries.find((entry) => entry.is_default) ??
+    videoEntries[0]!;
+  const byQuality = current.pricing
+    ?.price_micros_per_second_by_quality as Record<string, unknown> | undefined;
+  const micros = byQuality?.standard_720p;
+  const unitPricePerSec =
+    typeof micros === "string" ? Number(micros) / 1_000_000 : NaN;
+  if (!Number.isFinite(unitPricePerSec)) return null;
+  return {
+    unitPricePerSec,
+    displayName: current.display_name,
+    modelId: current.model_id,
+  };
+}
+
 /** Cost hint for upgrading a segment to API video (default 720P, 5s). */
 export function getVideoUpgradeCostHint(): {
   rate: string;
