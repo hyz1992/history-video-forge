@@ -93,6 +93,47 @@ describe("resolveVideoModelPricingHint", () => {
     });
   });
 
+  it("指定 high_1080p 档取 1080P 价（wan2.6-flash ¥0.50/秒）", () => {
+    const entries = [
+      videoEntry({
+        id: "video.image_to_video.dashscope.cn-beijing.wan2.6-i2v-flash",
+        model_id: "wan2.6-i2v-flash",
+        display_name: "万相图生视频轻量版（wan2.6-i2v-flash，有声）",
+        is_default: false,
+        pricing: {
+          price_micros_per_second_by_quality: {
+            standard_720p: "300000",
+            high_1080p: "500000",
+          },
+        },
+      }),
+      videoEntry({}),
+    ];
+    expect(
+      resolveVideoModelPricingHint(
+        entries,
+        "video.image_to_video.dashscope.cn-beijing.wan2.6-i2v-flash",
+        "high_1080p",
+      )?.unitPricePerSec,
+    ).toBe(0.5);
+  });
+
+  it("指定档无价时回退 720P 档", () => {
+    const entries = [
+      videoEntry({
+        is_default: true,
+        pricing: {
+          price_micros_per_second_by_quality: {
+            standard_720p: "600000",
+          },
+        },
+      }),
+    ];
+    expect(
+      resolveVideoModelPricingHint(entries, null, "high_1080p")?.unitPricePerSec,
+    ).toBe(0.6);
+  });
+
   it("unpriced 条目返回 null（不得显示成具体金额）", () => {
     const entries = [
       videoEntry({

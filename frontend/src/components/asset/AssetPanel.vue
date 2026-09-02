@@ -936,9 +936,17 @@ async function handleGenerateMissing() {
   if (checkDemoVisualBlock()) return;
   const count = blockedItems.value.length;
   const types = [...new Set(blockedItems.value.map(i => i.type))].join("、");
-  const { imgCount, vidSec, estCost } = estimateBlockedItemsCost(blockedItems.value);
+  const { imgCount, vidSec } = estimateBlockedItemsCost(blockedItems.value);
+  // 视频单价按项目当前配置模型估算；解析失败回退通用单价
+  const videoRate =
+    vidSec > 0 && projectId.value
+      ? (await resolveVideoPricingOnce(projectId.value))?.unitPricePerSec
+      : undefined;
+  const estCost =
+    imgCount * PRICING.image.unitPrice +
+    vidSec * (videoRate ?? PRICING.video720p.unitPricePerSec);
   const costText = imgCount + vidSec > 0
-    ? `\n预估费用约 ¥${estCost.toFixed(2)}（${imgCount} 张图 + ${vidSec}s 视频）`
+    ? `\n预估费用约 ¥${estCost.toFixed(2)}（${imgCount} 张图 + ${vidSec}s 视频${videoRate !== undefined ? `，视频 ¥${videoRate.toFixed(2)}/秒` : ""}）`
     : "\n口播/字幕/音效费用较低，约 ¥1 以内";
   try {
     await ElMessageBox.confirm(
@@ -975,9 +983,16 @@ async function handleGenerateByType(taskType: string, typeLabel: string) {
     .filter(i => (taskType === "image_still" && i.type === "分镜图") || (taskType === "video_clip" && i.type === "分镜视频"))
     .map(i => i.taskId);
   if (taskIds.length === 0) return;
-  const { imgCount, vidSec, estCost } = estimateBlockedItemsCost(
+  const { imgCount, vidSec } = estimateBlockedItemsCost(
     blockedItems.value.filter(i => taskIds.includes(i.taskId)),
   );
+  const videoRate =
+    vidSec > 0 && projectId.value
+      ? (await resolveVideoPricingOnce(projectId.value))?.unitPricePerSec
+      : undefined;
+  const estCost =
+    imgCount * PRICING.image.unitPrice +
+    vidSec * (videoRate ?? PRICING.video720p.unitPricePerSec);
   try {
     await ElMessageBox.confirm(
       `将生成 ${taskIds.length} 个${typeLabel}，预估 ¥${estCost.toFixed(2)}。\n确定继续？`,
@@ -1009,7 +1024,14 @@ async function handleGenerateSelected() {
   const ids = selectedBlockedIds.value;
   if (ids.length === 0) return;
   const items = blockedItems.value.filter(i => ids.includes(i.taskId));
-  const { estCost } = estimateBlockedItemsCost(items);
+  const { imgCount, vidSec } = estimateBlockedItemsCost(items);
+  const videoRate =
+    vidSec > 0 && projectId.value
+      ? (await resolveVideoPricingOnce(projectId.value))?.unitPricePerSec
+      : undefined;
+  const estCost =
+    imgCount * PRICING.image.unitPrice +
+    vidSec * (videoRate ?? PRICING.video720p.unitPricePerSec);
   try {
     await ElMessageBox.confirm(
       `将生成选中的 ${ids.length} 项，预估 ¥${estCost.toFixed(2)}。\n确定继续？`,
@@ -1060,35 +1082,85 @@ async function loadCapabilitiesOnce(): Promise<PublicCapabilityEntryDto[]> {
   return cachedCapabilities;
 }
 
+interface VideoPricingSnapshot {
+  /** 按项目 api_quality 选档的单价（单任务/批量生成用）。 */
+  unitPricePerSec: number;
+  /** 720P 档单价（升级 API 视频用：后端升级默认 720P/5s）。 */
+  unitPerSec720: number;
+  /** 1080P 档单价（模型无 1080P 价时等于 720P 价，按目录合同双档同源）。 */
+  unitPerSec1080: number;
+  displayName: string;
+  modelId: string;
+  qualityLabel: "720P" | "1080P";
+}
+
 /**
- * 按项目当前配置的 video 模型解析单价提示（client_preview_only，带模型名）。
+ * 项目当前视频模型定价快照（client_preview_only，带模型名与档位）。
+ * 目录 + 项目配置解析，按项目缓存（各生成入口共用同一结果）。
  * 任一环节失败/模型 unpriced 时返回 null，调用方回退本地通用文案。
  */
-async function resolveVideoCostHint(pid: string): Promise<string | null> {
-  try {
-    const [capabilities, projectConfig] = await Promise.all([
-      loadCapabilitiesOnce(),
-      createFetchGenerationConfigApi().getProjectConfig(pid),
-    ]);
-    const slot = projectConfig.configuration.capabilities?.["video.image_to_video"];
-    const currentEntryId =
-      slot && slot.mode === "fixed" ? (slot.provider_model_id ?? null) : null;
-    const hint = resolveVideoModelPricingHint(capabilities, currentEntryId);
-    if (!hint) return null;
-    return `约 ¥${hint.unitPricePerSec.toFixed(2)}/秒，模型：${hint.displayName}`;
-  } catch {
-    return null;
-  }
+const videoPricingCache = new Map<string, Promise<VideoPricingSnapshot | null>>();
+
+function resolveVideoPricingOnce(pid: string): Promise<VideoPricingSnapshot | null> {
+  const cached = videoPricingCache.get(pid);
+  if (cached) return cached;
+  const promise = (async () => {
+    try {
+      const api = createFetchGenerationConfigApi();
+      const [capabilities, projectConfig] = await Promise.all([
+        loadCapabilitiesOnce(),
+        api.getProjectConfig(pid),
+      ]);
+      const slot = projectConfig.configuration.capabilities?.["video.image_to_video"];
+      const currentEntryId =
+        slot && slot.mode === "fixed" ? (slot.provider_model_id ?? null) : null;
+      const apiQuality =
+        projectConfig.configuration.video?.api_quality === "high_1080p"
+          ? ("high_1080p" as const)
+          : ("standard_720p" as const);
+      const hint720 = resolveVideoModelPricingHint(capabilities, currentEntryId, "standard_720p");
+      if (!hint720) return null;
+      const hint1080 = resolveVideoModelPricingHint(capabilities, currentEntryId, "high_1080p");
+      return {
+        unitPricePerSec:
+          apiQuality === "high_1080p" ? hint1080!.unitPricePerSec : hint720.unitPricePerSec,
+        unitPerSec720: hint720.unitPricePerSec,
+        unitPerSec1080: hint1080!.unitPricePerSec,
+        displayName: hint720.displayName,
+        modelId: hint720.modelId,
+        qualityLabel: apiQuality === "high_1080p" ? "1080P" : "720P",
+      };
+    } catch {
+      return null;
+    }
+  })();
+  videoPricingCache.set(pid, promise);
+  return promise;
 }
 
 async function handleBatchUpgrade() {
   if (isAssetsBusy.value) return;
   if (checkDemoVisualBlock()) return;
   const count = upgradableSegments.value.length;
-  const { rate, estimatedTotal } = getVideoUpgradeCostHint();
+  // 升级单价/单条预估跟随项目当前配置模型；解析失败回退通用单价
+  let rate = "";
+  let estimatedSingle = 0;
+  if (projectId.value) {
+    const pricing = await resolveVideoPricingOnce(projectId.value);
+    if (pricing) {
+      // 升级走后端默认 720P/5s，固定按 720P 档提示
+      rate = `约 ¥${pricing.unitPerSec720.toFixed(2)}/秒（720P），模型：${pricing.displayName}`;
+      estimatedSingle = Math.round(5 * pricing.unitPerSec720 * 100) / 100;
+    }
+  }
+  if (!rate) {
+    const fallback = getVideoUpgradeCostHint();
+    rate = fallback.rate;
+    estimatedSingle = fallback.estimatedTotal;
+  }
   try {
     await ElMessageBox.confirm(
-      `将为 ${count} 个关键分镜(turn/peak)升级为 API 视频。\n费用：${rate}，预估 ¥${estimatedTotal.toFixed(2)} × ${count}。\n确定继续？`,
+      `将为 ${count} 个关键分镜(turn/peak)升级为 API 视频。\n费用：${rate}，预估 ¥${estimatedSingle.toFixed(2)} × ${count}。\n确定继续？`,
       "批量升级为 API 视频",
       { confirmButtonText: "确定升级", cancelButtonText: "取消", type: "info" },
     );
@@ -1112,8 +1184,11 @@ async function handleGenerateTask(taskId: string) {
   const taskLabel = task ? (TASK_TYPE_LABELS[task.task_type] ?? task.task_type) : taskId;
   let costHint = task ? getTaskCostHint(task.task_type) : "";
   if (task?.task_type === "video_clip" && projectId.value) {
-    // 视频单价跟随项目当前配置的模型（S2-2C 目录），提示同时给出模型名
-    costHint = await resolveVideoCostHint(projectId.value) ?? costHint;
+    // 视频单价跟随项目当前配置的模型与质量档位（S2-2C 目录），提示同时给出模型名
+    const pricing = await resolveVideoPricingOnce(projectId.value);
+    if (pricing) {
+      costHint = `约 ¥${pricing.unitPricePerSec.toFixed(2)}/秒（${pricing.qualityLabel}），模型：${pricing.displayName}`;
+    }
   }
   try {
     if (costHint) {
@@ -1159,7 +1234,20 @@ async function handleUpgradeVideo(segmentId: string) {
   if (checkDemoVisualBlock()) return;
   const seg = segments.value.find(s => s.segment_id === segmentId);
   const segLabel = seg ? `#${segments.value.indexOf(seg) + 1}` : segmentId;
-  const { rate, estimatedTotal } = getVideoUpgradeCostHint();
+  let rate = "";
+  let estimatedTotal = 0;
+  if (projectId.value) {
+    const pricing = await resolveVideoPricingOnce(projectId.value);
+    if (pricing) {
+      rate = `约 ¥${pricing.unitPerSec720.toFixed(2)}/秒（720P），模型：${pricing.displayName}`;
+      estimatedTotal = Math.round(5 * pricing.unitPerSec720 * 100) / 100;
+    }
+  }
+  if (!rate) {
+    const fallback = getVideoUpgradeCostHint();
+    rate = fallback.rate;
+    estimatedTotal = fallback.estimatedTotal;
+  }
   try {
     await ElMessageBox.confirm(
       `将为分镜 ${segLabel} 新增 API 视频任务（默认 720P / 5 秒，不影响图片+运镜路线）。\n费用：${rate}，预估 ¥${estimatedTotal.toFixed(2)}。\n切换后可在分镜卡片中手动生成或上传视频。`,

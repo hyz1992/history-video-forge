@@ -154,6 +154,7 @@ export function getTaskCostHint(taskType: string): string {
  * 服务端目录条目的前端投影（鸭子类型，避免 utils 反向依赖 store）。
  */
 export interface CatalogVideoEntryLike {
+  id: string;
   model_id: string;
   display_name: string;
   status: string;
@@ -162,16 +163,20 @@ export interface CatalogVideoEntryLike {
   pricing: Record<string, unknown>;
 }
 
+/** 视频 API 质量档位（与配置合同 api_quality 枚举一致）。 */
+export type VideoApiQuality = "standard_720p" | "high_1080p";
+
 /**
  * 从服务端目录解析当前视频模型的单价提示（client_preview_only）。
  * - entries：目录 API 的 active 条目；currentEntryId 为项目配置 fixed 槽的
  *   目录条目 id（完整串），null 表示 auto（解析到 is_default 条目）。
- * - 单价取 720P 档（当前默认 api_quality）；unpriced 条目返回 null，由调用方
- *   回退通用文案，避免把 unbounded 显示成具体金额。
+ * - quality 指定取价档位（默认 720P）；指定档无价时回退 720P 档；
+ *   完全 unpriced 返回 null，由调用方回退通用文案，避免把 unbounded 显示成金额。
  */
 export function resolveVideoModelPricingHint(
   entries: CatalogVideoEntryLike[],
   currentEntryId: string | null,
+  quality: VideoApiQuality = "standard_720p",
 ): { unitPricePerSec: number; displayName: string; modelId: string } | null {
   const videoEntries = entries.filter(
     (entry) => entry.status === "active" && entry.availability === "enabled",
@@ -185,7 +190,7 @@ export function resolveVideoModelPricingHint(
     videoEntries[0]!;
   const byQuality = current.pricing
     ?.price_micros_per_second_by_quality as Record<string, unknown> | undefined;
-  const micros = byQuality?.standard_720p;
+  const micros = byQuality?.[quality] ?? byQuality?.standard_720p;
   const unitPricePerSec =
     typeof micros === "string" ? Number(micros) / 1_000_000 : NaN;
   if (!Number.isFinite(unitPricePerSec)) return null;
