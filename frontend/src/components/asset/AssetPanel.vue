@@ -1196,7 +1196,8 @@ async function handleBatchUpgrade() {
   for (const seg of upgradableSegments.value) {
     try { await assetsStore.upgradeSegmentToVideo(seg.segment_id); } catch { /* continue */ }
   }
-  await assetsStore.loadProject();
+  // 升级改写 AssetPlan：刷新 plan 快照后卡片才会显示 API 视频状态
+  await assetPlanningStore.retryLoad();
   ElMessage.success("API 视频任务已创建");
 }
 
@@ -1288,7 +1289,9 @@ async function handleUpgradeVideo(segmentId: string) {
   } catch { return; }
   try {
     await assetsStore.upgradeSegmentToVideo(segmentId);
-    await assetsStore.loadProject();
+    // 升级改写 AssetPlan（新增 video_clip 任务）；卡片按 plan 判断 API/Remotion，
+    // assets store 的 loadProject 不含 active_asset_plan，必须单独刷新 plan 快照
+    await assetPlanningStore.retryLoad();
     ElMessage.success("已切换为 API 视频模式，可手动生成或上传视频");
   } catch (error) {
     if (isDemoVisualBlockedError(error)) {
