@@ -1112,57 +1112,53 @@ interface GenerationPricingSnapshot {
 
 /**
  * 项目当前视频/图片模型定价快照（client_preview_only，带模型名与档位）。
- * 目录 + 项目配置一次解析，按项目缓存（各生成入口共用同一结果）。
+ * - 目录（价格表）会话内不变：loadCapabilitiesOnce 缓存；
+ * - 项目配置（模型选择）用户随时改：每次实时拉取，保证配置切换后提示立即生效
+ *   （wan2.6→wan2.7 切换曾因快照缓存显示旧模型）。
  * 任一环节失败/模型 unpriced 时对应槽为 null，调用方回退本地通用文案。
  */
-const pricingSnapshotCache = new Map<string, Promise<GenerationPricingSnapshot>>();
-
-function resolveGenerationPricingOnce(pid: string): Promise<GenerationPricingSnapshot> {
-  const cached = pricingSnapshotCache.get(pid);
-  if (cached) return cached;
-  const promise = (async (): Promise<GenerationPricingSnapshot> => {
-    try {
-      const api = createFetchGenerationConfigApi();
-      const [capabilities, projectConfig] = await Promise.all([
-        loadCapabilitiesOnce(),
-        api.getProjectConfig(pid),
-      ]);
-      const slotOf = (capability: string) =>
-        projectConfig.configuration.capabilities?.[capability];
-      const videoSlot = slotOf("video.image_to_video");
-      const videoEntryId =
-        videoSlot && videoSlot.mode === "fixed" ? (videoSlot.provider_model_id ?? null) : null;
-      const apiQuality =
-        projectConfig.configuration.video?.api_quality === "high_1080p"
-          ? ("high_1080p" as const)
-          : ("standard_720p" as const);
-      const hint720 = resolveVideoModelPricingHint(capabilities, videoEntryId, "standard_720p");
-      const hint1080 = resolveVideoModelPricingHint(capabilities, videoEntryId, "high_1080p");
-      const imageSlot = slotOf("image.generate");
-      const imageEntryId =
-        imageSlot && imageSlot.mode === "fixed" ? (imageSlot.provider_model_id ?? null) : null;
-      const imageHint = resolveImageModelPricingHint(capabilities, imageEntryId);
-      return {
-        video:
-          hint720 === null
-            ? null
-            : {
-                unitPricePerSec:
-                  apiQuality === "high_1080p" ? hint1080!.unitPricePerSec : hint720.unitPricePerSec,
-                unitPerSec720: hint720.unitPricePerSec,
-                unitPerSec1080: hint1080!.unitPricePerSec,
-                displayName: hint720.displayName,
-                modelId: hint720.modelId,
-                qualityLabel: apiQuality === "high_1080p" ? "1080P" : "720P",
-              },
-        image: imageHint,
-      };
-    } catch {
-      return { video: null, image: null };
-    }
-  })();
-  pricingSnapshotCache.set(pid, promise);
-  return promise;
+async function resolveGenerationPricingOnce(
+  pid: string,
+): Promise<GenerationPricingSnapshot> {
+  try {
+    const api = createFetchGenerationConfigApi();
+    const [capabilities, projectConfig] = await Promise.all([
+      loadCapabilitiesOnce(),
+      api.getProjectConfig(pid),
+    ]);
+    const slotOf = (capability: string) =>
+      projectConfig.configuration.capabilities?.[capability];
+    const videoSlot = slotOf("video.image_to_video");
+    const videoEntryId =
+      videoSlot && videoSlot.mode === "fixed" ? (videoSlot.provider_model_id ?? null) : null;
+    const apiQuality =
+      projectConfig.configuration.video?.api_quality === "high_1080p"
+        ? ("high_1080p" as const)
+        : ("standard_720p" as const);
+    const hint720 = resolveVideoModelPricingHint(capabilities, videoEntryId, "standard_720p");
+    const hint1080 = resolveVideoModelPricingHint(capabilities, videoEntryId, "high_1080p");
+    const imageSlot = slotOf("image.generate");
+    const imageEntryId =
+      imageSlot && imageSlot.mode === "fixed" ? (imageSlot.provider_model_id ?? null) : null;
+    const imageHint = resolveImageModelPricingHint(capabilities, imageEntryId);
+    return {
+      video:
+        hint720 === null
+          ? null
+          : {
+              unitPricePerSec:
+                apiQuality === "high_1080p" ? hint1080!.unitPricePerSec : hint720.unitPricePerSec,
+              unitPerSec720: hint720.unitPricePerSec,
+              unitPerSec1080: hint1080!.unitPricePerSec,
+              displayName: hint720.displayName,
+              modelId: hint720.modelId,
+              qualityLabel: apiQuality === "high_1080p" ? "1080P" : "720P",
+            },
+      image: imageHint,
+    };
+  } catch {
+    return { video: null, image: null };
+  }
 }
 
 async function handleBatchUpgrade() {
