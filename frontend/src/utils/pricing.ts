@@ -164,22 +164,22 @@ export interface CatalogVideoEntryLike {
 
 /**
  * 从服务端目录解析当前视频模型的单价提示（client_preview_only）。
- * - entries：目录 API 的 active 条目；currentModelId 为项目配置 fixed 的模型 id，
- *   null 表示 auto（解析到 is_default 条目）。
+ * - entries：目录 API 的 active 条目；currentEntryId 为项目配置 fixed 槽的
+ *   目录条目 id（完整串），null 表示 auto（解析到 is_default 条目）。
  * - 单价取 720P 档（当前默认 api_quality）；unpriced 条目返回 null，由调用方
  *   回退通用文案，避免把 unbounded 显示成具体金额。
  */
 export function resolveVideoModelPricingHint(
   entries: CatalogVideoEntryLike[],
-  currentModelId: string | null,
+  currentEntryId: string | null,
 ): { unitPricePerSec: number; displayName: string; modelId: string } | null {
   const videoEntries = entries.filter(
     (entry) => entry.status === "active" && entry.availability === "enabled",
   );
   if (videoEntries.length === 0) return null;
   const current =
-    (currentModelId
-      ? videoEntries.find((entry) => entry.model_id === currentModelId)
+    (currentEntryId
+      ? videoEntries.find((entry) => entry.id === currentEntryId)
       : null) ??
     videoEntries.find((entry) => entry.is_default) ??
     videoEntries[0]!;

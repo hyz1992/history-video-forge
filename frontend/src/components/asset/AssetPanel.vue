@@ -1070,10 +1070,10 @@ async function resolveVideoCostHint(pid: string): Promise<string | null> {
       loadCapabilitiesOnce(),
       createFetchGenerationConfigApi().getProjectConfig(pid),
     ]);
-    const slot = projectConfig.configuration.capabilities?.video;
-    const currentModelId =
+    const slot = projectConfig.configuration.capabilities?.["video.image_to_video"];
+    const currentEntryId =
       slot && slot.mode === "fixed" ? (slot.provider_model_id ?? null) : null;
-    const hint = resolveVideoModelPricingHint(capabilities, currentModelId);
+    const hint = resolveVideoModelPricingHint(capabilities, currentEntryId);
     if (!hint) return null;
     return `约 ¥${hint.unitPricePerSec.toFixed(2)}/秒（${hint.displayName}）`;
   } catch {

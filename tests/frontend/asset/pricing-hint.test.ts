@@ -31,9 +31,10 @@ function videoEntry(overrides: Partial<PublicCapabilityEntryDto>): PublicCapabil
 }
 
 describe("resolveVideoModelPricingHint", () => {
-  it("auto（currentModelId=null）解析到 is_default 条目（wan2.7 ¥0.60/秒）", () => {
+  it("auto（currentEntryId=null）解析到 is_default 条目（wan2.7 ¥0.60/秒）", () => {
     const entries = [
       videoEntry({
+        id: "video.image_to_video.dashscope.cn-beijing.wan2.6-i2v-flash",
         model_id: "wan2.6-i2v-flash",
         display_name: "万相图生视频轻量版（wan2.6-i2v-flash，有声）",
         is_default: false,
@@ -53,9 +54,10 @@ describe("resolveVideoModelPricingHint", () => {
     });
   });
 
-  it("fixed wan2.6-i2v-flash 解析到该模型（¥0.30/秒）并带显示名", () => {
+  it("fixed 指向 wan2.6-i2v-flash 条目 id 时解析到该模型（¥0.30/秒）并带显示名", () => {
     const entries = [
       videoEntry({
+        id: "video.image_to_video.dashscope.cn-beijing.wan2.6-i2v-flash",
         model_id: "wan2.6-i2v-flash",
         display_name: "万相图生视频轻量版（wan2.6-i2v-flash，有声）",
         is_default: false,
@@ -68,30 +70,45 @@ describe("resolveVideoModelPricingHint", () => {
       }),
       videoEntry({}),
     ];
-    expect(resolveVideoModelPricingHint(entries, "wan2.6-i2v-flash")).toEqual({
+    expect(
+      resolveVideoModelPricingHint(
+        entries,
+        "video.image_to_video.dashscope.cn-beijing.wan2.6-i2v-flash",
+      ),
+    ).toEqual({
       unitPricePerSec: 0.3,
       displayName: "万相图生视频轻量版（wan2.6-i2v-flash，有声）",
       modelId: "wan2.6-i2v-flash",
     });
   });
 
-  it("fixed 指向目录外的模型时回退 is_default", () => {
+  it("fixed 指向目录外的条目 id 时回退 is_default", () => {
     const entries = [videoEntry({})];
-    expect(resolveVideoModelPricingHint(entries, "wan2.7-turbo")?.modelId).toBe(
-      "wan2.7-i2v-2026-04-25",
-    );
+    expect(
+      resolveVideoModelPricingHint(entries, "video.image_to_video.dashscope.cn-beijing.vanished"),
+    ).toEqual({
+      unitPricePerSec: 0.6,
+      displayName: "万相图生视频（wan2.7-i2v）",
+      modelId: "wan2.7-i2v-2026-04-25",
+    });
   });
 
   it("unpriced 条目返回 null（不得显示成具体金额）", () => {
     const entries = [
       videoEntry({
+        id: "video.image_to_video.dashscope.cn-beijing.wan2.6-i2v-flash",
         model_id: "wan2.6-i2v-flash",
         is_default: false,
         pricing: { unit_type: "video_second", currency: "CNY", unpriced: true },
       }),
       videoEntry({}),
     ];
-    expect(resolveVideoModelPricingHint(entries, "wan2.6-i2v-flash")).toBeNull();
+    expect(
+      resolveVideoModelPricingHint(
+        entries,
+        "video.image_to_video.dashscope.cn-beijing.wan2.6-i2v-flash",
+      ),
+    ).toBeNull();
   });
 
   it("无 active/可用条目返回 null", () => {
