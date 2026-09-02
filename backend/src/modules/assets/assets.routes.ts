@@ -11,6 +11,7 @@ import { guardOwnedRoute } from "../../auth/authorization.js";
 import { createLlmGateway } from "../../runtime/llm/llm-gateway.js";
 import { createTierAwareProviderFromEnv } from "../../runtime/llm/tier-aware-provider-factory.js";
 import { createCompositeInteractionLogWriter } from "../../runtime/trace/project-storage.js";
+import { saveAssetPlanRecord } from "../asset-planning/asset-plan-record.repository.js";
 import { probeImageMetadata } from "../../http/image-probe.js";
 import { probeVideoMetadata } from "../../http/video-probe.js";
 import { writeFileSync, mkdirSync } from "node:fs";
@@ -741,6 +742,23 @@ async function upgradeSegmentToVideoController(
   // Persist the new task in the asset plan so the frontend can find
   // it on refresh and subsequent regens work correctly.
   assetPlan.tasks.push(adHocTask as typeof assetPlan.tasks[number]);
+
+  // 2026-09-02 修复：仅 push 内存 planJson 会在服务重启/重载后丢失任务——
+  // 升级的分镜回到 Remotion、后续生成 run 查不到执行报"状态：未知"。
+  // saveAssetPlanRecord 重建 record 并写 DB（保留原 id/createdAt）。
+  await saveAssetPlanRecord(context.app.db, {
+    id: planRecord.id,
+    projectId: planRecord.projectId,
+    topicPackageId: planRecord.topicPackageId,
+    scriptRecordId: planRecord.scriptRecordId,
+    storyboardRecordId: planRecord.storyboardRecordId,
+    planJson: assetPlan,
+    validationResultJson: planRecord.validationResultJson,
+    executionStateJson: planRecord.executionStateJson,
+    graphTraceSummaryJson: planRecord.graphTraceSummaryJson,
+    runtimeDiagnosticsJson: planRecord.runtimeDiagnosticsJson,
+    createdAt: planRecord.createdAt,
+  });
 
   return {
     statusCode: 200,

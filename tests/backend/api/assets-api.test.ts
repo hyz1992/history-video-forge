@@ -1076,6 +1076,35 @@ describe("assets generate api", () => {
     });
   });
 
+  it("persists the upgraded video_clip task into the asset plan record", async () => {
+    const app = buildApp();
+    seedGenerationCatalog(app);
+    // 升级接口要求项目已有 active manifest（409 active_assets_missing 分支之前）
+    const prepared = await prepareActiveManifest(app);
+    const planRecord = app.db.assetPlanRecords.get(prepared.assetPlanRecord.id)!;
+    const before = (planRecord.planJson as { tasks: Array<{ task_type: string }> }).tasks.filter(
+      (t) => t.task_type === "video_clip",
+    ).length;
+
+    const upgradeResponse = await app.inject({
+      method: "POST",
+      url: `/api/projects/${prepared.project.id}/assets/segments/sb_001/upgrade-video`,
+      payload: {},
+      auth,
+    });
+    expect(upgradeResponse.statusCode).toBe(200);
+    expect(upgradeResponse.json()).toMatchObject({ created: true });
+
+    // 回归：升级任务必须落盘到 plan record（曾只 push 内存 planJson，
+    // 服务重启后任务丢失 → 分镜回 Remotion、后续生成查无执行报"状态：未知"）
+    const afterRecord = app.db.assetPlanRecords.get(prepared.assetPlanRecord.id)!;
+    const videoTasks = (afterRecord.planJson as {
+      tasks: Array<{ task_type: string; task_id: string; source_segment_id: string }>;
+    }).tasks.filter((t) => t.task_type === "video_clip");
+    expect(videoTasks.length).toBe(before + 1);
+    expect(videoTasks.at(-1)?.source_segment_id).toBe("sb_001");
+  });
+
   it("supports execution_mode dry_run and confirms no provider adapter is invoked", async () => {
     const app = buildApp();
     seedGenerationCatalog(app);
