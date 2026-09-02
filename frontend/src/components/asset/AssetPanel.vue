@@ -979,6 +979,8 @@ async function handleGenerateMissing() {
       if (!assetsStore.state.loadError) {
         ElMessage.success("剩余资产生成完成");
       }
+      // 提交后启动轮询，让任务进度与完成态自动刷新
+      startAssetPolling();
     },
   });
 }
@@ -1020,6 +1022,8 @@ async function handleGenerateByType(taskType: string, typeLabel: string) {
     },
     onSuccess: async () => {
       await handleDemoGeneratingError();
+      // 提交后启动轮询，让任务进度与完成态自动刷新
+      startAssetPolling();
     },
   });
 }
@@ -1063,6 +1067,8 @@ async function handleGenerateSelected() {
         return;
       }
       selectedBlockedIds.value = [];
+      // 提交后启动轮询，让任务进度与完成态自动刷新
+      startAssetPolling();
     },
   });
 }
@@ -1243,7 +1249,10 @@ async function handleGenerateTask(taskId: string) {
         } else if (exec?.status === "failed") {
           ElMessage.error("生成失败：" + (exec.notes?.join("; ") || "未知错误"));
         } else {
-          ElMessage.warning("任务已提交，状态：" + (exec?.status ?? "未知"));
+          // 任务刚提交，执行是异步的（视频任务耗时较长），此刻查不到终态是正常时序：
+          // 启动轮询让卡片状态自动跟进，不展示"未知"误导用户。
+          ElMessage.success("任务已提交，正在生成…");
+          startAssetPolling();
         }
       } catch (error) {
         if (isDemoVisualBlockedError(error)) {
