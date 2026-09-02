@@ -1248,6 +1248,9 @@ async function handleGenerateTask(taskId: string) {
           ElMessage.success("生成完成");
         } else if (exec?.status === "failed") {
           ElMessage.error("生成失败：" + (exec.notes?.join("; ") || "未知错误"));
+        } else if (exec?.status === "skipped_with_fallback") {
+          // 终态：段路线未授权/已降级，视频不会生成（不能继续当"正在生成"提示）
+          ElMessage.warning("任务已跳过（段视频未授权或已自动降级），未生成视频");
         } else {
           // 任务刚提交，执行是异步的（视频任务耗时较长），此刻查不到终态是正常时序：
           // 启动轮询让卡片状态自动跟进，不展示"未知"误导用户。

@@ -21,6 +21,7 @@ import { saveScriptRecord } from "../../../backend/src/modules/script/script-rec
 import { saveStoryboardRecord } from "../../../backend/src/modules/storyboard/storyboard-record.repository.js";
 import { saveTopicPackage } from "../../../backend/src/modules/topic/topic-package.repository.js";
 import { saveAssetManifestRecord } from "../../../backend/src/modules/assets/asset-manifest-record.repository.js";
+import { getSegmentOverride } from "../../../backend/src/modules/storyboard/storyboard-segment-override.repository.js";
 import type { AssetManifest, AssetPlan, AssetsValidationResult, StoryboardPlan } from "../../../shared/src/index.js";
 import { buildTestAuth } from "../auth/test-utils.js";
 
@@ -1103,6 +1104,11 @@ describe("assets generate api", () => {
     }).tasks.filter((t) => t.task_type === "video_clip");
     expect(videoTasks.length).toBe(before + 1);
     expect(videoTasks.at(-1)?.source_segment_id).toBe("sb_001");
+
+    // 回归：升级必须写分镜级 override=api_video（绑定 run 的快照路线收敛按
+    // override 授权；缺失会导致该段视频任务被跳过 skipped_with_fallback）
+    const override = getSegmentOverride(app.db, prepared.storyboardRecord.id, "sb_001");
+    expect(override?.strategyOverride).toBe("api_video");
   });
 
   it("supports execution_mode dry_run and confirms no provider adapter is invoked", async () => {

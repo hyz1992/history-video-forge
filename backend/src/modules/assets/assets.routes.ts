@@ -7,11 +7,15 @@ import {
 } from "./assets-run.service";
 import { env } from "../../config/env.js";
 import { createPromptRegistry } from "../../runtime/prompts/prompt-registry.js";
-import { guardOwnedRoute } from "../../auth/authorization.js";
+import { guardOwnedRoute, requireUser } from "../../auth/authorization.js";
 import { createLlmGateway } from "../../runtime/llm/llm-gateway.js";
 import { createTierAwareProviderFromEnv } from "../../runtime/llm/tier-aware-provider-factory.js";
 import { createCompositeInteractionLogWriter } from "../../runtime/trace/project-storage.js";
 import { saveAssetPlanRecord } from "../asset-planning/asset-plan-record.repository.js";
+import {
+  getSegmentOverride,
+  upsertSegmentOverride,
+} from "../storyboard/storyboard-segment-override.repository.js";
 import { probeImageMetadata } from "../../http/image-probe.js";
 import { probeVideoMetadata } from "../../http/video-probe.js";
 import { writeFileSync, mkdirSync } from "node:fs";
@@ -629,6 +633,9 @@ async function upgradeSegmentToVideoController(
     t => t.task_type === "video_clip" && t.source_segment_id === segmentId,
   );
   if (existingVideo) {
+    // 2026-09-02：旧升级可能缺 override 授权（绑定 run 收敛按快照路线跳过视频执行），
+    // 幂等补写 override=api_video，让已升级段可真正生成。
+    await authorizeSegmentApiVideo(context, project.id, planRecord.storyboardRecordId, segmentId);
     return {
       statusCode: 200,
       body: { created: false, task_id: existingVideo.task_id, message: "video_task_already_exists" },
@@ -760,10 +767,47 @@ async function upgradeSegmentToVideoController(
     createdAt: planRecord.createdAt,
   });
 
+  // 2026-09-02：升级必须同时写分镜级 override=api_video——绑定 run 的路线收敛
+  // 按提交快照解析（resolveSegmentRoute：override 优先于策略矩阵），
+  // 只加 plan task 不授权会让该段 video_clip 在快照里被判 remotion 而跳过
+  // （skipped_with_fallback，空跑 run，用户看不到任何执行）。
+  await authorizeSegmentApiVideo(context, project.id, planRecord.storyboardRecordId, segmentId);
+
   return {
     statusCode: 200,
     body: { created: true, task_id: newTaskId },
   };
+}
+
+/**
+ * 把分镜的视觉策略 override 置为 api_video（幂等：已授权则跳过）。
+ * 失败不阻断升级主流程（任务已落盘），记录警告；next run 由 resolve 读取。
+ */
+async function authorizeSegmentApiVideo(
+  context: RouteContext,
+  projectId: string,
+  storyboardRecordId: string | null,
+  segmentId: string,
+): Promise<void> {
+  if (!storyboardRecordId) return;
+  try {
+    const existing = getSegmentOverride(context.app.db, storyboardRecordId, segmentId);
+    if (existing?.strategyOverride === "api_video") return;
+    const user = requireUser(context.auth);
+    await upsertSegmentOverride(context.app.db, {
+      projectId,
+      storyboardRecordId,
+      segmentId,
+      strategyOverride: "api_video",
+      expectedRevision: existing?.revision ?? null,
+      updatedByUserId: user.userId,
+    });
+  } catch (error) {
+    console.warn(
+      `[assets] upgrade-video override 授权失败（segment=${segmentId}）：`,
+      error instanceof Error ? error.message : String(error),
+    );
+  }
 }
 
 export function registerAssetsRoutes(app: AppInstance) {
