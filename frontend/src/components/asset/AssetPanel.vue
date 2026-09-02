@@ -1075,7 +1075,7 @@ async function resolveVideoCostHint(pid: string): Promise<string | null> {
       slot && slot.mode === "fixed" ? (slot.provider_model_id ?? null) : null;
     const hint = resolveVideoModelPricingHint(capabilities, currentEntryId);
     if (!hint) return null;
-    return `约 ¥${hint.unitPricePerSec.toFixed(2)}/秒（${hint.displayName}）`;
+    return `约 ¥${hint.unitPricePerSec.toFixed(2)}/秒，模型：${hint.displayName}`;
   } catch {
     return null;
   }
