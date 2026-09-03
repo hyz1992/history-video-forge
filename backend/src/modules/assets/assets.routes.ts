@@ -628,6 +628,41 @@ async function upgradeSegmentToVideoController(
     }>;
   };
 
+  // 2026-09-03：升级视频时长按分镜预期时长（end_hint - start_hint，如 30s-39s → 9s）
+  // 推导，不再固定 5s 兜底——5s 与口播时长不匹配导致画面与旁白对不上。
+  // 范围收敛到 provider 单任务上限（2-15s，与 clamp 同源）。
+  const storyboardSegment = readStoryboardSegmentById(
+    context,
+    planRecord.storyboardRecordId,
+    segmentId,
+  );
+  const expectedDurationSec =
+    typeof storyboardSegment?.end_hint_sec === "number" &&
+    typeof storyboardSegment?.start_hint_sec === "number"
+      ? Math.round(storyboardSegment.end_hint_sec - storyboardSegment.start_hint_sec)
+      : 5;
+  const clampedDurationSec = Math.min(15, Math.max(2, expectedDurationSec));
+  const resolveDurationSec = (payloadValue: unknown): number => {
+    if (typeof payloadValue === "number" && Number.isFinite(payloadValue)) {
+      return Math.min(15, Math.max(2, Math.round(payloadValue)));
+    }
+    return clampedDurationSec;
+  };
+  const persistPlan = () =>
+    saveAssetPlanRecord(context.app.db, {
+      id: planRecord.id,
+      projectId: planRecord.projectId,
+      topicPackageId: planRecord.topicPackageId,
+      scriptRecordId: planRecord.scriptRecordId,
+      storyboardRecordId: planRecord.storyboardRecordId,
+      planJson: assetPlan,
+      validationResultJson: planRecord.validationResultJson,
+      executionStateJson: planRecord.executionStateJson,
+      graphTraceSummaryJson: planRecord.graphTraceSummaryJson,
+      runtimeDiagnosticsJson: planRecord.runtimeDiagnosticsJson,
+      createdAt: planRecord.createdAt,
+    });
+
   // Check if a video_clip task already exists for this segment
   const existingVideo = assetPlan.tasks.find(
     t => t.task_type === "video_clip" && t.source_segment_id === segmentId,
@@ -636,9 +671,23 @@ async function upgradeSegmentToVideoController(
     // 2026-09-02：旧升级可能缺 override 授权（绑定 run 收敛按快照路线跳过视频执行），
     // 幂等补写 override=api_video，让已升级段可真正生成。
     await authorizeSegmentApiVideo(context, project.id, planRecord.storyboardRecordId, segmentId);
+    // 2026-09-03：旧升级任务时长固定 5s（硬编码兜底），与分镜预期不符时修正。
+    const existingParams = existingVideo.parameters ?? {};
+    const existingDuration = typeof existingParams.duration_sec === "number"
+      ? existingParams.duration_sec
+      : null;
+    if (existingDuration !== clampedDurationSec) {
+      existingVideo.parameters = { ...existingParams, duration_sec: clampedDurationSec };
+      await persistPlan();
+    }
     return {
       statusCode: 200,
-      body: { created: false, task_id: existingVideo.task_id, message: "video_task_already_exists" },
+      body: {
+        created: false,
+        task_id: existingVideo.task_id,
+        message: "video_task_already_exists",
+        duration_sec: clampedDurationSec,
+      },
     };
   }
 
@@ -652,7 +701,7 @@ async function upgradeSegmentToVideoController(
 
   // Create an ad-hoc video_clip task based on the image task
   const newTaskId = `video_upgrade_${context.app.db.generateId().slice(0, 8)}`;
-  const durationSec = (payload.duration_sec as number) ?? 5;
+  const durationSec = resolveDurationSec(payload.duration_sec);
   const resolution = (payload.resolution as string) ?? "720P";
 
   // Prefer pre-generated video prompt from asset planning (image_still.parameters.video_prompt_reserve)
@@ -777,6 +826,24 @@ async function upgradeSegmentToVideoController(
     statusCode: 200,
     body: { created: true, task_id: newTaskId },
   };
+}
+
+/**
+ * 读取分镜段的预期时间窗（start/end hint），供升级视频时长推导。
+ * 无 storyboard 记录或找不到段时返回 null（调用方回退 5s）。
+ */
+function readStoryboardSegmentById(
+  context: RouteContext,
+  storyboardRecordId: string | null,
+  segmentId: string,
+): { start_hint_sec?: number; end_hint_sec?: number } | null {
+  if (!storyboardRecordId) return null;
+  const record = context.app.db.storyboardRecords.get(storyboardRecordId);
+  if (!record) return null;
+  const plan = (record.planJson ?? {}) as {
+    segments?: Array<{ segment_id?: string; start_hint_sec?: number; end_hint_sec?: number }>;
+  };
+  return plan.segments?.find((s) => s.segment_id === segmentId) ?? null;
 }
 
 /**

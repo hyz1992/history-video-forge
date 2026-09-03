@@ -1100,10 +1100,14 @@ describe("assets generate api", () => {
     // 服务重启后任务丢失 → 分镜回 Remotion、后续生成查无执行报"状态：未知"）
     const afterRecord = app.db.assetPlanRecords.get(prepared.assetPlanRecord.id)!;
     const videoTasks = (afterRecord.planJson as {
-      tasks: Array<{ task_type: string; task_id: string; source_segment_id: string }>;
+      tasks: Array<{ task_type: string; task_id: string; source_segment_id: string; parameters?: { duration_sec?: number } }>;
     }).tasks.filter((t) => t.task_type === "video_clip");
     expect(videoTasks.length).toBe(before + 1);
-    expect(videoTasks.at(-1)?.source_segment_id).toBe("sb_001");
+    const upgraded = videoTasks.at(-1)!;
+    expect(upgraded.source_segment_id).toBe("sb_001");
+    // 升级时长按分镜预期时长推导（sb_001 = 0-82s → clamp 到 provider 上限 15s），
+    // 不再固定 5s 兜底（曾导致 9s 分镜只生成 5s 视频）。
+    expect(upgraded.parameters?.duration_sec).toBe(15);
 
     // 回归：升级必须写分镜级 override=api_video（绑定 run 的快照路线收敛按
     // override 授权；缺失会导致该段视频任务被跳过 skipped_with_fallback）
