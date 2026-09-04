@@ -106,21 +106,23 @@ async function ensureVideoTaskConsistency(
     const segmentId = task.source_segment_id;
     await authorizeSegmentApiVideo(context, projectId, planRecord.storyboardRecordId, segmentId);
     if (!task.task_id.startsWith("video_upgrade_")) continue;
+    // 2026-09-04：升级任务时长对齐到实际口播（TTS chunk），保证视频与口播等长
+    // （段预期时长只是无口播信息时的兜底）。
+    const narrationSec = readSegmentNarrationDurationSec(context, projectId, segmentId);
     const segment = readStoryboardSegmentById(context, planRecord.storyboardRecordId, segmentId);
-    if (
-      segment &&
+    const expectedRaw =
+      narrationSec ??
+      (segment &&
       typeof segment.end_hint_sec === "number" &&
       typeof segment.start_hint_sec === "number"
-    ) {
-      const expected = Math.min(
-        15,
-        Math.max(2, Math.round(segment.end_hint_sec - segment.start_hint_sec)),
-      );
-      const params = task.parameters ?? {};
-      if (params.duration_sec !== expected) {
-        task.parameters = { ...params, duration_sec: expected };
-        planChanged = true;
-      }
+        ? segment.end_hint_sec - segment.start_hint_sec
+        : null);
+    if (expectedRaw === null) continue;
+    const expected = Math.min(15, Math.max(2, Math.ceil(expectedRaw)));
+    const params = task.parameters ?? {};
+    if (params.duration_sec !== expected) {
+      task.parameters = { ...params, duration_sec: expected };
+      planChanged = true;
     }
   }
   if (planChanged) {
@@ -698,20 +700,26 @@ async function upgradeSegmentToVideoController(
     }>;
   };
 
-  // 2026-09-03：升级视频时长按分镜预期时长（end_hint - start_hint，如 30s-39s → 9s）
-  // 推导，不再固定 5s 兜底——5s 与口播时长不匹配导致画面与旁白对不上。
+  // 2026-09-04：升级视频时长以实际口播为准（TTS chunk 探测时长，与口播等长），
+  // 段预期时长只是无口播信息时的兜底——视频必须完整覆盖口播且不被 compose 裁剪。
   // 范围收敛到 provider 单任务上限（2-15s，与 clamp 同源）。
+  const narrationDurationSec = readSegmentNarrationDurationSec(
+    context,
+    project.id,
+    segmentId,
+  );
   const storyboardSegment = readStoryboardSegmentById(
     context,
     planRecord.storyboardRecordId,
     segmentId,
   );
   const expectedDurationSec =
-    typeof storyboardSegment?.end_hint_sec === "number" &&
+    narrationDurationSec ??
+    (typeof storyboardSegment?.end_hint_sec === "number" &&
     typeof storyboardSegment?.start_hint_sec === "number"
       ? Math.round(storyboardSegment.end_hint_sec - storyboardSegment.start_hint_sec)
-      : 5;
-  const clampedDurationSec = Math.min(15, Math.max(2, expectedDurationSec));
+      : 5);
+  const clampedDurationSec = Math.min(15, Math.max(2, Math.ceil(expectedDurationSec)));
   const resolveDurationSec = (payloadValue: unknown): number => {
     if (typeof payloadValue === "number" && Number.isFinite(payloadValue)) {
       return Math.min(15, Math.max(2, Math.round(payloadValue)));
@@ -914,6 +922,47 @@ function readStoryboardSegmentById(
     segments?: Array<{ segment_id?: string; start_hint_sec?: number; end_hint_sec?: number }>;
   };
   return plan.segments?.find((s) => s.segment_id === segmentId) ?? null;
+}
+
+/**
+ * 读取分镜段的实际口播时长（TTS chunk 音频探测值，manifest 权威）。
+ * 视频时长必须与口播等长：plan 里的估计时长与真实口播偏差可达数秒，
+ * 过长被 compose 裁剪、过短截断口播。chunk 跨段时按段数均分（与 compose
+ * deriveSegmentTimings 同源）。仅认带 duration_source 探测标记的 chunk
+ * （测试/占位 chunk 无标记，不视为真实口播）。返回 null 表示无可靠口播信息。
+ */
+function readSegmentNarrationDurationSec(
+  context: RouteContext,
+  projectId: string,
+  segmentId: string,
+): number | null {
+  const project = context.app.db.projects.get(projectId);
+  if (!project?.activeAssetManifestRecordId) return null;
+  const manifestRecord = context.app.db.assetManifestRecords.get(
+    project.activeAssetManifestRecordId,
+  );
+  if (!manifestRecord) return null;
+  const manifest = manifestRecord.manifestJson as {
+    audio_summary?: {
+      tts_chunk_routes?: Array<{ artifact_id?: string | null; segment_ids?: string[] }>;
+    };
+    artifacts?: Array<{ artifact_id: string; metadata?: Record<string, unknown> }>;
+  };
+  const routes = manifest.audio_summary?.tts_chunk_routes ?? [];
+  const artifacts = manifest.artifacts ?? [];
+  let total = 0;
+  let found = false;
+  for (const route of routes) {
+    if (!route.artifact_id || !route.segment_ids?.includes(segmentId)) continue;
+    const artifact = artifacts.find((a) => a.artifact_id === route.artifact_id);
+    const metadata = artifact?.metadata;
+    const durationSec = metadata?.duration_sec;
+    if (typeof durationSec !== "number" || !Number.isFinite(durationSec)) continue;
+    if (typeof metadata?.duration_source !== "string") continue;
+    total += durationSec / route.segment_ids.length;
+    found = true;
+  }
+  return found ? total : null;
 }
 
 /**

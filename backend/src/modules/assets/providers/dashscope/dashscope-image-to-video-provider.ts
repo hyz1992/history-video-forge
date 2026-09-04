@@ -236,20 +236,30 @@ export function createDashscopeImageToVideoProvider(
       const sourceImageUrl = await readImageAsDataUri(sourceImage.file_uri);
       const prompt = ctx.planTask.prompt_draft ?? ctx.planTask.source_excerpt;
 
-      const ttsDurationSec = route?.tts_artifact_id
+      const ttsMeta = route?.tts_artifact_id
         ? (ctx.manifest.artifacts.find(
             (a) => a.artifact_id === route.tts_artifact_id,
-          )?.metadata as Record<string, unknown> | undefined)?.duration_sec
+          )?.metadata as Record<string, unknown> | undefined)
         : undefined;
+      const ttsDurationSec =
+        typeof ttsMeta?.duration_sec === "number" ? ttsMeta.duration_sec : undefined;
+      // 仅当 TTS chunk 带真实探测标记（duration_source）时以口播时长为准：
+      // 测试/占位 chunk 无 source 标记，其 duration 是估计占位，不应覆盖显式值。
+      const ttsIsMeasured = typeof ttsMeta?.duration_source === "string";
 
       const explicitDurationSec =
         typeof ctx.planTask.parameters.duration_sec === "number"
           ? ctx.planTask.parameters.duration_sec
           : options.durationSec;
-      const durationInput = explicitDurationSec ??
-        (typeof ttsDurationSec === "number" && ttsDurationSec > 0
+      // 2026-09-04 修复：视频时长以该段实际口播（TTS chunk）为准——plan 里的
+      // duration_sec 是资产规划按脚本节奏的估计值，与真实口播偏差可达数秒，
+      // 生成过长视频会被 compose 裁剪、过短会截断口播。TTS 在 manifest 就绪，
+      // 优先于估计值；显式值仅在无 TTS 时作兜底。
+      const durationInput =
+        (ttsIsMeasured && typeof ttsDurationSec === "number" && ttsDurationSec > 0
           ? Math.ceil(ttsDurationSec)
-          : undefined);
+          : undefined) ??
+        explicitDurationSec;
 
       const durationSec = clampDashscopeImageToVideoDuration(durationInput);
       const resolution =
@@ -265,17 +275,14 @@ export function createDashscopeImageToVideoProvider(
           ? ctx.planTask.parameters.watermark
           : options.watermark ?? false;
 
-      // 2026-08-29 修复：显式时长超过单任务上限时也必须拆分多段——
-      // 此前仅 TTS 驱动时长（无显式 duration_sec）会拆分，intent_compiler
-      // 主链路总写入显式 duration_sec，导致 25s 任务被 clamp 静默截断成
-      // 15s（口播对不上、卡帧）。computeSplitPlan 对 ≤15s 返回 null，
+      // 2026-08-29 修复：时长超过单任务上限时必须拆分多段，不能 clamp 静默截断
+      // （口播对不上、卡帧）。拆分判断基于未 clamp 的 durationInput（TTS 优先
+      // 解析后的总时长），拆分后每段 ≤15s；computeSplitPlan 对 ≤15s 返回 null，
       // 不影响正常单段任务。
       const splitPlan =
-        explicitDurationSec !== undefined
-          ? computeSplitPlan(explicitDurationSec)
-          : typeof ttsDurationSec === "number" && ttsDurationSec > 0
-            ? computeSplitPlan(ttsDurationSec)
-            : null;
+        typeof durationInput === "number" && Number.isFinite(durationInput)
+          ? computeSplitPlan(durationInput)
+          : null;
 
       if (splitPlan) {
         splitJobs = [];

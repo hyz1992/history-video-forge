@@ -419,4 +419,35 @@ describe("DashScope image-to-video provider payload", () => {
     }).parameters;
     expect(payloadParams.duration).toBe(15);
   });
+
+  it("TTS chunk 带真实探测时长时视频时长以口播为准（覆盖 plan 估计值）", async () => {
+    tempDir = join(tmpdir(), `dashscope-i2v-tts-${Date.now()}`);
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("unexpected", { status: 500 })));
+
+    const adapter = createDashscopeImageToVideoProvider({
+      apiKey: "test-key",
+      baseUrl: "https://dashscope.test",
+      model: "wan2.7-i2v-2026-04-25",
+    });
+    const ctx = makeVideoProviderContextWithImageArtifact(tempDir);
+    // plan 显式时长是估计值（15s），但该段真实口播只有 6.3s（已探测）
+    ctx.planTask.parameters = { duration_sec: 15, resolution: "720P" };
+    ctx.manifest.artifacts.push({
+      artifact_id: "artifact_tts_chunk_measured",
+      artifact_type: "tts_chunk_audio",
+      origin: "provider",
+      file_uri: "file:///tmp/tts.wav",
+      created_at: new Date().toISOString(),
+      metadata: { duration_sec: 6.3, duration_source: "audio_probe_proportional" },
+    });
+    const route = ctx.manifest.segment_routes[0]!;
+    route.tts_artifact_id = "artifact_tts_chunk_measured";
+
+    const prepared = await adapter.prepare(ctx);
+    const payloadParams = (prepared.rawRequestJson.payload as {
+      parameters: { duration: number };
+    }).parameters;
+    // 视频时长 = ceil(6.3) = 7s，与口播等长，而不是 plan 估计的 15s
+    expect(payloadParams.duration).toBe(7);
+  });
 });
