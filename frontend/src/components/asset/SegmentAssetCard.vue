@@ -36,6 +36,8 @@ interface ArtifactInfo {
 const props = defineProps<{
   segment: StoryboardSegment;
   segmentIndex: number;
+  /** 该段在成片中的真实时序（口播 chunk 累计）；null/缺省时展示规划预估窗。 */
+  realTime?: { startSec: number; endSec: number } | null;
   imageTasks: AssetTask[];
   videoTasks: AssetTask[];
   executionsByTaskId: Map<string, ExecutionInfo>;
@@ -675,7 +677,9 @@ function nextMedia() {
       <div class="segment-header-row">
         <span class="segment-header-number">#{{ segmentIndex + 1 }}</span>
         <span class="segment-header-time">
-          {{ formatSeconds(segment.start_hint_sec) }} - {{ formatSeconds(segment.end_hint_sec) }}
+          {{ realTime
+            ? `${formatSeconds(realTime.startSec)} - ${formatSeconds(realTime.endSec)}`
+            : `${formatSeconds(segment.start_hint_sec)} - ${formatSeconds(segment.end_hint_sec)}` }}
         </span>
         <ElTag size="small" type="info">{{ narrativeRoleLabel }}</ElTag>
       </div>

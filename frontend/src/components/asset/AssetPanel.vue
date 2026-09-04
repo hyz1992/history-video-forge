@@ -386,6 +386,51 @@ const artifactsById = computed(() => {
   return map;
 });
 
+/**
+ * 各分镜在成片中的真实时序（按 manifest TTS chunk 实际时长累计，与 compose
+ * deriveSegmentTimings 同源）。chunk 跨段时按段数均分。
+ * 口播未生成（无 chunk 或缺失探测）时返回 null，卡片回退规划预估窗。
+ */
+const realSegmentTimings = computed<Map<string, { startSec: number; endSec: number }> | null>(() => {
+  const mf = manifest.value as {
+    audio_summary?: {
+      tts_chunk_routes?: Array<{ artifact_id?: string | null; segment_ids?: string[] }>;
+    };
+    segment_routes?: Array<{ segment_id: string }>;
+    artifacts?: Array<{
+      artifact_id: string;
+      metadata?: Record<string, unknown>;
+    }>;
+  } | null;
+  if (!mf) return null;
+  const chunkDurationBySegment = new Map<string, number>();
+  for (const route of mf.audio_summary?.tts_chunk_routes ?? []) {
+    if (!route.artifact_id || !route.segment_ids || route.segment_ids.length === 0) continue;
+    const artifact = mf.artifacts?.find((a) => a.artifact_id === route.artifact_id);
+    const durationSec = artifact?.metadata?.duration_sec;
+    const measured = typeof artifact?.metadata?.duration_source === "string";
+    if (typeof durationSec !== "number" || !Number.isFinite(durationSec) || !measured) continue;
+    const share = durationSec / route.segment_ids.length;
+    for (const segmentId of route.segment_ids) {
+      chunkDurationBySegment.set(
+        segmentId,
+        (chunkDurationBySegment.get(segmentId) ?? 0) + share,
+      );
+    }
+  }
+  const orderedSegments = mf.segment_routes ?? [];
+  if (orderedSegments.length === 0) return null;
+  if (!orderedSegments.every((r) => chunkDurationBySegment.has(r.segment_id))) return null;
+  const timings = new Map<string, { startSec: number; endSec: number }>();
+  let cursor = 0;
+  for (const route of orderedSegments) {
+    const durationSec = chunkDurationBySegment.get(route.segment_id)!;
+    timings.set(route.segment_id, { startSec: cursor, endSec: cursor + durationSec });
+    cursor += durationSec;
+  }
+  return timings;
+});
+
 /* -------------------------------------------------------------------------- */
 /*  Execution stats                                                           */
 /* -------------------------------------------------------------------------- */
@@ -1754,6 +1799,7 @@ function handleConfirm() {
           :key="segment.segment_id"
           :segment="segment"
           :segment-index="index"
+          :real-time="realSegmentTimings?.get(segment.segment_id) ?? null"
           :image-tasks="imageTasksBySegment.get(segment.segment_id) ?? []"
           :video-tasks="videoTasksBySegment.get(segment.segment_id) ?? []"
           :executions-by-task-id="executionsByTaskId"
