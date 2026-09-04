@@ -76,14 +76,15 @@ function rejectClientProviderCredentials(
 }
 
 /**
- * 提交资产生成前，对 plan 中所有 video_clip 任务的段幂等补写 override=api_video。
- *
- * 背景（2026-09-04）：升级产生的 video_clip 任务若缺 override 授权（历史升级或
- * 遗漏），绑定 run 的快照路线收敛会把该段判为未授权而跳过（skipped_with_fallback，
- * 批量生成剩余时用户看到"失败"但实际是静默跳过）。任务存在本身即用户意图，
- * 提交前补齐授权可让所有升级过的段都能真正生成。
+ * 提交资产生成前，对 plan 中所有 video_clip 任务做一致性收敛：
+ * 1. 幂等补写 override=api_video——历史/遗漏升级（90e5bf1 之前）缺授权，
+ *    绑定 run 的快照路线收敛会把该段判为未授权而跳过（skipped_with_fallback，
+ *    批量生成剩余时用户看到"失败"但实际是静默跳过）。任务存在本身即用户意图。
+ * 2. 对齐 upgrade 任务时长到分镜预期（end-start，clamp 2-15s）——历史升级任务
+ *    固定 5s 兜底，与口播时长不匹配（如 6s 分镜生成 5s 视频）。
+ * 原生 video 任务（非 upgrade 前缀）不动：其时长由 asset planning 按口播确定。
  */
-async function ensureVideoTaskAuthorizations(
+async function ensureVideoTaskConsistency(
   context: RouteContext,
   projectId: string,
 ): Promise<void> {
@@ -92,15 +93,50 @@ async function ensureVideoTaskAuthorizations(
   const planRecord = context.app.db.assetPlanRecords.get(project.activeAssetPlanRecordId);
   if (!planRecord) return;
   const plan = planRecord.planJson as {
-    tasks?: Array<{ task_type: string; source_segment_id: string | null }>;
+    tasks?: Array<{
+      task_id: string;
+      task_type: string;
+      source_segment_id: string | null;
+      parameters?: Record<string, unknown>;
+    }>;
   };
-  const videoSegments = new Set(
-    (plan.tasks ?? [])
-      .filter((t) => t.task_type === "video_clip" && t.source_segment_id)
-      .map((t) => t.source_segment_id as string),
-  );
-  for (const segmentId of videoSegments) {
+  let planChanged = false;
+  for (const task of plan.tasks ?? []) {
+    if (task.task_type !== "video_clip" || !task.source_segment_id) continue;
+    const segmentId = task.source_segment_id;
     await authorizeSegmentApiVideo(context, projectId, planRecord.storyboardRecordId, segmentId);
+    if (!task.task_id.startsWith("video_upgrade_")) continue;
+    const segment = readStoryboardSegmentById(context, planRecord.storyboardRecordId, segmentId);
+    if (
+      segment &&
+      typeof segment.end_hint_sec === "number" &&
+      typeof segment.start_hint_sec === "number"
+    ) {
+      const expected = Math.min(
+        15,
+        Math.max(2, Math.round(segment.end_hint_sec - segment.start_hint_sec)),
+      );
+      const params = task.parameters ?? {};
+      if (params.duration_sec !== expected) {
+        task.parameters = { ...params, duration_sec: expected };
+        planChanged = true;
+      }
+    }
+  }
+  if (planChanged) {
+    await saveAssetPlanRecord(context.app.db, {
+      id: planRecord.id,
+      projectId: planRecord.projectId,
+      topicPackageId: planRecord.topicPackageId,
+      scriptRecordId: planRecord.scriptRecordId,
+      storyboardRecordId: planRecord.storyboardRecordId,
+      planJson: planRecord.planJson,
+      validationResultJson: planRecord.validationResultJson,
+      executionStateJson: planRecord.executionStateJson,
+      graphTraceSummaryJson: planRecord.graphTraceSummaryJson,
+      runtimeDiagnosticsJson: planRecord.runtimeDiagnosticsJson,
+      createdAt: planRecord.createdAt,
+    });
   }
 }
 
@@ -165,7 +201,7 @@ async function generateAssetsController(
     task_ids: requestedTaskIds ?? [],
   };
   // 2026-09-04：历史/遗漏升级缺 override 授权会被快照收敛跳过，提交前自动补齐
-  await ensureVideoTaskAuthorizations(context, project.id);
+  await ensureVideoTaskConsistency(context, project.id);
   return submitGenerationRun(context, "assets.generate", selection, {
     // S2-2B：旧客户端若仍携带 voice_profile_id 则原样透传，由提交服务与快照
     // resolved_creative 比对（一致放行/不一致 422）。执行端一律以快照为唯一权威。
@@ -565,7 +601,7 @@ async function generateTaskController(
   if (credentialsBlock) return credentialsBlock;
 
   // 2026-09-04：历史/遗漏升级缺 override 授权会被快照收敛跳过，提交前自动补齐
-  await ensureVideoTaskAuthorizations(context, project.id);
+  await ensureVideoTaskConsistency(context, project.id);
 
   // 2026-08-23（报价体系移除）：单任务生成统一走 run 提交协议（selection 只含该任务）
   return submitGenerationRun(context, "assets.generate", { task_ids: [taskId] }, {

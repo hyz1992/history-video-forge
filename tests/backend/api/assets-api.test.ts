@@ -1128,6 +1128,7 @@ describe("assets generate api", () => {
       task_id: "video_upgrade_legacy_001",
       task_type: "video_clip",
       source_segment_id: "sb_001",
+      parameters: { duration_sec: 5 }, // 历史升级固定 5s（硬编码兜底时代）
     });
     expect(getSegmentOverride(app.db, prepared.storyboardRecord.id, "sb_001")).toBeNull();
 
@@ -1155,6 +1156,12 @@ describe("assets generate api", () => {
     expect(response.statusCode).toBe(200);
     // 提交前自动补齐授权：历史升级段（缺 override）也能真正生成，不再被快照收敛跳过
     expect(getSegmentOverride(app.db, prepared.storyboardRecord.id, "sb_001")?.strategyOverride).toBe("api_video");
+    // 提交前对齐 upgrade 任务时长到分镜预期（sb_001 = 0-82s → clamp 15s），
+    // 历史 5s 硬编码任务不再产出与口播不匹配的短视频
+    const planAfter = (app.db.assetPlanRecords.get(prepared.assetPlanRecord.id)!.planJson as {
+      tasks: Array<{ task_id: string; parameters?: { duration_sec?: number } }>;
+    }).tasks.find((t) => t.task_id === "video_upgrade_legacy_001");
+    expect(planAfter?.parameters?.duration_sec).toBe(15);
   });
 
   it("supports execution_mode dry_run and confirms no provider adapter is invoked", async () => {
