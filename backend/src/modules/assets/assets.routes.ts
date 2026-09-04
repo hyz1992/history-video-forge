@@ -75,6 +75,35 @@ function rejectClientProviderCredentials(
   return null;
 }
 
+/**
+ * 提交资产生成前，对 plan 中所有 video_clip 任务的段幂等补写 override=api_video。
+ *
+ * 背景（2026-09-04）：升级产生的 video_clip 任务若缺 override 授权（历史升级或
+ * 遗漏），绑定 run 的快照路线收敛会把该段判为未授权而跳过（skipped_with_fallback，
+ * 批量生成剩余时用户看到"失败"但实际是静默跳过）。任务存在本身即用户意图，
+ * 提交前补齐授权可让所有升级过的段都能真正生成。
+ */
+async function ensureVideoTaskAuthorizations(
+  context: RouteContext,
+  projectId: string,
+): Promise<void> {
+  const project = await getProjectById(context.app.db, projectId);
+  if (!project?.activeAssetPlanRecordId) return;
+  const planRecord = context.app.db.assetPlanRecords.get(project.activeAssetPlanRecordId);
+  if (!planRecord) return;
+  const plan = planRecord.planJson as {
+    tasks?: Array<{ task_type: string; source_segment_id: string | null }>;
+  };
+  const videoSegments = new Set(
+    (plan.tasks ?? [])
+      .filter((t) => t.task_type === "video_clip" && t.source_segment_id)
+      .map((t) => t.source_segment_id as string),
+  );
+  for (const segmentId of videoSegments) {
+    await authorizeSegmentApiVideo(context, projectId, planRecord.storyboardRecordId, segmentId);
+  }
+}
+
 async function generateAssetsController(
   context: RouteContext,
 ): Promise<AppResponse> {
@@ -135,6 +164,8 @@ async function generateAssetsController(
     mode: missingOnly ? "missing_only" : undefined,
     task_ids: requestedTaskIds ?? [],
   };
+  // 2026-09-04：历史/遗漏升级缺 override 授权会被快照收敛跳过，提交前自动补齐
+  await ensureVideoTaskAuthorizations(context, project.id);
   return submitGenerationRun(context, "assets.generate", selection, {
     // S2-2B：旧客户端若仍携带 voice_profile_id 则原样透传，由提交服务与快照
     // resolved_creative 比对（一致放行/不一致 422）。执行端一律以快照为唯一权威。
@@ -532,6 +563,9 @@ async function generateTaskController(
   const payload = context.payload as Record<string, unknown>;
   const credentialsBlock = rejectClientProviderCredentials(payload);
   if (credentialsBlock) return credentialsBlock;
+
+  // 2026-09-04：历史/遗漏升级缺 override 授权会被快照收敛跳过，提交前自动补齐
+  await ensureVideoTaskAuthorizations(context, project.id);
 
   // 2026-08-23（报价体系移除）：单任务生成统一走 run 提交协议（selection 只含该任务）
   return submitGenerationRun(context, "assets.generate", { task_ids: [taskId] }, {

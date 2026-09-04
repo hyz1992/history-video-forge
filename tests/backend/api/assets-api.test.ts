@@ -1115,6 +1115,48 @@ describe("assets generate api", () => {
     expect(override?.strategyOverride).toBe("api_video");
   });
 
+  it("auto-authorizes segment override before a video generation submit", async () => {
+    const app = buildApp();
+    seedGenerationCatalog(app);
+    const prepared = await prepareActiveManifest(app);
+    // 模拟历史升级（90e5bf1 之前的升级无 override）：plan 有 video_clip 任务但无授权
+    const planRecord = app.db.assetPlanRecords.get(prepared.assetPlanRecord.id)!;
+    const plan = planRecord.planJson as { tasks: Array<Record<string, unknown>> };
+    const seedTask = plan.tasks[0]!;
+    plan.tasks.push({
+      ...seedTask,
+      task_id: "video_upgrade_legacy_001",
+      task_type: "video_clip",
+      source_segment_id: "sb_001",
+    });
+    expect(getSegmentOverride(app.db, prepared.storyboardRecord.id, "sb_001")).toBeNull();
+
+    const manifest = makeAssetManifest({
+      assetPlanRecordId: prepared.assetPlanRecord.id,
+      storyboardRecordId: prepared.storyboardRecord.id,
+      scriptRecordId: prepared.scriptRecord.id,
+      assetPlan: prepared.assetPlan,
+    });
+    buildInitialAssetManifestMock.mockReturnValueOnce(manifest);
+    validateAssetsManifestMock.mockReturnValueOnce({
+      stage: "assets_local_validation",
+      decision: "blocked",
+      errors: ["assets_task_execution_missing"],
+      warnings: [],
+      metrics: { task_count: 2, execution_count: 2, artifact_count: 1, segment_route_count: 1 },
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/projects/${prepared.project.id}/assets/generate`,
+      payload: { execution_mode: "auto_available" },
+      auth,
+    });
+    expect(response.statusCode).toBe(200);
+    // 提交前自动补齐授权：历史升级段（缺 override）也能真正生成，不再被快照收敛跳过
+    expect(getSegmentOverride(app.db, prepared.storyboardRecord.id, "sb_001")?.strategyOverride).toBe("api_video");
+  });
+
   it("supports execution_mode dry_run and confirms no provider adapter is invoked", async () => {
     const app = buildApp();
     seedGenerationCatalog(app);
