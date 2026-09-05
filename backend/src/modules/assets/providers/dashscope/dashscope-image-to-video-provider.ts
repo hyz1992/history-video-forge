@@ -243,9 +243,12 @@ export function createDashscopeImageToVideoProvider(
         : undefined;
       const ttsDurationSec =
         typeof ttsMeta?.duration_sec === "number" ? ttsMeta.duration_sec : undefined;
-      // 仅当 TTS chunk 带真实探测标记（duration_source）时以口播时长为准：
-      // 测试/占位 chunk 无 source 标记，其 duration 是估计占位，不应覆盖显式值。
-      const ttsIsMeasured = typeof ttsMeta?.duration_source === "string";
+      // 仅当 TTS chunk 带真实探测标记（duration_source）时以口播时长为准。
+      // 正式枚举含 "estimated"：fake TTS 与 DashScope 探测失败路径都写该值，
+      // 属估计占位而非实测，不能覆盖显式时长（与 compose shouldProbeAudioDuration 同源）。
+      const ttsIsMeasured =
+        typeof ttsMeta?.duration_source === "string" &&
+        ttsMeta.duration_source !== "estimated";
 
       const explicitDurationSec =
         typeof ctx.planTask.parameters.duration_sec === "number"

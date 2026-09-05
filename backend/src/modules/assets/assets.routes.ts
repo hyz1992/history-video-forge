@@ -924,8 +924,9 @@ function readStoryboardSegmentById(
  * 读取分镜段的实际口播时长（TTS chunk 音频探测值，manifest 权威）。
  * 视频时长必须与口播等长：plan 里的估计时长与真实口播偏差可达数秒，
  * 过长被 compose 裁剪、过短截断口播。chunk 跨段时按段数均分（与 compose
- * deriveSegmentTimings 同源）。仅认带 duration_source 探测标记的 chunk
- * （测试/占位 chunk 无标记，不视为真实口播）。返回 null 表示无可靠口播信息。
+ * deriveSegmentTimings 同源）。仅认带真实探测标记（duration_source 存在且
+ * ≠ estimated——fake TTS/探测失败路径写 estimated）的 chunk。
+ * 返回 null 表示无可靠口播信息。
  */
 function readSegmentNarrationDurationSec(
   context: RouteContext,
@@ -954,7 +955,8 @@ function readSegmentNarrationDurationSec(
     const metadata = artifact?.metadata;
     const durationSec = metadata?.duration_sec;
     if (typeof durationSec !== "number" || !Number.isFinite(durationSec)) continue;
-    if (typeof metadata?.duration_source !== "string") continue;
+    const durationSource = metadata?.duration_source;
+    if (typeof durationSource !== "string" || durationSource === "estimated") continue;
     total += durationSec / route.segment_ids.length;
     found = true;
   }

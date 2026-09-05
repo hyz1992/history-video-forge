@@ -408,7 +408,9 @@ const realSegmentTimings = computed<Map<string, { startSec: number; endSec: numb
     if (!route.artifact_id || !route.segment_ids || route.segment_ids.length === 0) continue;
     const artifact = mf.artifacts?.find((a) => a.artifact_id === route.artifact_id);
     const durationSec = artifact?.metadata?.duration_sec;
-    const measured = typeof artifact?.metadata?.duration_source === "string";
+    const durationSource = artifact?.metadata?.duration_source;
+    const measured =
+      typeof durationSource === "string" && durationSource !== "estimated";
     if (typeof durationSec !== "number" || !Number.isFinite(durationSec) || !measured) continue;
     const share = durationSec / route.segment_ids.length;
     for (const segmentId of route.segment_ids) {
