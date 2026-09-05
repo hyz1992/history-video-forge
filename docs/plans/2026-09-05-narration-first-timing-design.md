@@ -1,6 +1,6 @@
 # 口播前置与真实时间轴设计
 
-日期：2026-09-05。状态：自审整改后的设计交付，尚未实现；已核对官方候选能力，最终模型/音色须经有限对比后确定，真实音质及时间戳精度尚未验收。
+日期：2026-09-05。状态：三轮有限自审修复后，文档可实施性终审通过，可从任务 0 离线实施开始；尚未实现业务，最终模型/音色须经有限对比后确定，真实音质及时间戳精度尚未验收。见[审查闭环记录](../records/2026-09-05-narration-first-design-review-loops.md)。
 
 实施入口：[实施计划](./2026-09-05-narration-first-timing-implementation-plan.md)。
 
@@ -83,6 +83,16 @@ WS 的单次 `continue-task` 最多 20,000 字符，同一任务累计最多 200
 - 旧项目显式升级必须同时提交目标模型/音色选择和 expected 配置 revision；升级预览可建议合格组合，但不得提前修改旧项目配置。确认后一次事务切模式、写固定配置、记录策略与失效下游；不兼容或冲突时全部不写。发布开关关闭时拒绝新升级，但既有新模式仍可读取，不自动降级。
 
 隔离测试必须同时覆盖 legacy auto/fixed、新模式 auto/fixed、显式不兼容选择、策略更新、模型停用、配置保存及升级事务；不能只证明新 operation 能解析到一个模型。
+
+隔离还必须覆盖共享目录与实际协议，不能仅依赖 `isDefault`。本轮新增 WS 模型目录项明确标注 `execution_protocol=dashscope_ws`、`narration_only=true`，资格策略关联其音色档案 ID；历史无该标记的条目保持既有语义。项目候选展示、配置保存、run override 和外部 dispatch 共用兼容检查：新模式的 `script.narration.generate` 只接受合格 WS 模型/音色；legacy 资产 TTS 及旧 `voice.preview` 合成入口拒绝本轮 narration-only 组合，不能把 voice.targetModel 交给 HTTP adapter。旧 auto 匹配在评分前排除新增 narration-only 音色，既有候选评分/排序不变；显式选择不兼容时在调用前报错，不另找音色替换。全局偏好目录可展示带适用范围的组合，但不能绕过项目与执行入口的兼容检查。
+
+先交付兼容过滤/协议防护，再发布新增全局模型及音色 seed；即使新模式开关关闭，新增 seed 也不得影响 legacy 自动匹配。旧音色试听入口对新 WS 组合仅允许读取已有授权预览缓存；本轮不扩建独立付费 WS 试听服务，完整口播在文案页生成后预览。直接 HTTP 请求、错误 voice target、过期快照均须在外呼前拒绝。
+
+新建恢复沿用 `POST /api/projects`，实际入口为 `backend/src/modules/topic/topic.controller.ts` 的 `createProjectController`，不是 projects controller。请求新增可选 `narration_selection={provider_model_id,voice_profile_id,policy_version}`（由真实目录 ID 解析供应商 voice ID，不直接信任任意供应商字符串）。继承配置不兼容时返回 422 `narration_selection_required`、不兼容原因、当前策略版本及合格模型/音色组合；零项目写入。`CreateTopicModal.vue` 原地展示选择，保留项目名/选题输入，带选择重试同一创建入口，不改用户全局偏好。策略变动返回 409 和更新后的选择信息；开关关闭但请求仍带新模式选择时返回模式不可用，不暗中创建 legacy。创建成功才继续既有选题请求，取消选择零创建、零生成。创建合同/前后端接线在实施任务 2B/11C 闭环。
+
+系统推荐、事件库 `EventLibraryBrowser.vue`、自定义选题 `CustomTopicInput.vue` 三个入口共用父弹窗提供的创建协调函数及选择组件，子组件不得各自吞掉 422 后重复无选择的创建。等待选择时保留各自筛选条件、事件 ID/角度或 rawDigest；父弹窗只协调创建，不重写三种选题生成逻辑。一次创建成功后调用原有对应选题动作一次，随后的 ensureProject 必须复用该 ID，不再创建；取消/关闭终止待续动作，选择控件不能被外层“创建中”锁死。
+
+Prisma 模式下创建从 DB 权威用户偏好读取完整配置和 revision，不用本实例 Map 决定继承结果。读取后解析资格，创建事务再次比较该用户偏好 revision（缺记录也作为明确版本状态）；变化返回 409 `narration_creation_context_changed`，零项目写入，由同一创建选择流程提示用户确认后重新提交，禁止自动换成推荐。成功记录实际 sourceUserPreferenceRevision，模式/固定配置一起写入真实 first aggregate writer，事务提交后才刷新内存/项目 metadata；资格或事务拒绝不落项目目录。Project 的 narrationTimingMode 和两个 active 指针须贯通 first aggregate writer/hydrator、ProjectStore 映射和 snapshot；冷启动不能把新项目误判为 legacy。未启用新模式的既有创建语义不顺带重构。
 
 ## 3. 当前问题与代码落点
 
@@ -173,6 +183,8 @@ manifest 导入字幕时将 `resolvedStyle` 完整复制到现有消费者读取
 
 正式 `storyboard_v2` 包含 source narration ID/hash、timingMap hash、boundary ranges 与最终 visual intervals；旧 `start_hint_sec/end_hint_sec` 若为 UI 兼容保留，只能由最终毫秒派生。新旧合同用版本判别联合，禁止 v2 缺字段时回落 v1。回归须证明 18 个各 250 ms 的独立字 token 可以在第 6 字后（1,500 ms）切镜头，而非只能选择机械分组末尾；投影前后原始 timing hash 不变。
 
+每镜 `script_excerpt` 必须由同一范围确定性派生：`sourceText.slice(startBoundary.sourceOffset, endBoundary.sourceOffset)`；持久化 source 起止及派生摘录，不能让 LLM 再独立切一份正文。新 planner 输出合同不要求摘录；若兼容输入仍带摘录，须与派生值逐段完全相等，否则结构校验失败。v2 不走旧 `indexOf/fuzzy` 重定位与 82% 覆盖容忍。资产 planner 的 `script_excerpt`、compiler 的 `source_excerpt` 与真实 interval 共同来自这一已验证范围；单镜视觉重生锁定边界、时间、来源及派生摘录。测试同时覆盖“时间按 ABC/DEF、摘录按 AB/CDEF”的双重完整覆盖反例和重复句，不能只查总覆盖率。
+
 提供实际时长能消除估时误差带来的节奏决策失真，但不能保证镜头创意必然优秀。过密/过长镜头展示告警和预览供人判断，不新增语义审校器自动卡关。已有一次结构性 regen 可保留，不新增无限“节奏修复”循环。
 
 ### 5.3 字幕
@@ -180,6 +192,8 @@ manifest 导入字幕时将 `resolvedStyle` 完整复制到现有消费者读取
 从 raw token 按标点、字数和现有字幕样式约束断行，确定性产出 SRT/VTT。字幕显示不得越过下一字幕或音频结束；可在既有显示规则内延长可读时间，但不跨后一句发声起点。保留 `speechStartMs/speechEndMs` 与 `displayStartMs/displayEndMs`，样式变化仅重建显示层。
 
 SRT/VTT 是本地产物，不要求供应商直接提供字幕文件；新路径禁止 ASR 再识别，也禁止无声息回退按字均分。时间戳不合格时可播放候选排查，但不能确认、生成正式字幕或进入分镜。
+
+时间来源跨层显式映射：NarrationRecord 的 `timingSource=provider_native` 导入字幕 artifact 时写必填 `metadata.timing_source=provider_timestamp`（沿用现有 artifact 枚举）、narration ID、audio/timing hash 及 subtitle revision ID。v2 schema/validator 校验来源及引用一致，缺失或 estimated/mixed 均拒绝；不能仅复制样式。`remotion-input-builder` 的 v2 分支在校验后直接消费字幕绝对 cue 时间，绕过 `normalizeSubtitleCuesToNarration` 的旧缩放逻辑；v1 行为不变。尾静音不等于字幕漂移，例如 117 秒音频、末字幕 115 秒结束必须保持 115 秒，禁止拉到文件末尾。跨 builder→manifest→真实 render props 逐 cue 验证起止相等（只允许 SRT 毫秒表示精度），且整篇口播仍只有一个全局播放 clip。
 
 ## 6. 资产与最终合成
 

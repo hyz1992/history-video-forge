@@ -1,6 +1,6 @@
 # 口播前置与真实时间轴实施计划
 
-日期：2026-09-05。状态：自审整改后待执行；本次仅交付文档，没有实现、迁移或付费调用。
+日期：2026-09-05。状态：三轮有限自审修复后文档终审通过，待从任务 0 离线实施；本次仅交付文档，没有实现、迁移或付费调用。
 
 > 执行者：按 `superpowers:executing-plans` 分阶段执行，或在用户允许的协作方式下使用 `superpowers:subagent-driven-development`。项目契约优先：直接在 `dev` 主工作区，一次一个低耦合任务，不自行创建分支/worktree。每个任务先测试、再实现、再验证与自审，独立中文提交。
 
@@ -70,23 +70,41 @@ expect(TimingToken.safeParse({
 
 修改：`backend/prisma/schema.prisma`、`backend/src/db/client.ts`、`backend/src/db/prisma-client.types.ts`、`backend/src/modules/projects/project-snapshot.service.ts`、`backend/src/modules/projects/project.repository.ts`。如执行日期冲突，迁移目录按实际时间新建，不覆盖已有迁移。
 
+真实持久化接线同时修改：`backend/src/db/repositories/prisma-first-aggregate-writer.ts`、`prisma-first-aggregate-hydrator.ts`、`project-store.ts`、`prisma-project-store.ts`。显式字段映射不会因 Prisma schema 新增字段自动贯通，不能遗漏创建、读取、active patch、hydrate 任一分支。
+
 - [ ] 写隔离临时 SQLite 测试：旧项目读为 legacy、记录只能属于同 project/script、generationRunId 唯一；ready 不替换 active，查询不能从最新记录补 active。
 - [ ] 运行 `npx vitest run --configLoader runner tests/backend/narration/narration-repository.test.ts`，观察 FAIL。
 - [ ] 实现 NarrationRecord、NarrationSubtitleRevision 增量表及 Project 对应 nullable 指针/模式；narration repository 自己从 DB 读取，不依赖第二/第三 aggregate 的偶然热缓存。补 DbClient 测试镜像与项目 snapshot 的摘要字段，不将逐词数组灌入所有 snapshot。
+- [ ] 写真实 Prisma writer→清空 Map→hydrate/ProjectStore→snapshot 回归，验证 mode、activeNarrationRecordId、activeNarrationSubtitleRevisionId 不丢失；active patch 保持 owner/同项目及字幕所属 narration 检查，不允许跨项目指针。
 - [ ] 临时 DB 运行迁移与冷启动/恢复测试，不在用户运行库直接执行实验迁移；检查 FK 与删除顺序，project 删除只覆盖该项目自己的新目录。
 - [ ] 运行上述测试、`tests/backend/projects/project-snapshot.test.ts` 与 `npm run typecheck:backend`；PASS 后提交 `持久化口播版本与项目活动引用`。
+
+### 任务 2A：先保护 legacy 候选、音色池和协议入口
+
+新增：`backend/src/modules/narration/narration-execution-compatibility.ts`、`tests/backend/narration/narration-execution-compatibility.test.ts`。
+
+修改：`backend/src/modules/generation-config/generation-config.repository.ts`、`generation-config.controller.ts`；`backend/src/modules/generation-cost/generation-capability-readiness.ts`、`provider-dispatch-gate.ts`；`backend/src/modules/assets/voice/voice-resolution.service.ts`、`creative-voice-execution.ts`、`voice-preview.service.ts`；`backend/src/modules/assets/assets-run.service.ts`、`backend/src/modules/assets/providers/dashscope/dashscope-tts-provider.ts`。先不发布新 seed，不改变旧 HTTP 成功合成的语义。
+
+- [ ] 用模拟新增 WS 目录/音色写测试：相同 traits 的新增音色不能改变 legacy auto 结果；legacy fixed/旧试听提交新 WS model 或 voice target 在外呼前拒绝；旧组合行为不变，已缓存试听可读。
+- [ ] 运行 `npx vitest run --configLoader runner tests/backend/narration/narration-execution-compatibility.test.ts`，观察 FAIL。
+- [ ] 实现设计 §2.5 的共享兼容检查，按 project mode、operation、目录协议/适用范围和实际 voice target 校验；新增目录 metadata 为 `execution_protocol=dashscope_ws`、`narration_only=true`，无标记的既有条目维持原语义。旧 auto 在评分前排除新增 narration-only 音色，不修改 matcher 的旧评分/排序。
+- [ ] 项目目录及配置保存按适用范围过滤/拒绝；外呼前再次验证实际 voice target，不只检查快照 model。旧 HTTP adapter/voice.preview 不能因共享目录注册就调用新 WS 模型；新 mode 的 run override 接线在任务 5 复用该检查。禁止将“候选不可用”变成自动换音色/模型。
+- [ ] 运行上述测试、`npm run typecheck:backend`，PASS 后提交 `保护旧项目音色选择与口播协议边界`；通过前不得进入新增 seed 任务。
 
 ### 任务 2B：项目级模型固定与新旧默认隔离
 
 新增：`backend/src/modules/narration/narration-model-policy.ts`、`tests/backend/narration/narration-model-policy.test.ts`。
 
-修改：`backend/src/modules/projects/project.controller.ts`、`project.repository.ts`；`backend/src/modules/generation-config/generation-config.controller.ts`；`backend/src/modules/generation-cost/pricing-catalog.seed.ts`、`generation-cost-bootstrap.ts`；`backend/src/modules/assets/voice/voice-presets.ts`。任务 1/2 的共享合同与配置持久化字段同步补策略版本/选择原因；迁移如需补字段新建增量 migration，不修改已执行迁移。
+修改：`backend/src/modules/topic/topic.controller.ts`（真实 `POST /api/projects` 创建入口）、`backend/src/modules/projects/project.repository.ts`、`backend/src/db/repositories/prisma-first-aggregate-writer.ts`；`backend/src/modules/generation-config/generation-config.controller.ts`；`backend/src/modules/generation-cost/pricing-catalog.seed.ts`、`generation-cost-bootstrap.ts`；`backend/src/modules/assets/voice/voice-presets.ts`。任务 1/2 的共享合同与配置持久化字段同步补策略版本/选择原因及创建 selection/error DTO；迁移如需补字段新建增量 migration，不修改已执行迁移。
 
 - [ ] 写矩阵测试：legacy auto/fixed 解析结果不变；新模式 auto 固定为任务 0 推荐组合，合格 fixed 保留，不合格显式选择拒绝且零写入；策略默认更新不追改已有项目；模型下架不自动换模，历史音频可读。
 - [ ] 运行 `npx vitest run --configLoader runner tests/backend/narration/narration-model-policy.test.ts`，观察 FAIL。
 - [ ] 按设计 §2.5 实现版本化策略，合格候选作为非全局默认目录项注册，复用 seed/bootstrap 链；断言旧全局 `isDefault`、环境 TTS 默认、用户偏好都不变。新模式创建一次事务写 mode、fixed 模型、fixed 音色与选择依据；生产开关仍关闭，新模式分支通过测试显式注入。
+- [ ] 扩展真实创建 controller：可选 `narration_selection` 使用目录模型/音色档案 ID 与策略版本；不兼容继承返回 422 `narration_selection_required` 和合格选择，策略变动返回 409；新模式关闭时携带新选择不得暗中降级。事务内写项目/模式/配置，失败无半个项目，不先调用旧 create 再补配置；后续选题生成不属于本事务。
+- [ ] 新模式创建复用 firstAggregateWriter 的 DB 权威用户偏好读取，而非 getUserGenerationPreference 的 Map 结果；把读取的 source revision 传入实际创建事务复查，缺记录与新增记录也做冲突判断，变化报 409 `narration_creation_context_changed`。先校验资格、再事务、提交后同步内存/项目 metadata，拒绝不创建目录；不改 legacy 创建语义。
+- [ ] 写真实路由/临时 SQLite 测试：DB 为旧不合格 fixed、本实例缓存 auto 或空时返回 422 且零项目写入；读取后另一实例保存偏好时返回 409 且不留下目录；合格创建经真实 writer 冷恢复仍为新模式，准确冻结偏好 revision 与 fixed 配置。
 - [ ] 配置保存也使用相同策略；auto 明确表示一次应用当前新模式推荐并物化 fixed，不持续跟随全局。未合格选择在保存前拒绝；有效 TTS 变化的下游失效由任务 6 接入。为任务 11B 升级暴露纯解析结果，不提前修改旧项目配置。
-- [ ] 测试创建/保存冲突回滚，注册项存在不等于 narration 资格开放；回跑上述测试、`tests/shared/generation-configuration-schema.test.ts`、`npm run typecheck:backend`；PASS 后提交 `隔离新旧项目口播模型默认与固定策略`。
+- [ ] 测试创建/保存冲突回滚，并经真实 POST 路由验证拒绝→带合格选择重试→成功，用户偏好不变；开关关闭、seed 已注册时回跑任务 2A 的 legacy auto/fixed/试听零错误协议外呼用例。注册项存在不等于 narration 资格开放；回跑上述测试、`tests/shared/generation-configuration-schema.test.ts`、`npm run typecheck:backend`；PASS 后提交 `隔离新旧项目口播模型默认与固定策略`。
 
 ### 任务 3：整篇 WS adapter 与原生时间归一化
 
@@ -129,6 +147,7 @@ expect(TimingToken.safeParse({
 - [ ] 运行 `npx vitest run --configLoader runner tests/backend/narration/narration-lifecycle.test.ts tests/backend/api/narration-api.test.ts`，观察 FAIL。
 - [ ] 建立纯 readiness 函数供 UI projection 与后端一致使用；run 使用冻结 capability、qualified voice、参数及 settings hash。只把本轮验收通过的组合标 enabled；旧音色不自动跨模型复制。
 - [ ] 明确扩展 createOrRestoreGenerationRun 的有限 narration override 输入，透传到现有 resolveQuoteConfiguration 的 runOverrides 并进入快照；该函数保留旧名称不等于恢复 quote 工作流。扩展新 operation 的 computeRunPayloadFingerprint，纳入 script ID/text hash、overrides、语音配置投影/版本，旧 operation 行为不变。测试证明修改语速真实改变 provider 请求，同 key 换正文/参数返回冲突。
+- [ ] 在 run override 解析及 provider dispatch 前接任务 2A 兼容检查，实际模型/音色/协议必须与资格一致；直接 API 不能绕过 UI 候选过滤，拒绝时外呼为 0。
 - [ ] 对现有同步 submit 增加仅 narration 使用的“持久化后返回 202”路径，交由既有 dispatcher/lease 运行；其它 operation 保持现有响应。快照缺失 fail-closed。复用已存在恢复机制，未知供应商结果映射 run `needs_reconciliation`、record `unknown`，不另造后台队列体系。
 - [ ] 实现 confirm 事务复查、取消、record 查询及超时；同 active 重复确认必须无副作用，仅重新接受目标区间不清空视觉；不同候选并发确认 CAS 拒绝迟到请求。取消持久化在前，provider cancel 尽力执行，后续事件受状态/lease fencing 约束。
 - [ ] 在 GenerationRunEvent 保存 provider call intent/request key，扩展 usage-cost-recorder 的无 AssetProviderJob 媒体记账入口；新 operation usage 归文案步骤，assetProviderJobRecordId 为空，不伪造资产任务。价格使用独立模型目录项，禁止复制 qwen3 单价；未知实际费用保持 null/unknown。
@@ -156,7 +175,8 @@ expect(TimingToken.safeParse({
 
 - [ ] 写测试：boundary ID 合法，相邻镜头共享端点、全文无重复/遗漏；首镜 0、末镜等于 WAV 时长；停顿归前镜；重复文本按 ID 定位；v2 缺来源拒绝，不回退按字符重算；小于 1 秒不被强行改为 1 秒。18 个各 250 ms 独立字 token 的第 6 字后可切为 1,500 ms，投影不改变 raw timing hash；不可拆 span 内边界拒绝。
 - [ ] 运行 `npx vitest run --configLoader runner tests/backend/storyboard/storyboard-narration-timing.test.ts`，观察 FAIL。
-- [ ] 实现 v1/v2 判别联合与 projector，start/end hints 只派生不再参与计算。仅做结构校验，不在本地合并“语义不佳”的镜头。
+- [ ] 实现 v1/v2 判别联合与 projector，start/end hints 只派生不再参与计算；source 起止及 `script_excerpt` 同样由 boundary.sourceOffset 切片派生，持久化后逐段严格一致。新 planner 不独立输出摘录，兼容输入摘录不一致即拒绝；v2 绕过旧 excerpt 的 indexOf/fuzzy/82% 容忍，只保留 v1 旧逻辑。仅做结构校验，不在本地合并“语义不佳”的镜头。
+- [ ] 补双分区反例：时间 ABC/DEF、摘录 AB/CDEF 即使各自覆盖全文也必须失败；重复句按 source offsets 定位，单镜视觉重生不得改变派生摘录。
 - [ ] 运行上述测试与 `tests/backend/storyboard/storyboard-local-validator.test.ts`、`tests/backend/storyboard/storyboard-plan-compatibility.test.ts`、`npm run typecheck:backend`；PASS 后提交 `让分镜时间消费已确认口播的真实边界`。联合类型产生的现有消费者收窄必须在本任务闭环，不能把编译失败留给后续任务。
 
 回归样例必须明确区分 speech 与 visual：
@@ -177,7 +197,7 @@ expect(projectVisualIntervals(boundaries, [
 
 新增：`tests/backend/storyboard/storyboard-narration-prompt.test.ts`。
 
-- [ ] 写输入合同测试：planner 收到原文/tokens/完整 boundaries/停顿及冻结 narration 身份；输出连续 boundary ranges，切换到 v2 后 `recalculateSegmentTimings` 调用次数为 0。单镜重生不能改 boundary/time/source 字段；展示分句不能删掉合法切点，第 6 字切点必须实际出现在 prompt 输入中。
+- [ ] 写输入合同测试：planner 收到原文/tokens/完整 boundaries/停顿及冻结 narration 身份；输出连续 boundary ranges，摘录由任务 7 投影生成，切换到 v2 后 `recalculateSegmentTimings` 调用次数为 0。单镜重生不能改 boundary/time/source/派生 excerpt 字段；展示分句不能删掉合法切点，第 6 字切点必须实际出现在 prompt 输入中。
 - [ ] 运行 `npx vitest run --configLoader runner tests/backend/storyboard/storyboard-narration-prompt.test.ts`，观察 FAIL。
 - [ ] 精简调整正式中文 prompt，明确按语义和实际发声节奏规划，不猜秒数、不改正文；`language: zh-CN`、版本、changes、fixture 同步。保留 v1 的输入/output 分支，不让新 prompt 破坏旧模式回归。
 - [ ] 接入任务 7 projector；stub 也选择真实边界，不让 fake 一直走估算而掩盖 v2 问题。
@@ -191,7 +211,7 @@ expect(projectVisualIntervals(boundaries, [
 
 - [ ] 写测试：v2 task 中没有付费 TTS，visual task 用各段真实间隔，音色意图不覆盖已冻结 voice；依赖不再引用不存在的 TTS task；成本/调用次数不包含已生成口播。
 - [ ] 运行 `npx vitest run --configLoader runner tests/backend/asset-planning/narration-reference-compiler.test.ts`，观察 FAIL。
-- [ ] 实现 v2 compiler；沿用 typed visual intents/既有艺术设定，不改变 writer/reviewer。向视觉意图输入补真实间隔，音频来源由本地引用提供。
+- [ ] 实现 v2 compiler；沿用 typed visual intents/既有艺术设定，不改变 writer/reviewer。向视觉意图输入补真实间隔，`segment-intent-prompt-input` 的 script_excerpt 与 compiler 的 source_excerpt 均使用同一已验证 boundary 的派生切片；测试实际 prompt 输入与范围一致，不只证明时间数值正确。音频来源由本地引用提供。
 - [ ] asset-planning-run 在 LLM dispatch 前与最终激活前从 DB 调统一 readiness，复查 script/narration/timing hash/active storyboard；测试另一实例更换口播后本实例零新 LLM 调用，已发出的旧结果不得激活。
 - [ ] 运行上述测试、`tests/backend/asset-planning/asset-plan-intent-compiler.test.ts`、`tests/backend/asset-planning/asset-plan-downstream-compatibility.test.ts`、`npm run typecheck:backend`；PASS 后提交 `让资产规划复用前置口播与真实镜头时长`。
 
@@ -203,7 +223,7 @@ expect(projectVisualIntervals(boundaries, [
 
 - [ ] 写测试：v2 全局音频仅登记一次，每镜显式 range；“生成全部”/失败重试不调用 TTS、ASR 和 tts chunking；117 秒整篇音频里的 6.4 秒镜头按 6.4 秒选择素材规格，不按 117 秒。
 - [ ] 运行 `npx vitest run --configLoader runner tests/backend/assets/narration-manifest-importer.test.ts`，观察 FAIL。
-- [ ] 实现 bundle 引用导入和 v2 manifest；字幕 artifact 携带 revision ID、设置 hash，并把 revision.resolvedStyle 完整映射到 `metadata.subtitle_style`，缺失/不一致拒绝。视频 provider 从 route range 计算素材需求，沿用现有模型时长档与 split plan。保留现有 audio 参数、SFX/BGM 行为，不顺手改变视频是否有声。
+- [ ] 实现 bundle 引用导入和 v2 manifest；字幕 artifact 携带 revision ID、设置 hash，并把 revision.resolvedStyle 完整映射到 `metadata.subtitle_style`，缺失/不一致拒绝。将 narration 的 provider_native 显式映射为 artifact 必填 `metadata.timing_source=provider_timestamp`，同步 narration ID、audio/timing hash，v2 schema 拒绝缺来源或 estimated/mixed，不改变 v1 枚举语义。视频 provider 从 route range 计算素材需求，沿用现有模型时长档与 split plan。保留现有 audio 参数、SFX/BGM 行为，不顺手改变视频是否有声。
 - [ ] 写超上限拆视频、素材太短、可见 fallback、不触碰 narration 的回归；执行时快照不因资产配置重新挑语音模型。
 - [ ] assets-run/execution 在每个外部 dispatch 与 manifest 激活前从 DB 复查来源链，覆盖冷实例口播已更换、字幕 revision 仅更新、旧视频 job 迟到的测试；必要时保留 artifact 作历史，禁止恢复旧 active manifest。
 - [ ] 回跑上述测试及 `tests/backend/assets/assets-execution-regression.test.ts`、`tests/backend/assets/assets-local-validator.test.ts`、`npm run typecheck:backend`，PASS 后提交 `资产执行复用整篇口播并按镜头范围生成视频`。
@@ -229,6 +249,7 @@ expect(projectVisualIntervals(boundaries, [
 - [ ] 写 24/25/30 fps、长序列和不足一帧的测试：使用相同绝对端点取整后相减，连续无空洞，最终误差不超过一帧，零帧镜头明确失败。
 - [ ] 运行 `npx vitest run --configLoader runner tests/backend/compose/narration-first-timeline.test.ts`，观察 FAIL。
 - [ ] 实现 v2 compose 直接消费范围；禁止旧比例缩放 fallback。校验音频/timing hash、字幕 revision 和来源链，消费任务 9C 激活的 manifest，不在 builder 内做字幕事务；素材缺失按现有规则处理，不加速音频。
+- [ ] `remotion-input-builder` 单独增加 v2 时间来源校验与绝对 cue 直通分支，绕过现有 `normalizeSubtitleCuesToNarration`，不能只改 compose。用 117 秒音频/末字幕 115 秒、首尾及句间静音 fixture 经真实 builder→manifest→render props 逐 cue 断言时间不变；缺来源拒绝，v1 估算缩放回归不变；口播只建一个全局 clip。
 - [ ] visual-rendering/audio-rendering 的 v2 分支调用统一绝对端点投影，删除该分支独立 round(duration)/Math.max(1) 补帧。直接调用真实消费函数测试，不能只证明新增工具函数正确。
 - [ ] compose-run/render-run 在 dispatch 与激活前从 DB 复查 narration/timing/subtitle/direct upstream 链；测试跨实例变更、冷启动、渲染中换口播或字幕，迟到输出只能留历史不得激活。
 - [ ] 回跑上述测试、`tests/renderer/narration-frame-projection.test.ts`、`renderer/src/audio-rendering.test.ts`、`tests/backend/compose/compose-timeline-builder.test.ts`、`tests/backend/render/remotion-input-builder.test.ts`、`npm run harness:compose-runtime-smoke`、`npm run harness:render-runtime-smoke`，PASS 后提交 `统一真实时间轴到合成与渲染帧边界`。
@@ -257,15 +278,27 @@ expect(projectVisualIntervals(boundaries, [
 - [ ] 分镜和资产页把新路径“预估时长”改为实际画面区间/口播发声区间，二者差额注明停顿归属；展示旧 estimate 时明确其非权威。资产页不再提供新路径重复生口播按钮，而是回文案修改入口。
 - [ ] 回跑上述测试与 `tests/frontend/stores/assets.test.ts`、`tests/frontend/stores/storyboard.test.ts`、前端构建；PASS 后提交 `补齐真实时长展示与旧项目受控升级`。
 
+### 任务 11C：创建不兼容时的项目级选择与原地恢复
+
+新增：`frontend/src/composables/useNarrationProjectCreation.ts`、`frontend/src/components/topic/NarrationCreationSelection.vue`、`tests/frontend/narration-project-create.spec.ts`。
+
+修改：`frontend/src/components/topic/CreateTopicModal.vue`、`frontend/src/components/event-library/EventLibraryBrowser.vue`、`CustomTopicInput.vue`、`frontend/src/stores/project.ts`、`frontend/src/components/settings/CapabilitySlotSettings.vue`、`ProjectGenerationSettings.vue`、`CreativeVoiceSettings.vue`；复用任务 2B 的创建 selection/error DTO，不在前端自行维护另一份资格表。
+
+- [ ] 写三入口测试：系统推荐、事件库、自定义选题继承旧 fixed/旧音色被拒绝后，分别保留筛选条件、事件 ID/角度、rawDigest；用户选定后发送 selection 重试而非重复同一 name。取消/关闭零创建且不续发选题；成功后只创建一个项目、对应选题请求一次，ensureProject 复用 ID，用户全局偏好不变。
+- [ ] 运行 `npx vitest run --configLoader runner tests/frontend/narration-project-create.spec.ts`，观察 FAIL。
+- [ ] composable 只协调创建和等待选择，父弹窗提供统一函数给两个子组件（通过显式回调 prop），三入口均 await 该函数后才执行各自原有选题动作；子组件不自行吞掉创建兼容错误。复用选择组件处理 422、409 策略/偏好变化及重复点击，等待选择时选择控件仍可操作。store 只传 typed DTO/error，不引用 Vue 组件；取消拒绝待续 Promise，调用者不触发生成。
+- [ ] 开关关闭时解释不可用，不擅自创建 legacy。项目设置按适用模式展示/禁用模型和音色；WS 音色不触发旧付费 voice.preview，完整口播从 NarrationPanel 试听。
+- [ ] 回跑测试与 `npm run build:frontend`，PASS 后提交 `补齐新项目口播配置选择与创建失败恢复`。
+
 ### 任务 12：端到端验收、发布开关与正式文档收口
 
 新增：`harness/scripts/runtime/narration-first-runtime-smoke.ts`、`harness/scripts/ui-acceptance/narration-first-acceptance.ts`、`tests/harness/narration-first-runtime-smoke.test.ts`、`docs/records/2026-09-05-narration-first-acceptance.md`（执行时改实际日期）。
 
-修改：`package.json`、`backend/src/config/env.ts`、`backend/src/modules/projects/project.controller.ts`；文档 `docs/architecture/pipeline-io-spec.md`、`script-stage-design.md`、`api-design.md`、`docs/data/field-design.md`、`schema-design.md`、`harness/README.md`、`docs/README.md`、`docs/plans/README.md`、`docs/todos/roadmap-todo.md`。
+修改：`package.json`、`backend/src/config/env.ts`、`backend/src/modules/topic/topic.controller.ts`（新建模式）、`backend/src/modules/projects/project.controller.ts`（显式升级）；文档 `docs/architecture/pipeline-io-spec.md`、`script-stage-design.md`、`api-design.md`、`docs/data/field-design.md`、`schema-design.md`、`harness/README.md`、`docs/README.md`、`docs/plans/README.md`、`docs/todos/roadmap-todo.md`。
 
 - [ ] 写 fake runtime：确认文案→原生 timing fixture→确认口播→分镜→资产计划→fake 图/视频→compose→render；断言 TTS 只发生一次、ASR 为 0、合法切点未被机械桶限制、每镜/总长同源、资产重试不重生口播；字幕样式变更与历史重放、legacy/new 默认模型并存均走真实服务。
 - [ ] 运行 `npx vitest run --configLoader runner tests/harness/narration-first-runtime-smoke.test.ts`，先 FAIL，再接入生产服务完成闭环后 PASS。
-- [ ] 跑浏览器验收：未生成阻止推进、参数能力差异、生成进度/取消/刷新、字幕试听、超时长接受、深链、旧项目升级、改文案后过期及费用展示。记录截图/接口输出，不用组件测试冒充真实浏览器验收。
+- [ ] 跑浏览器验收：系统推荐/事件库/自定义三入口分别走继承旧 fixed/旧音色→创建拒绝→弹窗选择→重试成功，输入保留且全局偏好不变；取消不创建、每种选题只提交一次。再测未生成阻止推进、参数能力差异、生成进度/取消/刷新、字幕试听、超时长接受、深链、旧项目升级、改文案后过期及费用展示。记录截图/接口输出，不用组件测试冒充真实浏览器验收。
 - [ ] 运行 `npx vitest run --configLoader runner --no-file-parallelism`、`npm run typecheck:backend`、`npm run build:frontend`、`npm run harness:check-prompts`；任何既有失败分类列出，不能把部分通过称全量通过。
 - [ ] 经明确预算批准，用少量真实口播 + 已有/本地视觉素材完成整片验收；逐镜输出“speech 起止/visual 起止/资产需求时长/compose 起止/差值”表，并 probe 实际 MP4。优先避免为验证时间轴另付费生成视频。
 - [ ] 按设计 A1–A10 逐项标 `已修 / 部分修 / 未修 / 未验证` 及证据。通过前保持 `NARRATION_FIRST_ENABLED=false`；全部通过后该开关控制新建模式及显式升级入口，不重写既有项目、不改变全局 TTS 默认值。核对任务 2B 的创建/配置分支已接入，关闭开关不自动降级已有 v2。
@@ -287,4 +320,4 @@ expect(projectVisualIntervals(boundaries, [
 | 同源字幕需在改样式后仍可复现历史显示 | 已修 | 设计 §4.2；任务 1/4/9B/9C/10/11A：完整样式快照贯通真实消费者 | 未验证 |
 | 找最合适模型，不能只证明首个候选可用 | 已修 | 设计 §2.1–2.4；任务 0：两模型三组合、9 次基础/最多 11 次、资格与同稿评分 | 未验证 |
 
-整改复审（2026-09-05）：设计及 Chunk 1/2 的独立只读复审均通过，补入 Qwen 被选为推荐组合时的 UI 能力 fixture；四份相关文档共 83 个本地链接检查通过，`git diff --check` 通过。以上为文档级验证；未运行业务改造测试、浏览器验收或付费模型对比。
+最终有限循环审查（2026-09-05）：用户授权最多 3 轮，本次完成 3 轮并停止。第 1 轮关闭共享音色/协议、创建恢复、字幕渲染缩放、分镜摘录绑定四项缺口；第 2 轮补三入口创建、真实持久化映射和 DB 权威继承；第 3 轮设计及 Chunk 1/2 独立只读终审通过。完整问题证据、原始要求验收及执行门禁见[审查闭环记录](../records/2026-09-05-narration-first-design-review-loops.md)，本记录取代此前整体通过的简略表述。仅表示可开始任务 0 离线实施，不表示模型已选定或业务验收已通过。
