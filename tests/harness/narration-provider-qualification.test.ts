@@ -2,6 +2,7 @@ import { existsSync, mkdtempSync, readFileSync, writeFileSync, rmSync } from "no
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { EventEmitter } from "node:events";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -80,6 +81,62 @@ describe("口播候选离线资格入口", () => {
     await expect(q.runQualification({ ...q.parseArgs(live), samplesDir: dir }, { transport })).rejects.toThrow("sample_");
     expect(transport).not.toHaveBeenCalled();
   });
+  it("显式授权可采集 pending 候选，听审状态仍未验证，重复目录不补跑", async () => {
+    const q = await api();
+    const dir = mkdtempSync(join(tmpdir(), "narration-authorized-")); dirs.push(dir);
+    const outputDir = join(dir, "round");
+    const transport = vi.fn(async () => ({ status: "succeeded" as const, usage_characters: 100 }));
+    const options = { ...q.parseArgs(["--live", "--confirm-live", "--max-requests", "9", "--max-cost-cny", "5"]), samplesDir: dir, outputDir };
+    const dependencies = { transport, loadTexts: () => new Map([["short", "测试"], ["medium", "测试"], ["long", "测试"]]) };
+    const report = await q.runQualification(options, dependencies);
+    expect(report.actual_requests).toBe(9);
+    expect(report.comparison_status).toBe("incomplete");
+    expect(report.plan.candidates.every(c => c.preview_review === "pending")).toBe(true);
+    expect(readFileSync(join(outputDir, "attempts.jsonl"), "utf8").trim().split("\n")).toHaveLength(18);
+    await expect(q.runQualification(options, dependencies)).rejects.toThrow();
+    expect(transport).toHaveBeenCalledTimes(9);
+  });
+
+  it.each(['valid', 'corrupt-audio', 'failed', 'missing-terminal', 'after-finished', 'invalid-cost', 'duplicate-journal'])('离线核销已结束任务后只采集未发出行 %s', async scenario => {
+    const q = await api(); const dir = mkdtempSync(join(tmpdir(), 'narration-reconcile-')); dirs.push(dir);
+    const outputDir = join(dir, 'first'); const row = q.buildPlan().requests[0];
+    const pcm = Buffer.from([1,2]); const hash = createHash('sha256').update(pcm).digest('hex');
+    const json = (event: string, payload = {}) => ({ kind: 'json', elapsed_ms: 1, data: { header: { event, task_id: 'task-1' }, payload } });
+    const events = [json('task-started'), json('result-generated', {output:{type:'sentence-begin',sentence:{index:0}}}), {kind:'audio',elapsed_ms:2,byte_offset:0,byte_length:2}, json('result-generated',{output:{type:'sentence-end',sentence:{index:0}},usage:{characters:306}}), json(scenario === 'failed' ? 'task-failed':'task-finished'), {kind:'terminal',elapsed_ms:3,data:scenario === 'failed' ? 'task-failed':'task-finished'}];
+    const loadTexts = () => new Map([['short','测试'],['medium','测试'],['long','测试']]);
+    const options = {...q.parseArgs(['--live','--confirm-live','--max-requests','9','--max-cost-cny','5']), samplesDir:dir, outputDir};
+    // 旧采集器成功收到音频，但只认结束事件 usage，因而停机。
+    await q.runQualification(options,{loadTexts,transport:async()=>{
+      writeFileSync(join(outputDir,'cosy-sanshu-short.pcm'),pcm);
+      writeFileSync(join(outputDir,'cosy-sanshu-short.events.json'),JSON.stringify({task_id:'task-1',events}));
+      return {status:'succeeded',usage_characters:null,audio_bytes:2,audio_sha256:hash,elapsed_ms:3};
+    }});
+    if (scenario==='missing-terminal') events.pop();
+    if (scenario==='after-finished') events.splice(events.length-1,0,json('task-failed'));
+    if (scenario==='missing-terminal' || scenario==='after-finished') writeFileSync(join(outputDir,'cosy-sanshu-short.events.json'),JSON.stringify({task_id:'task-1',events}));
+    if (scenario==='invalid-cost') { const prior=JSON.parse(readFileSync(join(outputDir,'report.json'),'utf8')); prior.accounted_cost_cny='unknown'; writeFileSync(join(outputDir,'report.json'),JSON.stringify(prior)); }
+    if (scenario==='duplicate-journal') writeFileSync(join(outputDir,'attempts.jsonl'),readFileSync(join(outputDir,'attempts.jsonl'),'utf8').repeat(2));
+    if(scenario==='corrupt-audio')writeFileSync(join(outputDir,'cosy-sanshu-short.pcm'),Buffer.from([3,4]));
+    const transport=vi.fn(async()=>({status:'succeeded' as const,usage_characters:100}));
+    const resume={...options,outputDir:join(dir,'remaining'),reconcileFrom:outputDir};
+    if(scenario!=='valid') {
+      await expect(q.runQualification(resume,{loadTexts,transport})).rejects.toThrow();
+      expect(transport).not.toHaveBeenCalled(); return;
+    }
+    const report=await q.runQualification(resume,{loadTexts,transport});
+    expect(report.actual_requests).toBe(9); expect(transport).toHaveBeenCalledTimes(8);
+    expect(report.calls[0].result.usage_characters).toBe(306);
+    expect(report.actual_cost_cny).toBeCloseTo(0.1226);
+    expect(readFileSync(join(resume.outputDir,'attempts.jsonl'),'utf8')).not.toContain(row.id);
+    await expect(q.runQualification({...resume,outputDir:join(dir,'again')},{loadTexts,transport})).rejects.toThrow();
+    expect(transport).toHaveBeenCalledTimes(8);
+  });
+  it("调度按双倍正文长度预留，冻结的初始估价不是预算保证", async () => {
+    const q=await api(); const transport=vi.fn();
+    await expect(q.executePlan(q.buildPlan(), {maxRequests:9,maxCostCny:1},transport)).rejects.toThrow('cost_limit_insufficient');
+    expect(transport).not.toHaveBeenCalled();
+    expect((await q.runQualification({live:false})).estimated_budget_reserve_cny).toBe(1.66328);
+  });
   it("预算不足在读取密钥和外呼前拒绝", async () => {
     const q = await api(); const transport = vi.fn();
     await expect(q.runQualification({ ...q.parseArgs(live), maxCostCny: 0.00001 }, { transport })).rejects.toThrow("cost_limit_insufficient");
@@ -140,6 +197,20 @@ describe("口播候选离线资格入口", () => {
     if (scenario === "close" || scenario === "error") socket.emit(scenario, new Error("sensitive"));
     else socket.emit("message", Buffer.from(scenario === "malformed" ? "{" : JSON.stringify({ header: { event: scenario === "wrong-task" ? "task-started" : scenario, task_id: scenario === "wrong-task" ? "wrong" : "task-1" } })), false);
     const result = await pending; expect(result.status).toBe(scenario === "task-failed" ? "failed" : "unknown"); expect(result.usage_characters).toBeNull(); expect(socket.closed).toBe(true);
+  });
+
+  it.each([['success', 306], ['failed', null], ['unfinished-sentence', null], ['audio-after-end', null]])("句末累计用量仅在完整成功结束后结算 %s", async (scenario, expected) => {
+    const q = await api(); const socket = new Socket();
+    const pending = q.captureTask(socket, q.buildPlan().requests[0], '正文', 'task-1', 1000);
+    const emit = (event: string, payload = {}) => socket.emit('message', Buffer.from(JSON.stringify({ header: { event, task_id: 'task-1' }, payload })), false);
+    emit('task-started');
+    emit('result-generated', { output: { type: 'sentence-begin', sentence: { index: 0 } } });
+    socket.emit('message', Buffer.from([1, 2]), true);
+    emit('result-generated', { output: { type: 'sentence-end', sentence: { index: 0 } }, usage: { characters: 306 } });
+    if (scenario === 'unfinished-sentence') emit('result-generated', { output: { type: 'sentence-begin', sentence: { index: 1 } } });
+    if (scenario === 'audio-after-end') socket.emit('message', Buffer.from([3, 4]), true);
+    emit(scenario === 'failed' ? 'task-failed' : 'task-finished', { output: {} });
+    expect((await pending).usage_characters).toBe(expected);
   });
   it("WS 超时关闭连接，未推断位深、声道和时间戳基准", async () => {
     const q = await api(); const socket = new Socket();

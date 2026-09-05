@@ -3,6 +3,7 @@
  * 官方参数/价格来源及冻结样本索引见 narration-timing/manifest.json。
  * 只收集证据，不自动给出音质评分、资格或生产默认值。
  */
+import { EventEmitter } from "node:events";
 import { createHash, randomUUID } from "node:crypto";
 import { readFileSync, writeFileSync, mkdirSync, appendFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
@@ -25,6 +26,7 @@ export interface Options {
   maxCostCny?: number;
   samplesDir?: string;
   outputDir?: string;
+  reconcileFrom?: string;
 }
 export function parseArgs(argv: string[]): Options {
   const options: Options = { live: false };
@@ -36,20 +38,21 @@ export function parseArgs(argv: string[]): Options {
     if (flag === "--live") options.live = true;
     else if (flag === "--confirm-live") options.confirmLive = true;
     else if (flag === "--dry-run") { /* 缺省行为 */ }
-    else if (["--max-requests", "--max-cost-cny", "--samples-dir", "--output-dir"].includes(flag)) {
+    else if (["--max-requests", "--max-cost-cny", "--samples-dir", "--output-dir", "--reconcile-from"].includes(flag)) {
       const value = argv[++i];
       if (!value || value.startsWith("--")) throw new Error("argument_value_missing");
       if (flag === "--max-requests") options.maxRequests = Number(value);
       if (flag === "--max-cost-cny") options.maxCostCny = Number(value);
       if (flag === "--samples-dir") options.samplesDir = value;
       if (flag === "--output-dir") options.outputDir = value;
+      if (flag === "--reconcile-from") options.reconcileFrom = value;
     } else throw new Error("unknown_argument");
   }
   if (options.live && seen.has("--dry-run")) throw new Error("conflicting_mode");
   if (options.live) {
     if (!options.confirmLive) throw new Error("live_confirmation_required");
     assertLimits(options);
-  } else if (options.confirmLive || options.maxRequests !== undefined || options.maxCostCny !== undefined) {
+  } else if (options.confirmLive || options.maxRequests !== undefined || options.maxCostCny !== undefined || options.reconcileFrom !== undefined) {
     throw new Error("live_limits_without_live");
   }
   return options;
@@ -114,6 +117,9 @@ function emptyReport(plan: Plan, mode: "dry-run" | "live") {
   return {
     schema_version: "narration_qualification_report_v1",
     mode, plan,
+    // 实测计费字符高于 UTF-16 长度；保留历史冻结报价，调度使用独立的 2 倍预留。
+    estimated_budget_reserve_cny: money(plan.estimated_cost_cny * 2),
+    estimate_caveat: "初始冻结估价低于本轮真实 usage；双倍预留只用于调度，不是供应商账单保证。",
     actual_requests: 0,
     actual_cost_cny: 0 as number | null,
     accounted_cost_cny: 0,
@@ -132,11 +138,11 @@ export async function executePlan(plan: Plan, limits: { maxRequests: number; max
   assertLimits(limits);
   // 执行函数也不能接受调用方扩大或替换后的计划。
   if (JSON.stringify(plan) !== JSON.stringify(buildPlan())) throw new Error("frozen_matrix_changed");
-  if (limits.maxCostCny < plan.estimated_cost_cny) throw new Error("cost_limit_insufficient");
+  if (limits.maxCostCny < money(plan.estimated_cost_cny * 2)) throw new Error("cost_limit_insufficient");
   const report = emptyReport(plan, "live");
   for (const row of plan.requests) {
     if (report.actual_requests >= limits.maxRequests) { report.stopped_reason = "request_limit"; break; }
-    if (report.accounted_cost_cny + row.estimated_cost_cny > limits.maxCostCny) { report.stopped_reason = "cost_limit"; break; }
+    if (report.accounted_cost_cny + money(row.estimated_cost_cny * 2) > limits.maxCostCny) { report.stopped_reason = "cost_limit"; break; }
     // 在外呼之前计入；异常也占次数，绝不 retry。
     report.actual_requests++;
     let result: CallResult;
@@ -187,6 +193,8 @@ export function captureTask(socket: QualificationSocket, row: RequestRow, text: 
     let bytes = 0, started = false, settled = false;
     let requestId: string | null = null;
     let cumulativeUsage: number | null = null;
+    let nextSentence = 0, openSentence: number | null = null, sentenceOrderValid = true;
+    let completedUsage: number | null = null, completedBytes = -1;
     const finish = (status: CallResult["status"], reason: string, finalUsage?: unknown) => {
       if (settled) return;
       settled = true;
@@ -225,6 +233,19 @@ export function captureTask(socket: QualificationSocket, row: RequestRow, text: 
           if (!Number.isSafeInteger(usage) || usage < 0 || usage < (cumulativeUsage ?? 0)) { finish("unknown", "usage_invalid"); return; }
           cumulativeUsage = usage;
         }
+        if (event.header.event === "result-generated") {
+          const output = event.payload?.output;
+          const index = output?.sentence?.index;
+          if (output?.type === "sentence-begin") {
+            if (openSentence !== null || index !== nextSentence) sentenceOrderValid = false;
+            openSentence = index;
+          } else if (output?.type === "sentence-end") {
+            if (openSentence !== index || index !== nextSentence) sentenceOrderValid = false;
+            openSentence = null; nextSentence++;
+            completedUsage = Number.isSafeInteger(usage) && usage > 0 ? usage : null;
+            completedBytes = bytes;
+          }
+        }
         switch (event.header.event) {
           case "task-started":
             if (!started) { started = true; send("continue-task", { input: { text } }); send("finish-task", { input: {} }); }
@@ -233,7 +254,11 @@ export function captureTask(socket: QualificationSocket, row: RequestRow, text: 
             if (!started) finish("unknown", "event_order_invalid");
             break;
           case "task-finished":
-            finish(started && bytes > 0 ? "succeeded" : "unknown", "task-finished", usage); break;
+            // 部署实测 task-finished 可省略 usage。成功结束且所有句已闭合时，
+            // sentence-end 的最后累计计费值才是完整任务用量；失败/断流不回退。
+            finish(started && bytes > 0 ? "succeeded" : "unknown", "task-finished",
+              usage === undefined && sentenceOrderValid && nextSentence > 0 && openSentence === null && completedBytes === bytes
+                ? completedUsage : usage); break;
           case "task-failed": finish("failed", "task-failed"); break;
           default: finish("unknown", "unexpected_event");
         }
@@ -244,24 +269,77 @@ export function captureTask(socket: QualificationSocket, row: RequestRow, text: 
   });
 }
 
-export async function runQualification(options: Options, dependencies: { transport?: Transport } = {}) {
+
+// 只核销已有完整成功响应。回放完全离线，旧报告不覆盖，失败/缺帧不可恢复调度。
+export async function reconcileCompletedCalls(directory: string, plan: Plan, maxCostCny: number) {
+  const prior = JSON.parse(readFileSync(resolve(directory, "report.json"), "utf8")) as ReturnType<typeof emptyReport>;
+  const journal = readFileSync(resolve(directory, "attempts.jsonl"), "utf8").trim().split("\n").map(line => JSON.parse(line));
+  if (JSON.stringify(prior.plan) !== JSON.stringify(plan) || prior.stopped_reason !== "unknown_cost" ||
+      !Number.isSafeInteger(prior.actual_requests) || !Number.isFinite(prior.accounted_cost_cny) || prior.accounted_cost_cny <= 0 ||
+      prior.actual_requests < 1 || prior.actual_requests >= plan.requests.length || prior.calls.length !== prior.actual_requests ||
+      journal.length !== prior.calls.length * 2 || maxCostCny > prior.accounted_cost_cny) throw new Error("reconciliation_ledger_invalid");
+  const results = new Map<string, CallResult>();
+  for (const [i, call] of prior.calls.entries()) {
+    const row = plan.requests[i];
+    if (JSON.stringify(call.request) !== JSON.stringify(row) || call.result.status !== "succeeded" ||
+        journal[i*2].request_id !== row.id || journal[i*2].status !== "dispatched_cost_unknown" ||
+        journal[i*2+1].request_id !== row.id || journal[i*2+1].status !== "succeeded") throw new Error("reconciliation_ledger_invalid");
+    const name = row.id.replace(":", "-");
+    const pcm = readFileSync(resolve(directory, name + ".pcm"));
+    const raw = JSON.parse(readFileSync(resolve(directory, name + ".events.json"), "utf8"));
+    if (!pcm.length || pcm.length !== call.result.audio_bytes || sha256(pcm) !== call.result.audio_sha256 ||
+        !Array.isArray(raw.events) || !raw.task_id) throw new Error("reconciliation_evidence_invalid");
+    const recorded = raw.events as CaptureEvent[];
+    const last = recorded.at(-1), beforeLast = recorded.at(-2);
+    if (last?.kind !== "terminal" || last.data !== "task-finished" || beforeLast?.kind !== "json" ||
+        (beforeLast.data as any)?.header?.event !== "task-finished" || recorded.some((e, index) =>
+          !["json", "audio", "terminal"].includes(e.kind) || (e.kind === "terminal" && index !== recorded.length - 1) ||
+          (e.kind === "json" && ((e.data as any)?.header?.task_id !== raw.task_id ||
+            (["task-finished", "task-failed"].includes((e.data as any)?.header?.event) && index !== recorded.length - 2))))) throw new Error("reconciliation_evidence_invalid");
+    const socket = Object.assign(new EventEmitter(), { send() {}, close() {}, terminate() {} });
+    const pending = captureTask(socket, row, "", raw.task_id, 1000);
+    let offset = 0;
+    for (const event of raw.events as CaptureEvent[]) {
+      if (event.kind === "json") socket.emit("message", Buffer.from(JSON.stringify(event.data)), false);
+      else if (event.kind === "audio") {
+        if (event.byte_offset !== offset || !Number.isSafeInteger(event.byte_length) || event.byte_length! <= 0 || offset + event.byte_length! > pcm.length) {
+          socket.emit("error"); await pending; throw new Error("reconciliation_evidence_invalid");
+        }
+        socket.emit("message", pcm.subarray(offset, offset + event.byte_length!), true); offset += event.byte_length!;
+      }
+    }
+    socket.emit("close");
+    const replay = await pending;
+    if (offset !== pcm.length || replay.status !== "succeeded" || !replay.usage_characters || replay.audio_sha256 !== call.result.audio_sha256 ||
+        (call.result.usage_characters != null && call.result.usage_characters !== replay.usage_characters)) throw new Error("reconciliation_cost_still_unknown");
+    results.set(row.id, { ...call.result, usage_characters: replay.usage_characters });
+  }
+  return results;
+}
+
+export async function runQualification(options: Options, dependencies: { transport?: Transport; loadTexts?: typeof loadSampleTexts } = {}) {
   const plan = buildPlan();
   if (!options.live) return emptyReport(plan, "dry-run");
   if (!options.confirmLive) throw new Error("live_confirmation_required");
   assertLimits(options);
-  if (options.maxCostCny! < plan.estimated_cost_cny) throw new Error("cost_limit_insufficient");
+  if (options.maxCostCny! < money(plan.estimated_cost_cny * 2)) throw new Error("cost_limit_insufficient");
   if (!options.samplesDir) throw new Error("sample_directory_required");
-  const texts = loadSampleTexts(options.samplesDir, plan);
-  // 实际 live 前必须先完成人工预览与本轮授权。离线交付不冒充这个前提已满足。
-  if (plan.candidates.some(c => c.preview_review !== "confirmed")) throw new Error("candidate_preview_review_pending");
+  const texts = (dependencies.loadTexts ?? loadSampleTexts)(options.samplesDir, plan);
+  // 显式授权允许采集待听审候选；采集不改变 preview_review 或资格状态。
   if (!options.outputDir) throw new Error("live_output_directory_required");
   const apiKey = process.env.ALIYUN_DASHSCOPE_API_KEY;
   if (!dependencies.transport && !apiKey?.trim()) throw new Error("api_key_missing");
+  const reconciled = options.reconcileFrom ? await reconcileCompletedCalls(options.reconcileFrom, plan, options.maxCostCny!) : new Map<string, CallResult>();
   // 独占目录即本轮账本。已存在就拒绝，防止重启自动补跑已扣费的请求。
   mkdirSync(dirname(resolve(options.outputDir)), { recursive: true });
   mkdirSync(resolve(options.outputDir));
   const writeJson = (name: string, value: unknown) => writeFileSync(resolve(options.outputDir!, name), JSON.stringify(value, null, 2) + "\n", { flag: "wx" });
   writeJson("plan.json", plan);
+  if (options.reconcileFrom) {
+    // 永久独占领取，崩溃也不能自动再领或重发；上限沿用原轮，绝不重置预算。
+    writeFileSync(resolve(options.reconcileFrom, "reconciliation.claim.json"), JSON.stringify({ output_dir: resolve(options.outputDir), at: new Date().toISOString() }), { flag: "wx" });
+    writeJson("reconciliation.json", { source_dir: resolve(options.reconcileFrom), calls: [...reconciled.entries()], max_cost_cny: options.maxCostCny });
+  }
   const require = createRequire(import.meta.url);
   const WebSocket = dependencies.transport ? null : require("ws") as new (url: string, options: object) => QualificationSocket;
   const transport: Transport = dependencies.transport ?? (async row => {
@@ -275,6 +353,7 @@ export async function runQualification(options: Options, dependencies: { transpo
     return result;
   });
   const report = await executePlan(plan, { maxRequests: options.maxRequests!, maxCostCny: options.maxCostCny! }, async row => {
+    if (reconciled.has(row.id)) return reconciled.get(row.id)!;
     appendFileSync(resolve(options.outputDir!, "attempts.jsonl"), JSON.stringify({ request_id: row.id, status: "dispatched_cost_unknown", at: new Date().toISOString() }) + "\n");
     const result = await transport(row);
     appendFileSync(resolve(options.outputDir!, "attempts.jsonl"), JSON.stringify({ request_id: row.id, status: result.status, usage_characters: result.usage_characters ?? null }) + "\n");

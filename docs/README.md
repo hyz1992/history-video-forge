@@ -17,9 +17,9 @@
 
 2026-09-05 新设计（尚未实现）：
 
-任务 0 更新：独立离线验证入口、32 项测试、候选/样例摘要及 dry-run 已完成，连同 legacy TTS 最小回归共 45 项通过；[离线证据](./records/2026-09-05-narration-provider-qualification.md)见记录。官方候选预览听审尚未确认，语气试验与模型资格比较未完成；零付费调用，不进入任务 1。
+任务 0 更新：用户已授权 5 元，三组候选同稿九次真实采集完成，用量折价 1.55102 元；相关 58 项测试通过。CosyVoice 两组全文时间戳覆盖失败，Qwen 听审及边界精度待验证，语气槽未执行；[真实证据](./records/2026-09-05-narration-provider-live-comparison.md)。任务 0 整体未通过，不进入任务 1。
 
-- 口播前置与真实时间轴：在文案确认后、分镜前生成并确认整篇口播；原生字词时间戳统一派生字幕及镜头时间。见[设计与模型比较](./plans/2026-09-05-narration-first-timing-design.md)、[实施计划](./plans/2026-09-05-narration-first-timing-implementation-plan.md)。已完成用户限定的三轮自审修复，设计与计划文档终审通过，可开始任务 0 离线实施；证据见[有限循环记录](./records/2026-09-05-narration-first-design-review-loops.md)。CosyVoice v3 flash 与 Qwen-Audio 3.0 plus 的最终默认组合待实测，不预设赢家。尚未实现业务、未付费调用，不包含环境音效。
+- 口播前置与真实时间轴：在文案确认后、分镜前生成并确认整篇口播；原生字词时间戳统一派生字幕及镜头时间。见[设计与模型比较](./plans/2026-09-05-narration-first-timing-design.md)、[实施计划](./plans/2026-09-05-narration-first-timing-implementation-plan.md)。已完成用户限定的三轮自审修复，设计与计划文档终审通过，任务 0 已进入有限实测；证据见[有限循环记录](./records/2026-09-05-narration-first-design-review-loops.md)。CosyVoice v3 flash 与 Qwen-Audio 3.0 plus 的最终默认组合待实测，不预设赢家。尚未实现业务、已完成九次基础调用，不包含环境音效。
 
 截至 2026-08-21：
 
