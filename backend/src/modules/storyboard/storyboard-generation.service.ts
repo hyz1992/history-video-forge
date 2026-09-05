@@ -93,20 +93,24 @@ export async function generateStoryboardPlan(input: GenerateStoryboardPlanInput)
 /**
  * 按各段 script_excerpt 字符占比重算时间窗，总和恒等于 totalDurationSec。
  *
- * - 每段时长 = round(字符占比 × total)，最少 1s；末段吸收取整余数（与
- *   buildDeterministicStoryboardPlan 的分配方式同构）。
+ * - 每段时长 = round(字符占比 × total)，且为剩余段预留每段最少 1s；末段
+ *   吸收全部余数（总和恒等于 total，高偏斜分布不溢出）。
+ *   buildDeterministicStoryboardPlan 的分配方式同构。
  * - estimated_total_duration_sec 一并覆盖为 total（不再采信 LLM 声明）。
  * - segments 缺失/为空/非对象时原样返回（交由 schema 校验报错）。
  */
 export function recalculateSegmentTimings<T>(plan: T, totalDurationSec: number): T {
   if (!plan || typeof plan !== "object") return plan;
   const record = plan as Record<string, unknown>;
-  if (!Array.isArray(record.segments) || record.segments.length === 0) {
+  // 先落局部变量：索引签名属性的类型收窄无法在后续属性访问中保持
+  const rawSegments = record.segments;
+  if (!Array.isArray(rawSegments) || rawSegments.length === 0) {
     return plan;
   }
+  const segmentCount = rawSegments.length;
 
   const total = Math.max(1, Math.round(totalDurationSec));
-  const excerptChars = record.segments.map((segment) => {
+  const excerptChars = rawSegments.map((segment) => {
     if (!segment || typeof segment !== "object") return 0;
     const excerpt = String((segment as Record<string, unknown>).script_excerpt ?? "");
     return excerpt.replace(/\s/g, "").length;
@@ -114,17 +118,20 @@ export function recalculateSegmentTimings<T>(plan: T, totalDurationSec: number):
   const totalChars = excerptChars.reduce((sum, count) => sum + count, 0);
 
   let elapsed = 0;
-  const segments = record.segments.map((segment, index) => {
+  const segments = rawSegments.map((segment, index) => {
     const base =
       segment && typeof segment === "object"
         ? (segment as Record<string, unknown>)
         : {};
-    const isLast = index === record.segments.length - 1;
+    const isLast = index === segmentCount - 1;
     const ratioShare =
-      totalChars > 0 ? (excerptChars[index]! / totalChars) * total : total / record.segments.length;
+      totalChars > 0 ? (excerptChars[index]! / totalChars) * total : total / segmentCount;
+    // 非末段为剩余段预留每段最少 1s（高偏斜分布下独立 round 会提前耗尽预算，
+    // 末段再被强制 1s 会让总和溢出）；末段严格吸收余数。
+    const remainingSegments = segmentCount - index - 1;
     const duration = isLast
       ? Math.max(1, total - elapsed)
-      : Math.max(1, Math.round(ratioShare));
+      : Math.max(1, Math.min(Math.round(ratioShare), total - elapsed - remainingSegments));
     const start = elapsed;
     const end = start + duration;
     elapsed = end;

@@ -607,6 +607,28 @@ describe("recalculateSegmentTimings", () => {
     expect(recalculateSegmentTimings(null as never, 82)).toBeNull();
   });
 
+  it("高偏斜分布守恒：为剩余段预留最小 1s，末段吸收余数", () => {
+    // 审查反例：total=82、字符占比 810/5/5。旧实现每段独立 round + 最少 1s
+    // 得 [81,1,1]=83 溢出预算；预留后非末段 clamp 到剩余预算，总和恒为 82。
+    const segments = [
+      segment("sb_001", "a".repeat(810), 0, 81),
+      segment("sb_002", "b".repeat(5), 81, 82),
+      segment("sb_003", "c".repeat(5), 82, 83),
+    ];
+    const plan = recalculateSegmentTimings(
+      { estimated_total_duration_sec: 118, segments } as never,
+      82,
+    ) as { estimated_total_duration_sec: number; segments: Array<{ start_hint_sec: number; end_hint_sec: number }> };
+
+    expect(plan.estimated_total_duration_sec).toBe(82);
+    const durations = plan.segments.map((s) => s.end_hint_sec - s.start_hint_sec);
+    expect(durations.reduce((sum, d) => sum + d, 0)).toBe(82);
+    expect(durations.every((d) => d >= 1)).toBe(true);
+    // 单调衔接不变
+    expect(plan.segments[1]!.start_hint_sec).toBe(plan.segments[0]!.end_hint_sec);
+    expect(plan.segments[2]!.start_hint_sec).toBe(plan.segments[1]!.end_hint_sec);
+  });
+
   it("generateStoryboardPlan 对 LLM 输出的膨胀时间窗执行本地重算", async () => {
     const gateway: LlmGateway = {
       async invokeStructuredPrompt<T>(options: InvokeStructuredPromptOptions): Promise<T> {
