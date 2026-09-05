@@ -1,6 +1,6 @@
 # 口播前置与真实时间轴实施计划
 
-日期：2026-09-05。状态：三轮有限自审修复后文档终审通过，待从任务 0 离线实施；本次仅交付文档，没有实现、迁移或付费调用。
+日期：2026-09-05。状态：任务 0 离线入口、测试、矩阵摘要和 dry-run 已实施；候选预览听审及付费资格比较待完成，不进入任务 1。没有业务改造、迁移或付费调用。证据见[任务 0 离线记录](../records/2026-09-05-narration-provider-qualification.md)。
 
 > 执行者：按 `superpowers:executing-plans` 分阶段执行，或在用户允许的协作方式下使用 `superpowers:subagent-driven-development`。项目契约优先：直接在 `dev` 主工作区，一次一个低耦合任务，不自行创建分支/worktree。每个任务先测试、再实现、再验证与自审，独立中文提交。
 
@@ -31,14 +31,17 @@
 
 步骤：
 
-- [ ] 写测试：无 live 标志实际请求数为 0；缺请求数或费用上限即拒绝；只执行冻结矩阵，不自动重试或扩大候选；错误/未知调用占额度，费用不能当零；缺 Qwen 或 CosyVoice 的有效证据不允许输出比较已完成。
-- [ ] 运行 `npx vitest run --configLoader runner tests/harness/narration-provider-qualification.test.ts`，观察 FAIL。
+- [x] 写测试：无 live 标志实际请求数为 0；缺请求数或费用上限即拒绝；只执行冻结矩阵，不自动重试或扩大候选；错误/未知调用占额度，费用不能当零；缺 Qwen 或 CosyVoice 的有效证据不允许输出比较已完成。
+- [x] 运行 `npx vitest run --configLoader runner tests/harness/narration-provider-qualification.test.ts`，观察 FAIL。
 - [ ] 从 Qwen-Audio plus 官方预复刻音色表及试听确定一个普通话成年叙事候选，在 manifest 冻结准确 voice ID、来源、参数和选择理由；空值/占位符、其他模型同名音色不得进入 dry-run 成功计划或 live。不调用音色创建接口。
 - [ ] 实现最小独立 WS 验证入口，不接业务 dispatcher；龙三叔、龙安洋及一个 Qwen-Audio plus 候选各合成相同的短/中/长稿，共 9 次；另预留龙安洋/Qwen 各一次语气试验，总上限 11 次，不支持则跳过并记录。基础样本统一北京、PCM 24 kHz、默认语速/音调、无情感指令。报价按当日各组合官方价计算，不复用旧 qwen3 价格。
-- [ ] 用 dry-run 命令 `npx tsx harness/scripts/runtime/narration-provider-qualification.ts --dry-run` 验证请求计划和预估。无明确付费授权就在此停止并记录未验证。
+- [x] 用 dry-run 命令 `npx tsx harness/scripts/runtime/narration-provider-qualification.ts --dry-run` 验证请求计划和预估。无明确付费授权就在此停止并记录未验证。
 - [ ] 获得本轮明确预算后才执行 live：记录句序号、文本/时间索引、音频帧与累计 usage；逐组合确定 PCM 位深/声道、时间戳跨句基准、句内字符索引单位、最终事件顺序；每个组合抽样至少 30 个发声边界。预算不足/未知失败不自动补跑，报告明确缺口。
 - [ ] 按设计 §2.4 先过硬门，再隐藏标签同稿试听，用 35/25/20/10/10 权重记录各项评分及时间点，给出费用、耗时与缺失能力；差距不足 5 分按已定义规则处理。资格条目绑定 model/voice/region/protocol/参数版本和报告引用；输出样本范围内默认组合与可选语气组合，不预设 CosyVoice。只剩一个模型合格时区分资格筛选与音质优胜。
 - [ ] 回跑测试 PASS，报告不提交原始正文、音频或密钥；提交 `验证口播候选模型与原生时间戳协议`。
+
+
+执行进度（2026-09-05）：离线测试入口已实现，任务 0 自身 32 个测试及 13 个 legacy TTS 回归通过，严格类型检查和实际 dry-run 通过；基础九次预估 0.83164 元，含两预留槽 0.95980 元，建议费用上限 2 元，尚未授权。准确候选/参数及三篇正文 hash 已冻结；Qwen 官方预览听审 pending，两语气槽 reserved 未执行，PCM/WAV 布局与真实 timing 待实测。未完成的整项继续不勾选，不能宣称任务 0 完成。见[证据记录](../records/2026-09-05-narration-provider-qualification.md)。
 
 ### 任务 1：新增口播时间、配置与版本合同
 

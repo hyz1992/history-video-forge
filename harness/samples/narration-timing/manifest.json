@@ -1,0 +1,166 @@
+{
+  "schema_version": "narration_qualification_matrix_v1",
+  "frozen_at": "2026-09-05",
+  "baseline_commit": "6378b81",
+  "region": "cn-beijing",
+  "protocol": "dashscope_ws",
+  "endpoint": "wss://dashscope.aliyuncs.com/api-ws/v1/inference",
+  "parameters_version": "neutral-pcm24k-v1",
+  "parameters": {
+    "text_type": "PlainText",
+    "format": "pcm",
+    "sample_rate": 24000,
+    "rate": 1,
+    "pitch": 1,
+    "volume": 50,
+    "word_timestamp_enabled": true,
+    "enable_ssml": false,
+    "seed": 0
+  },
+  "pricing": {
+    "checked_at": "2026-09-05",
+    "source": "https://help.aliyun.com/zh/model-studio/model-pricing",
+    "currency": "CNY",
+    "estimate_basis": "UTF-16 全文长度含标点与空白作保守预估；实际以累计 usage.characters 为准，不抵扣免费额度"
+  },
+  "candidates": [
+    {
+      "id": "cosy-sanshu",
+      "model": "cosyvoice-v3-flash",
+      "voice": "longsanshu_v3",
+      "label": "龙三叔",
+      "price_cny_per_10k": 1,
+      "source": "https://help.aliyun.com/zh/model-studio/cosyvoice-voice-list",
+      "selection_reason": "计划指定的有声书沉稳男声；时间戳待实测。",
+      "preview_review": "pending",
+      "tone_trial": "unsupported"
+    },
+    {
+      "id": "cosy-anyang",
+      "model": "cosyvoice-v3-flash",
+      "voice": "longanyang",
+      "label": "龙安洋",
+      "price_cny_per_10k": 1,
+      "source": "https://help.aliyun.com/zh/model-studio/cosyvoice-voice-list",
+      "selection_reason": "计划指定的可控语气普通话男声；时间戳待实测。",
+      "preview_review": "pending",
+      "tone_trial": "reserved_not_frozen"
+    },
+    {
+      "id": "qwen-yimuling",
+      "model": "qwen-audio-3.0-tts-plus",
+      "voice": "qwen-audio-3.0-tts-plus-longyimuling",
+      "label": "龙翼暮凌",
+      "price_cny_per_10k": 1.4,
+      "source": "https://help.aliyun.com/zh/model-studio/qwen-audio-tts-voice-list",
+      "source_excel": "https://help-static-aliyun-doc.aliyuncs.com/file-manage-files/zh-CN/20260723/ydwqqz/qwen-audio-3.0-tts-plus%E5%9F%BA%E7%A1%80%E9%9F%B3%E8%89%B2.xlsx",
+      "source_excel_sha256": "a616f1e94421e5ec5aabea0c997dd70ef048b816f8076a2ee0deca68e608838d",
+      "source_excel_row": 82,
+      "source_fields": {
+        "sex": "男",
+        "age": 38,
+        "trait": "沉稳有力音",
+        "scene": "有声阅读",
+        "language": "中文",
+        "preview_file": "longyimuling.wav"
+      },
+      "preview_zip": "https://help-static-aliyun-doc.aliyuncs.com/file-manage-files/zh-CN/20260720/tuuuqo/%E5%9F%BA%E7%A1%80%E9%9F%B3%E8%89%B2%E8%AF%95%E5%90%AC%E9%9F%B3%E9%A2%91%E5%8C%85.zip",
+      "preview_review": "pending",
+      "selection_reason": "官方 plus 基础音色表第 81 号为成年中文有声阅读男声，作为普通话叙事候选；口音和听感尚未试听确认，不能称最佳。",
+      "tone_trial": "reserved_capability_unverified"
+    }
+  ],
+  "samples": [
+    {
+      "id": "short",
+      "filename": "short.txt",
+      "utf16_length": 172,
+      "unicode_codepoints": 171,
+      "text_sha256": "17296c67741440b2e52ba9a5a0142e76b4423bb7754f8d45756c130410bf8a47",
+      "source": "本轮离线编写的虚构历史场景测试稿；不用于发布",
+      "coverage": [
+        "数字",
+        "年号",
+        "引号",
+        "英文",
+        "多音字",
+        "省略号",
+        "代理对"
+      ]
+    },
+    {
+      "id": "medium",
+      "filename": "medium.txt",
+      "utf16_length": 534,
+      "unicode_codepoints": 534,
+      "text_sha256": "a5deb98f9a5147afffb2f4d90f9cb1ac663b119e55e6bc521c2a9fd81302a872",
+      "source": "SQLite ScriptRecord 8875cd8d-7370-46af-9525-52913c61c991；原文冻结，三国演义叙事，非史实核查样本",
+      "coverage": [
+        "当前真实案例",
+        "人名",
+        "多句",
+        "叙事"
+      ]
+    },
+    {
+      "id": "long",
+      "filename": "long.txt",
+      "utf16_length": 1740,
+      "unicode_codepoints": 1740,
+      "text_sha256": "65feb205f0d16844bc5f398defa4a6ebdc7f5203cacf1888018c4baccd3db67d",
+      "source": "本轮离线编写的虚构历史场景测试稿；不用于发布",
+      "coverage": [
+        "1500–3000 字连续故事",
+        "对话",
+        "长停顿",
+        "数字",
+        "年号"
+      ]
+    }
+  ],
+  "normalization_cases": [
+    {
+      "id": "year",
+      "source": "建安13年",
+      "purpose": "核对数字朗读展开及原文范围映射"
+    },
+    {
+      "id": "polyphone",
+      "source": "沈重重新走到长安。",
+      "purpose": "人工检查人名、多音字；不做关键词语义评分"
+    },
+    {
+      "id": "surrogate",
+      "source": "A𠮷B",
+      "purpose": "离线检查 UTF-16 与码点差异，严禁直接用于额外付费请求",
+      "utf16_length": 4,
+      "unicode_codepoints": 3
+    },
+    {
+      "id": "silence",
+      "source": "他没有回答……\n\n门开了。",
+      "purpose": "首尾和句间静音，字幕不得按末 cue 缩放"
+    }
+  ],
+  "limits": {
+    "base_requests": 9,
+    "reserved_tone_requests": 2,
+    "max_requests": 11,
+    "retries": 0,
+    "create_voice_requests": 0
+  },
+  "scoring": {
+    "weights": {
+      "naturalness": 35,
+      "long_form_coherence": 25,
+      "pronunciation": 20,
+      "tone_control": 10,
+      "preference": 10
+    },
+    "min_boundary_samples_per_candidate": 30,
+    "p95_absolute_error_ms": 200,
+    "max_absolute_error_ms": 500,
+    "tie_threshold_points": 5
+  },
+  "sample_storage": "正文只保存在运行 output 的 samples/；dry-run 可只读 manifest，live 必须校验正文哈希；本轮公开报告不收录正文。"
+}
