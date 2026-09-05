@@ -1,6 +1,6 @@
 ---
 id: storyboard.planner
-version: v1.1.0
+version: v1.2.0
 stage: storyboard
 language: zh-CN
 consumes:
@@ -76,15 +76,13 @@ status: active
 
 你只负责判断适配度，不得决定是否付费调用、不得读取或推断任何预算或用户财富状态，不得输出 provider/model 或费用相关内容。适配度到最终视觉路线的映射由后端解析器完成。
 
-# 时间预算约束
+# 时间窗说明
 
-你必须严格遵守以下时间规则：
+时间窗（`start_hint_sec` / `end_hint_sec` / `estimated_total_duration_sec`）由运行时按各段正文字符占比以 `draft.estimated_duration_sec` 确定性重算，你输出的时间数值不会被采信，仅供 schema 占位。因此：
 
-- `estimated_total_duration_sec` 必须等于或贴近输入 `draft.estimated_duration_sec`。允许小幅偏差，但绝不能无理由膨胀到 120s 或 160s。
-- 所有 segment 的 `(end_hint_sec - start_hint_sec)` 总和必须接近 `draft.estimated_duration_sec`，偏差不超过 25%。绝对不得超过 40%，否则会导致整体生成失败。
-- segment 时间必须单调递增：`end_hint_sec > start_hint_sec`，且前一个 `end_hint_sec` 必须 ≤ 下一个 `start_hint_sec`。
-- **不要为了给每句话都分镜而把总时长拉长。** 一句话可以只占 3-5 秒，多个短句可以合并在同一 segment 中。宁可 segment 数量略少、每个 segment 容纳更多正文，也不能把总时长撑破。
-- 如果 `regeneration_context.errors` 包含 `storyboard_timing_invalid`，你必须优先压缩、重分配 segment 时间，把总时长拉回估算范围，而不是只改视觉描述。可以把过长的 segment 拆分时间给前面，也可以把多个短 segment 合并来压缩总时长。
+- 不要在时间窗上花费精力，也不需要为贴合某个总时长而调整切分。
+- 把精力全部放在内容切分与视觉描述的质量上：段落边界按叙事节奏切，`script_excerpt` 按脚本顺序逐字覆盖完整正文。
+- 段落数量由内容决定，一句话可以独占一段，多个短句也可以合并在同一 segment。
 
 # 质量边界
 

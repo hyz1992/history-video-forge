@@ -12,6 +12,7 @@ import { createPromptRegistry } from "../../../backend/src/runtime/prompts/promp
 import {
   buildStoryboardPlannerPromptInput,
   generateStoryboardPlan,
+  recalculateSegmentTimings,
   regenerateSingleSegment,
 } from "../../../backend/src/modules/storyboard/storyboard-generation.service.js";
 
@@ -543,5 +544,92 @@ describe("regenerateSingleSegment", () => {
         "storyboard_segment_schema_invalid",
       );
     }
+  });
+});
+
+describe("recalculateSegmentTimings", () => {
+  const draft = makeDraft();
+
+  function segment(id: string, excerpt: string, start: number, end: number) {
+    return {
+      segment_id: id,
+      order: 0,
+      script_excerpt: excerpt,
+      start_hint_sec: start,
+      end_hint_sec: end,
+      narrative_role: "pressure",
+      visual_intent: "x",
+      scene_description: "x",
+      visual_elements: [],
+      framing_hint: "medium",
+      content_type: "live_action",
+      motion_hint: "static",
+      editing_hint: "single",
+      on_screen_text: [],
+      linked_beats: [],
+      linked_quotes: [],
+      risk_notes: [],
+      api_video_suitability: "remotion_sufficient",
+    };
+  }
+
+  it("重算后时间窗总和恒等于 draft.estimated_duration_sec（不复信 LLM 膨胀值）", () => {
+    // 真实事故场景：LLM 按人类朗读语速把 82s 脚本排成 118s
+    const segments = [
+      segment("sb_001", "aaaa", 0, 40),
+      segment("sb_002", "bbbbbbbb", 40, 90),
+      segment("sb_003", "cc", 90, 118),
+    ];
+    const plan = recalculateSegmentTimings(
+      { estimated_total_duration_sec: 118, segments } as never,
+      draft.estimated_duration_sec,
+    ) as { estimated_total_duration_sec: number; segments: Array<{ start_hint_sec: number; end_hint_sec: number }> };
+
+    expect(plan.estimated_total_duration_sec).toBe(draft.estimated_duration_sec);
+    const total = plan.segments.reduce((sum, s) => sum + (s.end_hint_sec - s.start_hint_sec), 0);
+    expect(total).toBe(draft.estimated_duration_sec);
+    // 比例：8 字段最长、2 字段最短
+    const d0 = plan.segments[0]!.end_hint_sec - plan.segments[0]!.start_hint_sec;
+    const d1 = plan.segments[1]!.end_hint_sec - plan.segments[1]!.start_hint_sec;
+    const d2 = plan.segments[2]!.end_hint_sec - plan.segments[2]!.start_hint_sec;
+    expect(d1).toBeGreaterThan(d0);
+    expect(d0).toBeGreaterThanOrEqual(d2);
+    // 单调衔接
+    expect(plan.segments[1]!.start_hint_sec).toBe(plan.segments[0]!.end_hint_sec);
+    expect(plan.segments[2]!.start_hint_sec).toBe(plan.segments[1]!.end_hint_sec);
+  });
+
+  it("segments 缺失或为空时原样返回（交由 schema 校验报错）", () => {
+    const empty = { segments: [] };
+    expect(recalculateSegmentTimings(empty as never, 82)).toBe(empty);
+    const noSegments = { foo: 1 };
+    expect(recalculateSegmentTimings(noSegments as never, 82)).toBe(noSegments);
+    expect(recalculateSegmentTimings(null as never, 82)).toBeNull();
+  });
+
+  it("generateStoryboardPlan 对 LLM 输出的膨胀时间窗执行本地重算", async () => {
+    const gateway: LlmGateway = {
+      async invokeStructuredPrompt<T>(options: InvokeStructuredPromptOptions): Promise<T> {
+        const promptInput = options.input as ReturnType<typeof buildStoryboardPlannerPromptInput>;
+        return {
+          plan_version: "storyboard_v1",
+          source_script_record_id: promptInput.source_script_record_id,
+          source_topic_package_id: promptInput.source_topic_package_id,
+          // LLM 声明的总量（人类语速常识），约为 draft 的两倍
+          estimated_total_duration_sec: promptInput.draft.estimated_duration_sec * 2,
+          segments: [
+            { segment_id: "sb_001", order: 0, script_excerpt: promptInput.draft.script_text.slice(0, 40), start_hint_sec: 0, end_hint_sec: 60, narrative_role: "pressure", visual_intent: "x", scene_description: "x", visual_elements: ["楚王"], framing_hint: "medium", content_type: "live_action", motion_hint: "static", editing_hint: "single", on_screen_text: [], linked_beats: [], linked_quotes: [], risk_notes: [], api_video_suitability: "remotion_sufficient" },
+            { segment_id: "sb_002", order: 1, script_excerpt: promptInput.draft.script_text.slice(40), start_hint_sec: 60, end_hint_sec: 116, narrative_role: "ending", visual_intent: "x", scene_description: "x", visual_elements: ["晏子"], framing_hint: "close", content_type: "live_action", motion_hint: "static", editing_hint: "single", on_screen_text: [], linked_beats: [], linked_quotes: [], risk_notes: [], api_video_suitability: "remotion_sufficient" },
+          ],
+          global_visual_notes: [],
+        } as T;
+      },
+      invokeStrictStructured: vi.fn(),
+    };
+
+    const plan = await generateStoryboardPlan(makeInput(gateway));
+    expect(plan.estimated_total_duration_sec).toBe(draft.estimated_duration_sec);
+    const total = plan.segments.reduce((sum, s) => sum + (s.end_hint_sec - s.start_hint_sec), 0);
+    expect(total).toBe(draft.estimated_duration_sec);
   });
 });

@@ -76,11 +76,66 @@ export async function generateStoryboardPlan(input: GenerateStoryboardPlanInput)
     interactionLogWriter: input.interactionLogWriter,
   });
 
+  const normalized = normalizeStoryboardPlan(rawPlan, input);
+  // 2026-09-05（时长校准）：LLM 按人类朗读语速常识排时间窗（本项目实测 3.9 字/秒），
+  // 而 TTS 实际语速 5.33 字/秒，导致段预估系统性虚高（118s vs 脚本 82s，+44%）并
+  // 一路传导到视频生成时长。时间窗与内容切分解耦：LLM 只负责切分与视觉意图，
+  // 时间窗由本地按各段正文字符占比 × draft.estimated_duration_sec 确定性重算，
+  // 总和恒等于脚本声明时长，误差收敛到脚本估算单点（82 vs 真实 86，≈5%）。
+  const plan = recalculateSegmentTimings(normalized, input.draft.estimated_duration_sec);
   return parseLlmOutput(
     StoryboardPlan,
-    normalizeStoryboardPlan(rawPlan, input),
+    plan,
     "storyboard_plan_schema_invalid",
   );
+}
+
+/**
+ * 按各段 script_excerpt 字符占比重算时间窗，总和恒等于 totalDurationSec。
+ *
+ * - 每段时长 = round(字符占比 × total)，最少 1s；末段吸收取整余数（与
+ *   buildDeterministicStoryboardPlan 的分配方式同构）。
+ * - estimated_total_duration_sec 一并覆盖为 total（不再采信 LLM 声明）。
+ * - segments 缺失/为空/非对象时原样返回（交由 schema 校验报错）。
+ */
+export function recalculateSegmentTimings<T>(plan: T, totalDurationSec: number): T {
+  if (!plan || typeof plan !== "object") return plan;
+  const record = plan as Record<string, unknown>;
+  if (!Array.isArray(record.segments) || record.segments.length === 0) {
+    return plan;
+  }
+
+  const total = Math.max(1, Math.round(totalDurationSec));
+  const excerptChars = record.segments.map((segment) => {
+    if (!segment || typeof segment !== "object") return 0;
+    const excerpt = String((segment as Record<string, unknown>).script_excerpt ?? "");
+    return excerpt.replace(/\s/g, "").length;
+  });
+  const totalChars = excerptChars.reduce((sum, count) => sum + count, 0);
+
+  let elapsed = 0;
+  const segments = record.segments.map((segment, index) => {
+    const base =
+      segment && typeof segment === "object"
+        ? (segment as Record<string, unknown>)
+        : {};
+    const isLast = index === record.segments.length - 1;
+    const ratioShare =
+      totalChars > 0 ? (excerptChars[index]! / totalChars) * total : total / record.segments.length;
+    const duration = isLast
+      ? Math.max(1, total - elapsed)
+      : Math.max(1, Math.round(ratioShare));
+    const start = elapsed;
+    const end = start + duration;
+    elapsed = end;
+    return { ...base, start_hint_sec: start, end_hint_sec: end };
+  });
+
+  return {
+    ...record,
+    segments,
+    estimated_total_duration_sec: total,
+  } as T;
 }
 
 function normalizeStoryboardPlan(
