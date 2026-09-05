@@ -1,6 +1,6 @@
 # 口播前置与真实时间轴设计
 
-日期：2026-09-05。状态：设计交付，尚未实现；模型选型为官方能力核对结论，真实音质及时间戳精度尚未验收。
+日期：2026-09-05。状态：自审整改后的设计交付，尚未实现；已核对官方候选能力，最终模型/音色须经有限对比后确定，真实音质及时间戳精度尚未验收。
 
 实施入口：[实施计划](./2026-09-05-narration-first-timing-implementation-plan.md)。
 
@@ -8,7 +8,7 @@
 
 采用“确认文案 → 生成并确认整篇口播 → 按真实口播规划分镜 → 资产规划/生成 → 合成”的方案。口播准备归属现有文案步骤，不增加第七个产品阶段，不改变 Topic Package 合同、script writer 主链路和 reviewer shadow-only 边界。
 
-**工程首选模型为 `cosyvoice-v3-flash`，通过百炼 WebSocket 接入。** 首选历史叙事音色候选为 `longsanshu_v3`（龙三叔），需要情感控制时使用 `longanyang`（龙安洋）候选。它们必须分别通过本设计的模型验收后才能标记可用。不是承诺 CosyVoice 音质优于所有新模型，也不是因价格低就忽略声音表现。
+**最终默认模型尚未选定。** 首轮比较 `cosyvoice-v3-flash` 的 `longsanshu_v3`（龙三叔）、`longanyang`（龙安洋）与 `qwen-audio-3.0-tts-plus` 的一个预复刻叙事音色，统一通过百炼 WebSocket 验证。先过长文/时间戳硬门，再用同稿试听比较；不能把“CosyVoice 能用”写成“CosyVoice 最适合”。比较对象是模型、音色及参数组合，而非抽象模型排名。
 
 核心约束：
 
@@ -27,18 +27,19 @@
 
 | 候选 | 长文本与时间信息 | 本项目取舍 |
 |---|---|---|
-| `cosyvoice-v3-flash` | WS 支持长文本与原生字级时间戳；系统音色表逐项标注支持情况 | 首选：有叙事类现成音色，不必先复刻；需要新增 WS adapter，不能只改旧 HTTP model 参数 |
-| `qwen-audio-3.0-tts-plus` / `flash` | 与 CosyVoice 共用 WS 协议；支持部分音色的时间戳；另有预复刻基础音色 | 升级备选：官方推荐的新系列，但系统音色表没有逐项时间戳列；不能据此断言不支持，也不能未经具体音色验证直接设默认 |
+| `cosyvoice-v3-flash` | WS 支持长文本与原生字级时间戳；系统音色表逐项标注支持情况 | 必测候选：有叙事类现成音色，不必先复刻；需要新增 WS adapter，不能只改旧 HTTP model 参数 |
+| `qwen-audio-3.0-tts-plus` / `flash` | 与 CosyVoice 共用 WS 协议；支持部分音色的时间戳；另有预复刻基础音色 | plus 纳入同轮比较，不以 CosyVoice 失败为前提；flash 暂不扩入付费矩阵。系统音色表未逐项标注时间戳不等于整个系列不支持，具体组合仍须验证 |
 | `cosyvoice-v3.5-plus` / `flash` | 原生时间戳能力在客户端文档列出；无现成系统音色，需要自定义音色 | 暂不首选：引入音色创建、兼容与运营状态，不是本轮解决时长的必要条件 |
 | `MiniMax/speech-2.8-hd` / `2.8-turbo`（百炼） | 同步文本少于 10,000 字符；百炼 `subtitle_enable` 仅非流式可用 | 备选：当前百炼文档未完整给出字幕输出字段及字词粒度，不把 MiniMax 直连接口能力当成百炼已透传能力 |
 | 当前 `qwen3-tts-instruct-flash` HTTP 路径 | 文本上限 600 字符；现有接口没有本方案所需的原生字词时间戳合同 | 保留旧链路，不作为新主路径 |
 
 资料核对日为 2026-09-05；以上长度按各自接口定义，不能跨协议套用。来源：[百炼语音合成模型总览](https://help.aliyun.com/zh/model-studio/tts-model)、[WS 客户端事件](https://help.aliyun.com/zh/model-studio/cosyvoice-client-events)、[CosyVoice 音色表](https://help.aliyun.com/zh/model-studio/cosyvoice-voice-list)、[Qwen-Audio 音色表](https://help.aliyun.com/zh/model-studio/qwen-audio-tts-voice-list)、[百炼 MiniMax API](https://help.aliyun.com/zh/model-studio/minimax-synchronous-speech-synthesis-api)、[Qwen TTS API](https://help.aliyun.com/zh/model-studio/qwen-tts-api)。
 
-### 2.2 首选的具体能力边界
+### 2.2 候选的具体能力边界
 
 - `longsanshu_v3`：官方定位有声书、沉稳男声，支持时间戳，不支持 Instruct。允许音色/语速快捷设置，情感控件禁用并解释原因。
 - `longanyang`：支持时间戳与指定格式的情感/旁白角色指令。控件只开放该音色官方允许的值，不把自由文本“悲壮、悬疑”等直接当成供应商枚举。
+- Qwen-Audio plus：从官方预复刻基础音色表及试听中，按普通话、成年叙事声线、模型兼容性筛出一个候选；任务 0 在 dry-run 前冻结准确 voice ID、官方来源和选择理由。不能杜撰 ID、套用 flash 同名音色 ID，或把音色占位符带入 live。可控性按该组合官方能力及验证结果开放，不套用龙安洋枚举。
 - 正式 TTS 指令模板同样放在 `prompts/narration/`，声明 `language: zh-CN` 并版本化；业务代码只按能力校验参数、加载模板，不内嵌另一份正式模型指令。
 - 首批部署固定北京地域，显式冻结 model、voice、region、protocol、rate、pitch、volume、sample rate、format 和指令版本。不同模型音色不能混用。现有自定义音色不因名字相似自动迁移。
 - 首版选择 PCM 流并在本地封装单个 WAV，避免逐包 WAV 头拼接。采样率拟用 24 kHz；声道、位深及字节顺序由任务 0 的协议小样本锁定并用 fixture 固化，不凭猜测处理二进制。
@@ -51,21 +52,37 @@ WS 的单次 `continue-task` 最多 20,000 字符，同一任务累计最多 200
 
 `run-task → task-started → 一次 continue-task（全文）→ finish-task → 收齐音频/时间戳 → task-finished`。这是一个供应商合成任务；供应商内部仍可能按句处理，不能承诺“一次神经网络前向计算”或绝对无衔接问题。[协议依据](https://help.aliyun.com/zh/model-studio/cosyvoice-client-events)
 
-### 2.4 上线资格门
+### 2.4 有限比较与上线资格门
 
-开发开始时先做有限能力验证，不直接修改默认配置。先验证首选两种音色；只有首选不满足要求时，才经明确授权验证 Qwen-Audio 备选，不自动扩大付费矩阵。
+开发开始时先做有限对比，不直接修改默认配置。基础矩阵固定为上述三个模型/音色组合 × 三篇相同正文，共 9 次合成；Qwen-Audio 必须在同轮，不是失败后的备选。另预留龙安洋及 Qwen 候选各一次中篇的语气控制试验，共最多 11 次；不支持语气的组合跳过该项并明确能力缺失，不另换音色补满次数。禁止自动重试或扩大矩阵；故障调用也占请求额度，未知费用按预算上界处理，不能假设没收费。缺少任一模型的有效比较证据时，结论只能是“比较未完成”，不能宣布另一个模型胜出。
 
-至少覆盖 3 种文案：短文、当前约 534 字的历史案例、1,500–3,000 字长文；覆盖多句、数字、年号、人名、多音字、引号、长停顿。保留 request ID、模型/音色、调用次数、耗时、计费字符、最终文件 hash、原始时间事件及脱敏报告。
+三篇文案为短文、当前约 534 字的历史案例、1,500–3,000 字长文；覆盖多句、数字、年号、人名、多音字、引号、长停顿。基础比较使用完全相同的正文、北京地域、PCM 24 kHz、默认语速/音调、不加情感指令；各组合完整参数在样例 manifest 冻结。试听随机隐藏候选标签，播放端可调整响度但不改变归档音频/时间戳。保留 request ID、模型/音色、调用次数、耗时、计费字符、最终文件 hash、原始时间事件及脱敏报告。
 
 通过条件：
 
 - 全文同一任务，无客户端分段合成/交叉淡化；末句完整，听审无明显漏读、重复、跳音、破音及句间重置感。
 - 每一个应朗读文本单位均有可验证来源映射；不允许以“覆盖率差不多”隐藏缺失。数字规范化必须可追踪，不要求朗读文本与显示文本逐字符相同。
 - 字词时间有效、整体单调、无无法解释的重叠、位于实测音频范围内。验证供应商时间是句内还是任务累计时间，以及中文/英文/代理对索引单位。未确认时不得进入生产适配。
-- 人工抽样至少 30 个边界，建议验收目标为绝对偏差 P95 ≤ 200 ms、最大 ≤ 500 ms；这是本项目验收目标，不是官方精度承诺。不通过则调整候选/参数重新验收，不能回落估算冒充通过。
+- 每个组合人工抽样至少 30 个边界，建议验收目标为绝对偏差 P95 ≤ 200 ms、最大 ≤ 500 ms；这是本项目验收目标，不是官方精度承诺。不通过则调整候选/参数重新验收；超出本轮矩阵必须另行授权，不能回落估算冒充通过。
 - 明确判断叙事表现是否可接受，不能用本地关键词规则或“最新模型”标签代替听审。
 
+先按以上硬门给每个组合标合格/不合格，再对合格组合进行同稿人工评分：叙事自然度 35%、长文连贯性 25%、发音准确性 20%、语气控制 10%、整体声音偏好 10%。各项 1–5 分，1 表示明显不可用、3 表示可接受但有明显不足、5 表示样本内无明显问题；不支持语气控制记 1 分并公开原因，不能凭空打高分。质量项取三篇平均，语气项使用专项试验；记录每项理由及问题时间点。总分换算百分制；最高分领先不足 5 分视为近似持平，优先采用实测费用更低者，费用不可比较时由用户试听选择；耗时只报告本轮观测，不把小样本当稳定性统计。不得因便宜让未过硬门的组合入选。
+
+报告必须列出全部组合的资格、评分、调用失败、费用与延迟，并给出“本项目样本范围内推荐”的默认组合和可选语气组合。只有一个模型的组合过硬门且另一模型已完成有效失败验证时，可推荐唯一合格者，但须写明这是资格筛选，不是音质优胜。未做比较前，代码计划不得硬编码 CosyVoice 为默认。
+
 本轮仅写设计和计划，以上 live 均未执行。真实验证需单独明确请求次数与费用上限；不恢复已经移除的产品 quote/预算授权体系。
+
+### 2.5 新旧项目的模型选择隔离
+
+现有 resolver 的 `auto` 从全局模型目录选择唯一 active default（`shared/src/generation/generation-configuration-resolver.ts`）。本改造不改变该通用语义，也不修改旧 TTS 的全局 `isDefault` 或环境默认值。
+
+- 经任务 0 验证的模型作为**非全局默认**目录项注册，复用现有 pricing catalog seed → bootstrap 注册链。新增版本化 `NarrationFirstModelPolicyV1`，只保存合格组合/报告引用、新模式默认 provider model ID、默认 voice ID 与策略版本；内容来自比较结果，不预设赢家。
+- 新建 `narration_first_v1` 项目时，在项目配置落库前处理继承的 TTS 选择：`auto` 物化为 `{mode: "fixed", provider_model_id: 策略默认模型}`；显式 fixed 且已合格则原样保留。显式模型/音色不合格时拒绝本次创建并返回可选组合，要求用户明确选择后重试，不静默替换、不产生半个项目。auto 音色也在此固定为所选模型的合格音色；后续 run 只消费固定配置。
+- 项目模式、固定模型/音色及策略版本/选择原因在同一创建事务保存。用户全局偏好不被回写；旧项目（包括 auto）仍按原全局默认工作。修改策略默认只影响此后新建或明确升级的项目，不追改已有新模式项目。
+- 新模式项目后续保存 TTS 配置也必须遵守同一策略：`auto` 是一次明确的“应用当前新模式推荐”操作，保存时物化 fixed 并告知失效影响；显式选择未合格组合直接拒绝。界面展示实际固定模型与音色，不能显示为持续跟随全局的 auto。关闭/下架模型只阻止后续调用，不替换为别的模型、不妨碍播放冻结音频。
+- 旧项目显式升级必须同时提交目标模型/音色选择和 expected 配置 revision；升级预览可建议合格组合，但不得提前修改旧项目配置。确认后一次事务切模式、写固定配置、记录策略与失效下游；不兼容或冲突时全部不写。发布开关关闭时拒绝新升级，但既有新模式仍可读取，不自动降级。
+
+隔离测试必须同时覆盖 legacy auto/fixed、新模式 auto/fixed、显式不兼容选择、策略更新、模型停用、配置保存及升级事务；不能只证明新 operation 能解析到一个模型。
 
 ## 3. 当前问题与代码落点
 
@@ -115,7 +132,11 @@ ready 候选不会替换原 active。确认新候选时事务执行：复查当�
 
 `sourceProjectTtsSettingsSha256` 冻结生成时项目语音配置投影；`settingsSha256` 冻结叠加本次 override 后的实际语音参数。确认比较前者与当前项目语音投影，并校验后者与本次 run/bundle 一致，不把 override 错当项目配置漂移。视频、画风、字幕引起的整体 revision 改变不单独阻止口播确认；声音控件展示 active 参数与项目默认的差别。
 
-新增轻量 `NarrationSubtitleRevision` 表：id、projectId、narrationRecordId、audioHash、timingHash、subtitleSettingsHash、builderVersion、SRT/VTT 相对 URI/hash、createdAt；记录不可变。初始字幕也是一个 revision，由 narration 记录保留初始引用；后续换行/样式产生新 revision，绝不覆盖原 bundle。预览按指定 revision 读取，项目 active 字幕指针必须属于 active narration。新字幕生成成功后事务切换指针：尚无 manifest 时只切字幕引用；已有 manifest 时以复用已有视觉 artifacts 的新 manifest 引用该 revision，再使 compose/render/publish 过期；失败保留旧字幕及视觉结果。
+新增轻量 `NarrationSubtitleRevision` 表：id、projectId、narrationRecordId、audioHash、timingHash、subtitleSettingsSnapshotJson、subtitleSettingsHash、builderVersion、SRT/VTT 相对 URI/hash、createdAt；记录不可变。`subtitleSettingsSnapshotJson` 必须保存 preset ID/版本（无预设时为 null）、完整解析后的 `resolvedStyle`、经校验的 overrides、断行策略及版本、样式 resolver 版本；不是只存 preset ID 或 hash。`resolvedStyle` 复用现有字幕样式合同的完整值，不能省略“当前默认”的字段。canonical hash 覆盖整个设置快照，builderVersion 另列参与派生幂等键。
+
+初始字幕从口播 run 已冻结的字幕配置解析并保存快照；后续派生在请求开始时解析一次当前已保存配置及预设版本并冻结。builder、预览和 render 只消费该 revision 的完整快照，不重新查询最新预设/项目偏好；即使仅改样式导致 SRT/VTT 字节相同，也保留独立 revision 及样式 hash。初始字幕也是一个 revision，由 narration 记录保留初始引用；后续换行/样式产生新 revision，绝不覆盖原 bundle。预览按指定 revision 读取，项目 active 字幕指针必须属于 active narration。新字幕生成成功后事务切换指针：尚无 manifest 时只切字幕引用；已有 manifest 时以复用已有视觉 artifacts 的新 manifest 引用该 revision，再使 compose/render/publish 过期；失败保留旧字幕及视觉结果。
+
+manifest 导入字幕时将 `resolvedStyle` 完整复制到现有消费者读取的 `artifact.metadata.subtitle_style`，同时写 subtitle revision ID、设置 hash；v2 校验两者与 revision 一致。`remotion-input-builder.ts` 的新路径消费此冻结 metadata，缺失/不一致就拒绝，不能用当前预设兜底。历史 revision 的预览/重放必须在预设更新后仍保持原样式。
 
 ### 4.3 配置与失效
 
@@ -134,10 +155,10 @@ ready 候选不会替换原 active。确认新候选时事务执行：复查当�
 
 ### 5.1 原始事件与归一化时间图
 
-保存供应商原始事件（去凭据）用于定位问题；归一化为 `NarrationTimingMapV1`，包含 source/spoken 文本、映射版本、音频 hash、durationMs、`tokens[]` 和 `units[]`。
+保存供应商原始事件（去凭据）用于定位问题；归一化为 `NarrationTimingMapV1`，包含 source/spoken 文本、映射版本、音频 hash、durationMs、`tokens[]` 和 `boundaries[]`。原始 timing 与合法切点表在 ready 前冻结，但不预先按字数/毫秒切成只能合并的分镜单元。
 
 - token：稳定 ID、sourceStart/sourceEnd（正文 UTF-16 半开区间）、spokenText、startMs/endMs（整数）、providerSentenceIndex、providerIndexRange。
-- unit：稳定 ID、连续 token ID 区间、source 范围、实际起止毫秒、正文文本。`unitizer_v1` 在标点处分隔，长句按最多 12 个 UTF-16 单位或 1,800 ms 组成小单元，若加入下一完整 source span 将越界则先结束当前单元；单个 span 超界时整体保留并告警。不可拆规范化 span；不做语义判断。单位在 bundle ready 前生成并冻结，LLM 只能组合，不得事后重写 timing map。
+- boundary：稳定 ID、sourceOffset、相邻 token ID、visualTimeMs、边界规则版本。完整枚举相邻非重叠 token/source span 之间的合法切点，另含正文首尾边界（画面时间 0/durationMs）。内部切点取下一 token 实际发声起点及其 sourceStart，之间未发声的标点/空白归前镜；同一 source span 的多 token、不完整代理对/组合字符内部均不可切。相同时间的内部候选只保留最大合法 sourceOffset，并保留其余 offset 的归并记录；时间为 0/durationMs 时只保留正文首/尾边界。最终可选边界时间严格递增，不能制造零时长镜头。结构合法不代表语义合适，具体切点仍由 planner 结合全文决定。
 - sourceText 是正文原样快照；首版不启用 SSML、Markdown 自动过滤、供应商任意文本 replace，也不向正文插入情感标签。语气走独立参数。
 - 数字/规范读法可能产生一对多 token，保留 source span；多 token 共用 source span 时，不能在该 span 中间切镜头。重复短语用供应商句序号和递增 source 范围定位，不用全篇首次 `indexOf`。
 - 供应商 text index 是句内索引，不能直接当全文索引；time 的基准由实测协议资格报告锁定。若句内时间需平移，只允许使用该句实际 PCM 起点，不能累加预估句长。冲突/缺失/不明确映射报 `narration_timing_invalid`，不插值猜测。
@@ -146,11 +167,11 @@ ready 候选不会替换原 active。确认新候选时事务执行：复查当�
 
 ### 5.2 语音边界与画面边界不是同一概念
 
-原始 token 时间只描述“何时说了什么”，字幕显示延长、停顿画面停留不得覆盖它。分镜有独立 `visualStartMs/visualEndMs`：必须按序无缝覆盖 `[0,durationMs]`，首镜从 0 开始，末镜到文件结束；句间停顿默认保留给前镜，下一镜在下一单元首 token 开始时切换。首尾静音归入首末镜。
+原始 token 时间只描述“何时说了什么”，字幕显示延长、停顿画面停留不得覆盖它。分镜有独立 `visualStartMs/visualEndMs`：必须按序无缝覆盖 `[0,durationMs]`，首镜从 0 开始，末镜到文件结束；句间停顿默认保留给前镜，下一镜在所选边界的下一 token 开始时切换。首尾静音归入首末镜。
 
-首版分镜选择连续 unit ID 范围，不让 LLM 编造精确秒数。输入给 planner 每个已冻结 unit 的原文、真实时长和邻接停顿。LLM 负责合并/选择范围及视觉节奏，本地只校验顺序、连续覆盖和确定性时间映射，不按字数重排、不把一段强制拉长到最少 1 秒。
+首版 planner 接收全文、token 发声信息和完整合法边界表，输出每镜 `start_boundary_id/end_boundary_id`。相邻镜头共享同一边界，首尾覆盖全部正文与音频；本地只校验来源、合法切点、连续覆盖和确定性时间映射，不让 LLM 编造精确秒数，不按字数重排、不把一段强制拉长到最少 1 秒。为阅读方便的分句展示不能缩减可选边界集合；不按 12 字或 1,800 ms 建立只能合并的桶。若单个不可拆 span 很长则提示限制，不插值制造词内切点。
 
-正式 `storyboard_v2` 包含 source narration ID/hash、timingMap hash、unit ranges 与最终 visual intervals；旧 `start_hint_sec/end_hint_sec` 若为 UI 兼容保留，只能由最终毫秒派生。新旧合同用版本判别联合，禁止 v2 缺字段时回落 v1。
+正式 `storyboard_v2` 包含 source narration ID/hash、timingMap hash、boundary ranges 与最终 visual intervals；旧 `start_hint_sec/end_hint_sec` 若为 UI 兼容保留，只能由最终毫秒派生。新旧合同用版本判别联合，禁止 v2 缺字段时回落 v1。回归须证明 18 个各 250 ms 的独立字 token 可以在第 6 字后（1,500 ms）切镜头，而非只能选择机械分组末尾；投影前后原始 timing hash 不变。
 
 提供实际时长能消除估时误差带来的节奏决策失真，但不能保证镜头创意必然优秀。过密/过长镜头展示告警和预览供人判断，不新增语义审校器自动卡关。已有一次结构性 regen 可保留，不新增无限“节奏修复”循环。
 
@@ -200,9 +221,9 @@ Project snapshot 添加 active narration 摘要、当前 script 的最新候选/
 
 ## 8. 旧项目兼容与发布
 
-迁移只添加 nullable 字段与新表，现存项目回填 `legacy_estimated`，新功能关闭时新项目也维持 legacy。资格验收及端到端验证通过后，部署开关让新建项目使用 `narration_first_v1`；开关关闭只停止创建新模式项目，不把已有 v2 强制解释成 v1。
+迁移只添加 nullable 字段与新表，现存项目回填 `legacy_estimated`，新功能关闭时新项目也维持 legacy。资格验收及端到端验证通过后，部署开关让新建项目使用 `narration_first_v1` 并开放显式升级；开关关闭只停止创建/升级到新模式，不把已有 v2 强制解释成 v1。
 
-旧项目继续预览、导出原有结果，显示旧时间来源。升级采用显式动作：展示将失效的分镜/资产/合成结果，用户确认后在同一事务切换项目模式、清空下游 active 指针和写升级事件，再回到文案准备口播；保留历史文件。不把旧 ASR 时间戳标成 provider_native，不用旧 merged 音频加猜测映射通过新 gate。
+旧项目继续预览、导出原有结果，显示旧时间来源。升级采用显式动作：展示将失效的分镜/资产/合成结果及模型/音色变化，用户确认后按 §2.5 在同一事务切换项目模式、固定合格配置、清空下游 active 指针和写升级事件，再回到文案准备口播；保留历史文件。不把旧 ASR 时间戳标成 provider_native，不用旧 merged 音频加猜测映射通过新 gate。新模式启用不改变全局 TTS 默认值。
 
 v1/v2 可并存读取，单条链路不能混用。部分实施期间 v2 创建关闭，不能只上线按钮就允许资产按旧计划再合成口播。回滚保持数据库增量和 v2 读取能力；不能运行破坏性 down migration 删除新文件/记录。
 
@@ -212,15 +233,15 @@ v1/v2 可并存读取，单条链路不能混用。部分实施期间 v2 创建�
 
 | 编号 | 必须证明的结果 | 验证方式 |
 |---|---|---|
-| A1 | 官方能力对应实际 model/voice，长文一个任务完成，原生时间有效 | 显式 live + 人工听审 + 脱敏事件 |
+| A1 | 两个模型同稿有限比较后有可追溯选型，实际 model/voice 长文一个任务完成、原生时间有效 | 显式 live + 资格/评分矩阵 + 人工听审 + 脱敏事件 |
 | A2 | 文案页能设置、生成、播放、确认；无口播 API/深链都不能新生成分镜 | 组件测试 + API 对抗 + 浏览器 |
 | A3 | 音频与时间戳一次生成；新路径无 ASR、无按字 fallback | provider spy + fixture 回放 |
 | A4 | 重复语句、数字、多音字、UTF-16 索引及停顿映射正确 | timeline unit/contract 测试 |
-| A5 | 分镜规划输入已含实际时间，分镜/资产/compose 数值同源 | runtime harness 跨阶段断言 |
+| A5 | planner 获得完整合法切点而非机械桶；分镜/资产/compose 数值同源且 raw timing 不变 | 6 字切点回归 + runtime harness 跨阶段断言 |
 | A6 | 大于 500 字不拆独立 TTS；资产重试零额外 TTS 请求 | adapter/execution 回归 |
-| A7 | 配置/文案更新、迟到响应、重启、重复提交不激活错版本 | DB 多实例及恢复测试 |
+| A7 | 配置/文案更新、迟到响应、重启、重复提交不激活错版本；字幕完整样式快照可历史重放 | DB 多实例/恢复 + 预设更新后 revision/renderer 回归 |
 | A8 | 最终时间轴覆盖音频；字幕误差人工达标；素材时长非整篇误用 | 音视频 probe + 成品验收 |
-| A9 | 旧项目可继续查看/导出，显式升级可追溯，不删历史资产 | 迁移测试 + 浏览器 |
+| A9 | 新旧模型默认隔离，auto/fixed、策略更新和升级事务可追溯；旧项目可查看/导出且不删历史资产 | 模型选择矩阵 + 迁移测试 + 浏览器 |
 | A10 | 使用量正确归入项目文案成本，失败未知不伪造成功或零费用 | usage 对抗测试 |
 
 残余风险：TTS 本身仍可能读错历史人名、长文表现变差、原生时间边界不准；提前音频仅提供真实约束，不保证 LLM 自动选择最佳节奏。通过资格测试、逐项目试听确认、版本固定和成品检查解决；不通过时停止新路径发布，而不是退回估算掩盖问题。

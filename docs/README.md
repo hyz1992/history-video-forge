@@ -17,7 +17,7 @@
 
 2026-09-05 新设计（尚未实现）：
 
-- 口播前置与真实时间轴：工程首选 `cosyvoice-v3-flash`，在文案确认后、分镜前生成并确认整篇口播；原生字词时间戳统一派生字幕及镜头时间。见[设计与模型比较](./plans/2026-09-05-narration-first-timing-design.md)、[实施计划](./plans/2026-09-05-narration-first-timing-implementation-plan.md)。本轮仅交付文档，真实模型/音色资格、音质与时间戳精度均待显式验收；不包含环境音效。
+- 口播前置与真实时间轴：在文案确认后、分镜前生成并确认整篇口播；原生字词时间戳统一派生字幕及镜头时间。见[设计与模型比较](./plans/2026-09-05-narration-first-timing-design.md)、[实施计划](./plans/2026-09-05-narration-first-timing-implementation-plan.md)。文档已整改模型默认隔离、合法切点选择、字幕样式快照与有限同稿比较；CosyVoice v3 flash 与 Qwen-Audio 3.0 plus 的最终默认组合待验证，不预设赢家。尚未实现、未付费调用，不包含环境音效。
 
 截至 2026-08-21：
 
