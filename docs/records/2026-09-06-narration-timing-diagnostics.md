@@ -57,3 +57,9 @@ output-dir 必须不存在；此命令仅读本地证据，无 API key 或 WebSo
 | 测试与完成前验证 | 已修 | 四文件 73/73 通过（新检查器15、采集器45、旧live harness 3、旧provider 10），严格TypeScript检查通过；实际九份CLI零请求复跑 |
 
 审查级别 T2（诊断结果涉及资格合同及设计索引断言），只审本轮最小修改，不重开整体设计。TDD首轮14条为入口缺失的明确行为失败，CLI负例随后红→绿；四文件回归命令为 `node node_modules/vitest/vitest.mjs run --configLoader runner --no-file-parallelism tests/harness/narration-evidence-inspector.test.ts tests/harness/narration-provider-qualification.test.ts tests/harness/assets-dashscope-tts-live-check.test.ts tests/backend/assets/dashscope-tts-provider.test.ts`，实际73/73；类型检查使用 `tsc --noEmit --strict --target ES2022 --module ESNext --moduleResolution Bundler --esModuleInterop --skipLibCheck` 检查本轮两个TS文件，退出0。首次误用NodeNext的检查因项目模块模式报TS1470，改用项目现有ESNext/Bundler模式后通过，未为迁就命令改源码。原始输出为 regression.log 和 typecheck.log。同模型、新上下文独立审查：初审 diff 为 Critical 0 / Important 0 / Minor 2，contract 为 0/0/0；第1轮文档整改后两者均为 0/0/0。Minor之一接受为算法局限并明确留档（空结果不授资格），另一项证据目录说明已修；两项分别以实现/实际报告及目录/CLI路径交叉验证。复审前后文件核对无审查者写入，累计范围仅上述8文件；未触碰用户配置及storage。候选提交后进行一次R5两阶段终审，结果另行机械落盘。
+
+## 固定候选终审结果
+
+被终审候选：8727e9c3fd4f2d2585f031586c7da3651e8c0b98；TASK_BASE_SHA：5d47c269d48e3ec27af7655d88cd4c80c7e424b8。候选收敛周期1个，整改复审1轮，final调用1次（同一审查者R5两阶段），终审 Critical 0 / Important 0 / Minor 0。独立核对原始事件/PCM、红绿测试日志、73/73回归及严格类型输出后，仅离线诊断部分通过。任务0整体未通过；人工听审/边界精度未验证，任务1不启动。
+
+本节仅机械记录终审，不改被审代码、参数或协议。检测漏检边界继续留档，候选未因此修改；无新增付费调用、仍9次usage折价1.55102元。终审落盘前检查：候选引用与当前HEAD一致，final计数为1，累计8文件与声明范围一致，本次待提交仅此记录。
