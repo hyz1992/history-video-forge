@@ -171,7 +171,7 @@ manifest 导入字幕时将 `resolvedStyle` 完整复制到现有消费者读取
 - boundary：稳定 ID、sourceOffset、相邻 token ID、visualTimeMs、边界规则版本。完整枚举相邻非重叠 token/source span 之间的合法切点，另含正文首尾边界（画面时间 0/durationMs）。内部切点取下一 token 实际发声起点及其 sourceStart，之间未发声的标点/空白归前镜；同一 source span 的多 token、不完整代理对/组合字符内部均不可切。相同时间的内部候选只保留最大合法 sourceOffset，并保留其余 offset 的归并记录；时间为 0/durationMs 时只保留正文首/尾边界。最终可选边界时间严格递增，不能制造零时长镜头。结构合法不代表语义合适，具体切点仍由 planner 结合全文决定。
 - sourceText 是正文原样快照；首版不启用 SSML、Markdown 自动过滤、供应商任意文本 replace，也不向正文插入情感标签。语气走独立参数。
 - 数字/规范读法可能产生一对多 token，保留 source span；多 token 共用 source span 时，不能在该 span 中间切镜头。重复短语用供应商句序号和递增 source 范围定位，不用全篇首次 `indexOf`。
-- 供应商 text index 是句内索引，不能直接当全文索引；time 的基准由实测协议资格报告锁定。若句内时间需平移，只允许使用该句实际 PCM 起点，不能累加预估句长。冲突/缺失/不明确映射报 `narration_timing_invalid`，不插值猜测。
+- 供应商 text index 的范围及单位（句内/任务累计、字符/token 序号）与 time 基准均由实测协议资格报告锁定，不能直接当正文 UTF-16 偏移。本轮诊断已观察到任务累计 token 序号，见[实测索引证据](../records/2026-09-06-narration-timing-diagnostics.md)；未验收组合不能套用该观察。若句内时间需平移，只允许使用该句实际 PCM 起点，不能累加预估句长。冲突/缺失/不明确映射报 `narration_timing_invalid`，不插值猜测。
 
 字段依据：[服务端事件](https://help.aliyun.com/zh/model-studio/cosyvoice-server-events)。跨句基准和字符单位是必须验证的协议边界，不把该文档没有说明的细节写成事实。
 

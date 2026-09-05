@@ -1,0 +1,156 @@
+{
+  "schema_version": "narration_mapping_observations_v1",
+  "status": "diagnostic_only_not_pronunciation_approval",
+  "entries": [
+    {
+      "candidate_id": "qwen-yimuling",
+      "sample_id": "short",
+      "source_sha256": "17296c67741440b2e52ba9a5a0142e76b4423bb7754f8d45756c130410bf8a47",
+      "spoken_sha256": "c3451c6b22704cc4e6f6b29bf6948111f4b7dfe806e4c481ab8b580d3f48c4fa",
+      "observations": [
+        {
+          "start": 25,
+          "end": 26,
+          "expected": "3",
+          "spoken": "三"
+        },
+        {
+          "start": 52,
+          "end": 54,
+          "expected": "12",
+          "spoken": "十二"
+        },
+        {
+          "start": 154,
+          "end": 156,
+          "expected": "𠮷",
+          "spoken": "吉"
+        }
+      ]
+    },
+    {
+      "candidate_id": "qwen-yimuling",
+      "sample_id": "medium",
+      "source_sha256": "a5deb98f9a5147afffb2f4d90f9cb1ac663b119e55e6bc521c2a9fd81302a872",
+      "spoken_sha256": "87c9e15953bf58010641b5843b01d804e0a15de3829c157a22efe1634d68ffe0",
+      "observations": [
+        {
+          "start": 21,
+          "end": 23,
+          "expected": "——",
+          "spoken": "，"
+        }
+      ]
+    },
+    {
+      "candidate_id": "qwen-yimuling",
+      "sample_id": "long",
+      "source_sha256": "65feb205f0d16844bc5f398defa4a6ebdc7f5203cacf1888018c4baccd3db67d",
+      "spoken_sha256": "607611949aab03acb0efc17fe52193d5db62aff7902dc3c80bfc72325b4427be",
+      "observations": [
+        {
+          "start": 104,
+          "end": 105,
+          "expected": "\n",
+          "spoken": ""
+        },
+        {
+          "start": 205,
+          "end": 206,
+          "expected": "\n",
+          "spoken": ""
+        },
+        {
+          "start": 301,
+          "end": 302,
+          "expected": "\n",
+          "spoken": ""
+        },
+        {
+          "start": 395,
+          "end": 396,
+          "expected": "\n",
+          "spoken": ""
+        },
+        {
+          "start": 484,
+          "end": 485,
+          "expected": "\n",
+          "spoken": ""
+        },
+        {
+          "start": 579,
+          "end": 580,
+          "expected": "\n",
+          "spoken": ""
+        },
+        {
+          "start": 677,
+          "end": 678,
+          "expected": "\n",
+          "spoken": ""
+        },
+        {
+          "start": 771,
+          "end": 772,
+          "expected": "\n",
+          "spoken": ""
+        },
+        {
+          "start": 865,
+          "end": 866,
+          "expected": "\n",
+          "spoken": ""
+        },
+        {
+          "start": 965,
+          "end": 966,
+          "expected": "\n",
+          "spoken": ""
+        },
+        {
+          "start": 1063,
+          "end": 1064,
+          "expected": "\n",
+          "spoken": ""
+        },
+        {
+          "start": 1160,
+          "end": 1161,
+          "expected": "\n",
+          "spoken": ""
+        },
+        {
+          "start": 1253,
+          "end": 1254,
+          "expected": "\n",
+          "spoken": ""
+        },
+        {
+          "start": 1347,
+          "end": 1348,
+          "expected": "\n",
+          "spoken": ""
+        },
+        {
+          "start": 1446,
+          "end": 1447,
+          "expected": "\n",
+          "spoken": ""
+        },
+        {
+          "start": 1540,
+          "end": 1541,
+          "expected": "\n",
+          "spoken": ""
+        },
+        {
+          "start": 1639,
+          "end": 1640,
+          "expected": "\n",
+          "spoken": ""
+        }
+      ]
+    }
+  ]
+}

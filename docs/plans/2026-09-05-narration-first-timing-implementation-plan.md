@@ -36,12 +36,14 @@
 - [ ] 从 Qwen-Audio plus 官方预复刻音色表及试听确定一个普通话成年叙事候选，在 manifest 冻结准确 voice ID、来源、参数和选择理由；空值/占位符、其他模型同名音色不得进入 dry-run 成功计划或 live。不调用音色创建接口。
 - [ ] 实现最小独立 WS 验证入口，不接业务 dispatcher；龙三叔、龙安洋及一个 Qwen-Audio plus 候选各合成相同的短/中/长稿，共 9 次；另预留龙安洋/Qwen 各一次语气试验，总上限 11 次，不支持则跳过并记录。基础样本统一北京、PCM 24 kHz、默认语速/音调、无情感指令。报价按当日各组合官方价计算，不复用旧 qwen3 价格。
 - [x] 用 dry-run 命令 `npx tsx harness/scripts/runtime/narration-provider-qualification.ts --dry-run` 验证请求计划和预估。无明确付费授权就在此停止并记录未验证。
-- [ ] 获得本轮明确预算后才执行 live：记录句序号、文本/时间索引、音频帧与累计 usage；逐组合确定 PCM 位深/声道、时间戳跨句基准、句内字符索引单位、最终事件顺序；每个组合抽样至少 30 个发声边界。预算不足/未知失败不自动补跑，报告明确缺口。
+- [ ] 获得本轮明确预算后才执行 live：记录句序号、文本/时间索引、音频帧与累计 usage；逐组合确定 PCM 位深/声道、时间戳跨句基准、文本索引范围及单位、最终事件顺序；每个组合抽样至少 30 个发声边界。预算不足/未知失败不自动补跑，报告明确缺口。
 - [ ] 按设计 §2.4 先过硬门，再隐藏标签同稿试听，用 35/25/20/10/10 权重记录各项评分及时间点，给出费用、耗时与缺失能力；差距不足 5 分按已定义规则处理。资格条目绑定 model/voice/region/protocol/参数版本和报告引用；输出样本范围内默认组合与可选语气组合，不预设 CosyVoice。只剩一个模型合格时区分资格筛选与音质优胜。
 - [ ] 回跑测试 PASS，报告不提交原始正文、音频或密钥；提交 `验证口播候选模型与原生时间戳协议`。
 
 
 执行进度（2026-09-05）：离线部分已提交 dc24705/be0c36b；用户后续授权 5 元，三候选各短/中/长九次已执行，累计用量折价 1.55102 元，未重试/扩矩阵/创建音色。真实事件发现结束用量省略，已兼容完整成功末句累计值并离线核销首条，只续采剩余八条。相关测试 58 项通过；九份 WAV 保持 PCM 字节不变，90 个边界样点准备完成但人工实测为 0。Cosy 两组全文覆盖失败，Qwen 映射/听审/精度待验收；两语气槽未执行。原 0.83164 元初估低于实际，当前调度另用 1.66328 元预留，非账单保证。保留未完成整项为未勾选，任务 0 整体未通过。见[真实证据](../records/2026-09-05-narration-provider-live-comparison.md)。
+
+2026-09-06 继续任务 0：新增零网络证据检查，定位 Cosy 每句33.44秒截断及龙安洋短稿34 token/34ms、Qwen长稿1138 token等分时间；Qwen声明式文字映射可严格对齐，但听审/精度仍未验收。[诊断及有限调整提案](../records/2026-09-06-narration-timing-diagnostics.md)；本轮未新增付费请求，任务 1 保持关闭。
 
 ### 任务 1：新增口播时间、配置与版本合同
 
@@ -115,7 +117,7 @@ expect(TimingToken.safeParse({
 
 - `backend/src/modules/narration/providers/dashscope-speech-ws-client.ts`：只处理两类候选共用的 WS 事件与音频流，协议差异以已验证能力声明区分。
 - `backend/src/modules/narration/providers/dashscope-narration-provider.ts`：请求参数、结果 bundle，注入 client；使用任务 0 合格组合，不硬编码 CosyVoice。
-- `backend/src/modules/narration/narration-timing-normalizer.ts`：句内索引/原生时间转换为全局文本与时间图。
+- `backend/src/modules/narration/narration-timing-normalizer.ts`：按已验收的索引范围/单位及原生时间基准转换为全局文本与时间图。
 - `tests/backend/narration/dashscope-narration-provider.test.ts`、`tests/backend/narration/narration-timing-normalizer.test.ts`。
 - `prompts/narration/narrator-instruction.prompt.md`、`prompts/narration/narrator-instruction.changes.md`：保存经验证支持 Instruct 的组合使用的正式中文模板；不同指令合同使用显式模型能力分支，禁用组合不发送指令。元数据 `language: zh-CN`；接入现有 Prompt Registry 及 fixture，不在 adapter 内写正式指令文案。
 
