@@ -1,6 +1,6 @@
 ---
 id: script.writer
-version: v1.0.0
+version: v1.0.1
 stage: script
 language: zh-CN
 consumes:
@@ -72,7 +72,7 @@ status: active
 
 ## 口播草稿约束
 
-- `script_text` 的口播体量必须服务于 `hard_lane.duration_band`；先按档位控制正文体量，再按约 3.6-4.6 个汉字等价长度/秒回填 `estimated_duration_sec`；`short=45-70秒`，`medium=75-95秒`，`long=90-140秒`；`estimated_duration_sec` 必须落在对应时长区间内，且不得与正文体量明显失真
+- `script_text` 的口播体量必须服务于 `hard_lane.duration_band`；先按档位控制正文体量，再按约 4.8-5.6 个汉字等价长度/秒回填（本项目 TTS 实测语速约 5.3 字/秒） `estimated_duration_sec`；`short=45-70秒`，`medium=75-95秒`，`long=90-140秒`；`estimated_duration_sec` 必须落在对应时长区间内，且不得与正文体量明显失真
 - `medium` 首稿正文优先写到约 330-450 个汉字等价长度；如果正文只有 320-360 字，估时应更保守，不能硬标 85-90 秒；只能用场景、动作、对话或转述、压力升级、即时后果补足体量，不得为了凑字数重复解释、空泛评价或喊口号
 - 先单独确定一个可独立成立的 `opening_span` 作为开场钩子；`script_text` 从 `opening_span` 之后的下一拍进入正文推进，不得在正文开头逐字重复 `opening_span`；`opening_span` 采用破壁开头：第一分句必须包含本事件的具体人物或势力，并绑定压力源、选择或代价，优先从 `core_conflict`、`stakes` 或 `narrative_tension_map` 提炼；第二分句立刻落到具体历史场面、动作或危险局面；不要用泛称惊叹替代具体压力；不得为了开头铺垫而空泛解释背景；`hook_claim` 只是包装 promise 弱参考，如需借用，必须还原成具体场面，不能机械复述或照搬，不使用固定统一开头模板；`ending_span` 必须回收到 `ending_residue` 或 `stakes`，不要空泛拔高或喊口号收尾
 - `ending_span` 必须落在代价、反讽、未平后果或场景内判断上；不要默认写成改变历史、成为典范、留名史册式空泛收尾

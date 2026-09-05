@@ -590,7 +590,7 @@ describe("prompt runtime", () => {
 
     expect(prompt.metadata.language).toBe("zh-CN");
     expect(prompt.body).toContain("`medium` 首稿正文优先写到约 330-450 个汉字等价长度");
-    expect(prompt.body).toContain("按约 3.6-4.6 个汉字等价长度/秒回填");
+    expect(prompt.body).toContain("按约 4.8-5.6 个汉字等价长度/秒回填");
     expect(prompt.body).toContain("如果正文只有 320-360 字，估时应更保守");
     expect(prompt.body).toContain("不能硬标 85-90 秒");
   });

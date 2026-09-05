@@ -570,7 +570,7 @@ ${JSON.stringify(runtimeDraft)}
     expect(entries[0]?.systemPrompt).toContain("medium=75-95秒");
     expect(entries[0]?.systemPrompt).toContain("long=90-140秒");
     expect(entries[0]?.systemPrompt).toContain(
-      "先按档位控制正文体量，再按约 3.6-4.6 个汉字等价长度/秒回填",
+      "先按档位控制正文体量，再按约 4.8-5.6 个汉字等价长度/秒回填",
     );
     expect(entries[0]?.systemPrompt).toContain("`opening_span`");
     expect(entries[0]?.systemPrompt).toContain(
