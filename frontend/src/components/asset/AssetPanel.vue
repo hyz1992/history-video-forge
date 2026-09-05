@@ -388,7 +388,10 @@ const artifactsById = computed(() => {
 
 /**
  * 各分镜在成片中的真实时序（按 manifest TTS chunk 实际时长累计，与 compose
- * deriveSegmentTimings 同源）。chunk 跨段时按段数均分。
+ * deriveSegmentTimings 同源）。chunk 跨段时按段数均分；最后一段额外计入
+ * compose 追加的 3s 片尾缓冲（compose-timeline-builder END_PADDING_SEC），
+ * 保证末段卡片的结束时间等于成片真实结束时间。
+ * duration_source 仅认真实探测标记（≠ estimated：fake TTS/探测失败写 estimated）。
  * 口播未生成（无 chunk 或缺失探测）时返回 null，卡片回退规划预估窗。
  */
 const realSegmentTimings = computed<Map<string, { startSec: number; endSec: number }> | null>(() => {
@@ -423,13 +426,18 @@ const realSegmentTimings = computed<Map<string, { startSec: number; endSec: numb
   const orderedSegments = mf.segment_routes ?? [];
   if (orderedSegments.length === 0) return null;
   if (!orderedSegments.every((r) => chunkDurationBySegment.has(r.segment_id))) return null;
+  const END_PADDING_SEC = 3; // 与 compose-timeline-builder.ts 的片尾缓冲同源
   const timings = new Map<string, { startSec: number; endSec: number }>();
   let cursor = 0;
-  for (const route of orderedSegments) {
+  orderedSegments.forEach((route, index) => {
     const durationSec = chunkDurationBySegment.get(route.segment_id)!;
-    timings.set(route.segment_id, { startSec: cursor, endSec: cursor + durationSec });
+    const isLast = index === orderedSegments.length - 1;
+    timings.set(route.segment_id, {
+      startSec: cursor,
+      endSec: cursor + durationSec + (isLast ? END_PADDING_SEC : 0),
+    });
     cursor += durationSec;
-  }
+  });
   return timings;
 });
 
