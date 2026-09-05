@@ -692,13 +692,9 @@ async function upgradeSegmentToVideoController(
     return { statusCode: 404, body: { error: "asset_plan_record_not_found" } };
   }
 
-  const assetPlan = planRecord.planJson as {
-    tasks: Array<{
-      task_id: string; task_type: string; source_segment_id: string | null;
-      prompt_draft?: string | null; parameters?: Record<string, unknown>;
-      manual_upload_policy?: { allowed: boolean; required: boolean; accepted_file_types: string[]; acceptance_notes?: string[] };
-    }>;
-  };
+  // planJson 本身就是正式 AssetPlan（AssetPlanRecord.planJson）；不得窄化成
+  // 局部形状再回传 saveAssetPlanRecord——会丢必填字段导致 TS2740。
+  const assetPlan = planRecord.planJson;
 
   // 2026-09-04：升级视频时长以实际口播为准（TTS chunk 探测时长，与口播等长），
   // 段预期时长只是无口播信息时的兜底——视频必须完整覆盖口播且不被 compose 裁剪。
