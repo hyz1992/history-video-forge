@@ -47,3 +47,13 @@
 - 文本预留从冻结输入派生并归档计划，不声称matrix存有逐行派生金额。
 
 根验证：62项目标测试、8文件301项完整回归通过，严格tsc通过，dry-run为0调用且计划摘要未变；证据为output/narration-omni35-evidence-20260906/round1-regression.json、round1-typecheck.json、round1-dry-run.json。独立整改复审进行中；本轮未执行付费调用，资格未验证。
+
+## 候选1终审机械落盘
+
+- 被审SHA：2459752380dc0d0ac7fc13b7fee460a23a287385；TASK_BASE_SHA：486b3bfbe816b0ab4b7a0c631660e0a35177b361。当前四文件与终审冻结摘要一致；本节仅补结论，不修改候选逻辑。
+- 初审C0/I3/M1；整改复审第1轮diff与contract均C0/I0/M0；有效R5两阶段终审1次，C0/I0/M0。工具采集部分通过，不代表任务0或业务验收通过。
+- 实测8文件301项（新62项）通过、strict tsc通过、dry-run零请求；独立核对冻结12项媒体/source摘要、prompt摘要和5份用户文件摘要一致。.zcode仅状态一致，没有整目录内容审计。
+- K仅调用1次，完整49个JSON事件、1个末尾DONE、stream_state=complete、身份一致且stop；按最终usage (2445×53+497×7+473×40)/1000000=0.151984元，累计3.1541128元、剩余1.8458872元，均非账单。最终result为本组核销依据，不与pending整组0.65预留重复相加。
+- 完整回答明确acceptable=false、major循环卡顿、133秒位置；根与独立审查核对符合129–147秒容差。独立PCM核验确认134–142秒250ms重复32次且窗口外不变；不声称根/审查代理直接试听或核实“粮堆”的准确声学转写。
+- 原limitations为字符串，被数组结构合同拒绝，capture.status=failed/review=null原样保留。K声音观察子项已修；正式结构裁决部分修；正常3份声音及任务0整体未验证。control-adjudication和samples目录不存在，正常调用0，任务1未放行。
+- 原始实证：output/narration-omni35-probe-live-20260906；执行快照及回归：output/narration-omni35-evidence-20260906/candidate-round1、round1-regression/typecheck/dry-run.json、probe-before-live.json。下一低耦合任务处理归档K格式兼容，不重发K，保持原始证据及预设声音门。
