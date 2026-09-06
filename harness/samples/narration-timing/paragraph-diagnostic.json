@@ -1,0 +1,133 @@
+{
+  "schema_version": "narration_paragraph_diagnostic_v1",
+  "source_matrix_hash": "055f65442056099f7b98455c881da236e7dde7412943e3101185d02db4e65440",
+  "baseline_report_sha256": "69bcdd1440473d7885ee349659b853a88cea9e17beda45d7737b2ed24bae50a0",
+  "baseline_usage_cost_cny": 1.55102,
+  "authorization_date": "2026-09-06",
+  "authorization_scope": "用户在两次自然段同任务诊断提案后明确要求继续；本项1元，总上限5元；不重试、不创建音色、不占语气槽。",
+  "request_ids": [
+    "cosy-sanshu:long",
+    "qwen-yimuling:long"
+  ],
+  "input_mode": "one_task_18_continue_messages",
+  "sample_id": "long",
+  "text_sha256": "65feb205f0d16844bc5f398defa4a6ebdc7f5203cacf1888018c4baccd3db67d",
+  "continue_messages": [
+    {
+      "start": 0,
+      "end": 105,
+      "utf16_length": 105,
+      "sha256": "2bddd37a515900c9c05769f4d832608578fe9e15b9ed6c00e5ad9a842265c10a"
+    },
+    {
+      "start": 105,
+      "end": 206,
+      "utf16_length": 101,
+      "sha256": "3287fa34c40041971c45de1846ff1a135c7ae53fc1b3eccb5c985d3670d8a1f1"
+    },
+    {
+      "start": 206,
+      "end": 302,
+      "utf16_length": 96,
+      "sha256": "19c65fa032e0edc64039860ea1d57ef61f28022627388e6405b0b8437fb04196"
+    },
+    {
+      "start": 302,
+      "end": 396,
+      "utf16_length": 94,
+      "sha256": "beb48e2683fc89d8aef14769a8c6fed08fd4892cccf74b3002b20d884d9be271"
+    },
+    {
+      "start": 396,
+      "end": 485,
+      "utf16_length": 89,
+      "sha256": "738e663983be1e2fea21694ced8ec4d6e235a31f36af11cd36217191686fb49c"
+    },
+    {
+      "start": 485,
+      "end": 580,
+      "utf16_length": 95,
+      "sha256": "a663b0a429bd756642a3d32fcbd97ff516c00dc56c47df62dc94d031e38092dc"
+    },
+    {
+      "start": 580,
+      "end": 678,
+      "utf16_length": 98,
+      "sha256": "88f00d3caea5f17273a3b0ce81aab1089df3dde1b94d3824ef7de68143558813"
+    },
+    {
+      "start": 678,
+      "end": 772,
+      "utf16_length": 94,
+      "sha256": "6acd736174dab0d56bd28da42103e7587ee61aae8e72d894c891a438d278aebe"
+    },
+    {
+      "start": 772,
+      "end": 866,
+      "utf16_length": 94,
+      "sha256": "97444c1295fd2050ff683cb49a05142b22396e448ce88e5427c250a28eb84679"
+    },
+    {
+      "start": 866,
+      "end": 966,
+      "utf16_length": 100,
+      "sha256": "9bfea8c1876927003beb015ed3de6a2f71bfaecacc61c64cb41dac2498eabf00"
+    },
+    {
+      "start": 966,
+      "end": 1064,
+      "utf16_length": 98,
+      "sha256": "3cbd07da96ffcd39cfce5a26ebbe297235bf480e390532545f43840c5dce2489"
+    },
+    {
+      "start": 1064,
+      "end": 1161,
+      "utf16_length": 97,
+      "sha256": "8799702a1a877e977bd7e2ca3878705214cc9c9bbe8e96b99569c1b40a355f81"
+    },
+    {
+      "start": 1161,
+      "end": 1254,
+      "utf16_length": 93,
+      "sha256": "a97a97b93b9cbcc0f8e10403142683b25fe645ac4e484c00433df7891924f66c"
+    },
+    {
+      "start": 1254,
+      "end": 1348,
+      "utf16_length": 94,
+      "sha256": "a918889df3df41a4a05a8a47ea19f0b45f121b75eddf8c41fb3aa794ba83b6c9"
+    },
+    {
+      "start": 1348,
+      "end": 1447,
+      "utf16_length": 99,
+      "sha256": "41cd120384ccf1cd170de3497ebf4b34a02e275d42b526dbf8d08c4db87961d6"
+    },
+    {
+      "start": 1447,
+      "end": 1541,
+      "utf16_length": 94,
+      "sha256": "bdd25e7dea5aa1a4f8704a4b0f24f095bf01711f3c5322533cced4f0a7569577"
+    },
+    {
+      "start": 1541,
+      "end": 1640,
+      "utf16_length": 99,
+      "sha256": "71616203e355a0bbd92cf45a776ca69fd9e4444c8441e9a9a7fd5ccd81ff9e15"
+    },
+    {
+      "start": 1640,
+      "end": 1740,
+      "utf16_length": 100,
+      "sha256": "4f9255408c4458f04fb573437a0fa646dc928f6c2b107825e760e9c82de0daa0"
+    }
+  ],
+  "max_requests": 2,
+  "max_cost_cny": 1,
+  "total_cap_cny": 5,
+  "estimated_cost_cny": 0.78096,
+  "scheduling_reserve_cny": 0.8352,
+  "pricing_checked_at": "2026-09-06",
+  "pricing_source": "https://help.aliyun.com/zh/model-studio/model-pricing",
+  "protocol_source": "https://help.aliyun.com/zh/model-studio/cosyvoice-client-events"
+}

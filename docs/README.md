@@ -21,6 +21,8 @@
 
 2026-09-06 离线诊断发现龙安洋短稿及 Qwen 长稿的原生时间戳有严格等分段，仍无生产合格组合；[诊断与待批准的有限输入对照](./records/2026-09-06-narration-timing-diagnostics.md)。本轮0次新增调用，不进入任务1。
 
+后续：用户已批准[两次自然段输入对照](./records/2026-09-06-narration-paragraph-comparison.md)，两次均已执行，累计usage折价2.33198元；Cosy仍截断，Qwen全文映射仍完整、旧长等分现象本轮消失，但正文零时长/听审尚未验收。101项回归通过，任务1保持关闭。
+
 - 口播前置与真实时间轴：在文案确认后、分镜前生成并确认整篇口播；原生字词时间戳统一派生字幕及镜头时间。见[设计与模型比较](./plans/2026-09-05-narration-first-timing-design.md)、[实施计划](./plans/2026-09-05-narration-first-timing-implementation-plan.md)。已完成用户限定的三轮自审修复，设计与计划文档终审通过，任务 0 已进入有限实测；证据见[有限循环记录](./records/2026-09-05-narration-first-design-review-loops.md)。CosyVoice v3 flash 与 Qwen-Audio 3.0 plus 的最终默认组合待实测，不预设赢家。尚未实现业务、已完成九次基础调用，不包含环境音效。
 
 截至 2026-08-21：
