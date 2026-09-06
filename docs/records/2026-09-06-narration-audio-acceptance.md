@@ -97,3 +97,15 @@ G/H/I三项正常音频均返回true和5/5/5，故障副本J也返回true和5/5/
 正式审查进度：固定基线5848466d55dc55406ff67a958f70ab568964ad82；diff初审0 Critical/1 Important/0 Minor，整改复审轮1为0/0/0，已闭合失败fixture假阳性；独立合同方法预检通过不等于正式contract_reviewer完成，正式合同审查及R5终审均未完成，final次数0，当前7文件尚未提交。三轮音频调用不是三轮代码审查，代码整改计数仅1。当前会话子代理容量工具返回agent thread limit reached，按用户预授权在新会话继续正式合同/R5审查及后续实施，不略过验证。
 
 后续工具调查已核对[Qwen-Omni官方说明](https://help.aliyun.com/zh/model-studio/qwen-omni)和[北京价格](https://help.aliyun.com/zh/model-studio/model-pricing)：音频专节写Qwen3最长20分钟、Qwen3.5最长3小时，页面选型概述另写Qwen3音视频150秒，因此不能据概述断言本次6分钟音频必然被截断；失效原因仍以实测为准。可用的新核验候选为qwen3.5-omni-plus-2026-03-15，北京音频/文本输入/文本输出分别53/7/40元每百万token，输入音频约7 token/秒。尚未冻结或发起该模型请求；建议先用同一隐藏故障对照验证适用性，再决定是否评价三份正常样例，仍须固定数量/成本、不以新标签保证效果。现有5元总上限及原生/全文/声音资格要求保持。
+
+
+## 候选1终审机械落盘（续接完成）
+
+- 被审SHA：9553a62fbf5bdb6d74c001c2d49b83e59f7d30dd；TASK_BASE_SHA：5848466d55dc55406ff67a958f70ab568964ad82。上述7文件与终审冻结摘要逐项一致，本节只记录结论，不改变候选实现。此前“正式合同/R5待续”为交接时点状态，以本节续接结果为准。
+- 正式contract_reviewer为0 Critical/0 Important/0 Minor；有效R5两阶段终审1次，结果0 Critical/0 Important/1 Minor，限定音频观察工具及失效记录可局部提交。代码整改仍为第1轮；没有新增整改轮。
+- final代理启动2次：首次提取计划时意外读入历史验证摘要，在独立结论前中止；随后新上下文只读取需求合同及4个代码/测试/matrix/prompt文件形成finding，再在阶段2核对文档和实证。第一次不是有效终审，不省略此输入隔离异常。
+- M1保留未修：narration-audio-review.ts的SSE解析不归档[DONE]结束见证。采集时检查完成信号，但原始parsed chunks不能离线重放证明DONE；无额外wire原件，不补造历史事件。这不推翻最终usage核销与声音工具负对照失败结论。保存原始事件要求为部分修。
+- 独立终审核对14份完整回答及唯一response ID、所有最终usage、冻结音频/正文摘要与故障PCM：134–142秒确为250ms片段重复32次，窗口外相同；J仍否认循环并给5/5/5。因此任务0声音资格未修，任务1–12业务未验证，不放行。
+- 新鲜验证：7文件239项（目标48）通过；strict tsc、diff-check通过；中文/重复prompt检查各22份；本地链接21项有效。证据为同目录continuation-fresh-regression/typecheck/diffcheck/prompts.json及continuation-document-links.json。
+- 费用独立复算仍累计3.0021288元、剩余1.9978712元，本次续接新增付费请求0。5份用户文件摘要与initial-state一致，.zcode未触碰。
+- 下一步在剩余预算内换适用声音工具：先固定故障对照单次验证，成功后才评价正常短中长，保持原生/全文/声音门，不新增TTS候选、不自动重试。
