@@ -6,8 +6,8 @@
 |---|---|
 | TASK_BASE_SHA | 318a6a2aafddc041b09b084d6d3b0a43a417b2d2 |
 | 审查级别 | T2 |
-| 阶段 | 初始双路累计审查收敛；候选待 R5 终审 |
-| 整改复审轮数 | 0 / 3 |
+| 阶段 | 第 1 轮累计双路复审收敛；候选待 R5 终审 |
+| 整改复审轮数 | 1 / 3 |
 | 终审调用次数 | 0 |
 
 ## 原始验收清单
@@ -79,10 +79,16 @@ default-database-readonly-audit.mts/json 使用项目 Node 与 readonly/fileMust
 
 限制：位值整数精确转换最多 12 位（前导零只原样/逐位），不识别的正文变换拒绝；捕获设 64 MiB PCM 与 100000 事件上限。整体 20000 UTF-16 是输入上限，不保证任何正文均通过映射/时长/供应商输出约束。没有扩大模型、音色、语气资格；未进行新的付费 live；没有用户实际试听或后续成品验收。
 
-初始 diff 与 contract 均 C0/I0/M0；整改复审 0 轮、终审 0 次，候选待 R5 终审。审查前后 13 文件 hash 与 git status 一致，见 initial-review-readonly-check.json。
+初始 diff 与 contract 均 C0/I0/M0；此后 root 发现提交前检查退出码未阻止提交，进入第 1 轮整改复审；终审 0 次。审查前后 13 文件 hash 与 git status 一致，见 initial-review-readonly-check.json。
 
 ## 精确 1500 UTF-16 补充证据
 
 合同审查指出已有 1500 用例仅覆盖发送过程，root 在不修改冻结产品/测试的情况下补 root-1500-complete-bundle.mts/json：真实 client→provider 消费离线构造事件与 PCM，单 socket/task、3 条各 500 UTF-16 原文输入、一次 finish；完整成功输出 35928 样本、1497 ms、1497 token、1498 边界，通过共享合同。它不是新的 provider live，不替代三篇真实原件；合同审查核对后关闭证据缺口，未形成 C/I/M finding，未发生产品整改。
 
 用户文件核对见 candidate-protected-check.json；四份文件全量与既存指纹一致，frontend log 原 4007 字节前缀一致，当前共 5798 字节；不暂存这些文件或 .zcode。默认库误指向的证据限制按前节保留。
+
+## 提交检查补正
+
+候选 159f737a13c0355629d5b2cac342d327712c2d3b 暂存检查 exit 2，指出新迁移末尾额外空行；编排未据退出码停止提交。此前未跟踪文件不在普通 git diff --check 内，不能用该检查宣称完整范围无格式问题。本轮删除额外空行，SQL trimEnd 内容全等；root-eof-check.json 保留候选累计检查失败与修正后完整累计检查 exit 0。流程不变量：提交须以完整任务范围的累计检查退出码为门槛，任一非零即停止。纯格式/流程补正不增行为测试，保留既有语义验证；按 R1 对完整累计 13 文件重审，计第 1 / 3 轮。
+
+第 1 轮累计 diff 与 contract 复审均 C0/I0/M0，独立核对候选检查 exit 2、修正后 exit 0 与 SQL 内容不变；审查前后 13 文件指纹及状态一致，见 round1-review-readonly-check.json。整改累计 1 / 3 轮，终审尚未调用。

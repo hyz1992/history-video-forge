@@ -106,4 +106,3 @@ COMMIT;
 PRAGMA legacy_alter_table = OFF;
 
 PRAGMA foreign_keys = ON;
-
