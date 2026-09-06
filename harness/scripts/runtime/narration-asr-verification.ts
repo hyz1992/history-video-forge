@@ -25,7 +25,7 @@ type Plan = ReturnType<typeof asrPlan>;
 type Row = Plan['requests'][number];
 interface Result {
   status: 'succeeded' | 'failed' | 'unknown'; seconds: number | null; submit_attempts: number;
-  task_id?: string; word_count?: number; error?: string;
+  task_id?: string; word_count?: number; error?: string; reference_issues?: string[];
 }
 export function parseAsrArgs(args: string[]) {
   if (!args.length || args.join(' ') === '--dry-run') return 'dry-run';
@@ -82,7 +82,9 @@ export async function captureAsr(row: Row, dir: string, apiKey: string, fetcher 
   captureActive = true;
   const original = globalThis.fetch;
   let task_id: string | undefined, seconds: number | null = null, submits = 0, transcriptSaved = false;
+  let reference_issues: string[] = [];
   const finish = (result: Result) => {
+    result = { ...result, reference_issues };
     save(dir, 'result.json', { ...result, id: row.id, wav_sha256: row.wav_sha256,
       transcription_sha256: transcriptSaved ? hash(readFileSync(resolve(dir, 'transcription.json'))) : null });
     return result;
@@ -131,9 +133,10 @@ export async function captureAsr(row: Row, dir: string, apiKey: string, fetcher 
       return response;
     };
     const words = await invoke();
+    reference_issues = timingIssues(words.map(w => ({ text: w.text, begin_time: w.begin_time_ms, end_time: w.end_time_ms })), row.duration_seconds * 1000);
     if (!transcriptSaved || !words.length || !task_id || words.some(w => typeof w.text !== 'string'
       || !Number.isFinite(w.begin_time_ms) || !Number.isFinite(w.end_time_ms)
-      || w.begin_time_ms < 0 || w.end_time_ms < w.begin_time_ms || w.end_time_ms > row.duration_seconds * 1000 + 1000)) throw Error('asr_words_invalid');
+      || w.begin_time_ms < 0 || w.end_time_ms < w.begin_time_ms || w.end_time_ms > row.duration_seconds * 1000)) throw Error('asr_words_invalid');
     save(dir, 'words.json', words);
     return finish({ status: 'succeeded', seconds, task_id, submit_attempts: submits, word_count: words.length });
   } catch {
@@ -156,15 +159,16 @@ export function loadAsrReference(row: Row, dir: string) {
     const words = parseAsrWords(JSON.parse(bytes.toString('utf8')));
     if (!words.length || words.length !== receipt.word_count || words.some(w => typeof w.text !== 'string'
       || !Number.isFinite(w.begin_time_ms) || !Number.isFinite(w.end_time_ms) || w.begin_time_ms < 0
-      || w.end_time_ms < w.begin_time_ms || w.end_time_ms > row.duration_seconds * 1000 + 1000)) throw Error();
+      || w.end_time_ms < w.begin_time_ms || w.end_time_ms > row.duration_seconds * 1000)) throw Error();
     return words;
   } catch { throw Error('asr_reference_invalid'); }
 }
-function timingIssues(words: Word[]) {
+function timingIssues(words: Word[], durationMs: number) {
   let highWater = 0;
   return words.flatMap((w, i) => {
     const valid = Number.isFinite(w.begin_time) && Number.isFinite(w.end_time) && w.begin_time >= 0 && w.end_time > w.begin_time;
     const issues = [...(!valid ? ['token_duration_invalid:' + i] : []),
+      ...(w.begin_time < 0 || w.begin_time >= durationMs || w.end_time > durationMs ? ['token_out_of_audio_range:' + i] : []),
       ...(w.begin_time < highWater ? ['token_overlap:' + i] : [])];
     // 坏词/倒序词不得让后续词绕过此前已观察到的时间范围。
     if (valid) highWater = Math.max(highWater, w.end_time);
@@ -193,13 +197,14 @@ function align(a: string, b: string) {
   }
   return { matches, edit_distance: dp.at(-1)!, deletions, insertions, substitutions, differences: differences.reverse() };
 }
-export function compareRecognition(source: string, native: Word[], asr: AsrWord[]) {
+export function compareRecognition(source: string, native: Word[], asr: AsrWord[], durationMs: number) {
+  if (!Number.isSafeInteger(durationMs) || durationMs <= 0) throw Error('asr_audio_duration_invalid');
   const sourceText = normalize(source), nativeText = normalize(native.map(w => w.text).join(''));
   const asrText = normalize(asr.map(w => w.text).join(''));
   const { matches: _sourceMatches, ...source_asr } = align(sourceText, asrText);
   const alignment = align(nativeText, asrText);
-  const native_timing_issues = timingIssues(native);
-  const asr_timing_issues = timingIssues(asr.map(w => ({ text: w.text, begin_time: w.begin_time_ms, end_time: w.end_time_ms })));
+  const native_timing_issues = timingIssues(native, durationMs);
+  const asr_timing_issues = timingIssues(asr.map(w => ({ text: w.text, begin_time: w.begin_time_ms, end_time: w.end_time_ms })), durationMs);
   const invalidNative = new Set(native_timing_issues.map(s => Number(s.split(':')[1])));
   const invalidAsr = new Set(asr_timing_issues.map(s => Number(s.split(':')[1])));
   const starts = (words: Array<{text: string}>) => { let offset = 0; return words.map((w, ordinal) => {
@@ -217,7 +222,7 @@ export function compareRecognition(source: string, native: Word[], asr: AsrWord[
     points.push({ native_ordinal: n.ordinal, asr_ordinal: a.ordinal, native_ms, asr_ms, difference_ms: Math.abs(native_ms - asr_ms) });
   }
   const errors = points.map(p => p.difference_ms).sort((a, b) => a - b);
-  return { qualification: 'unverified', reference_kind: 'independent_asr_not_acoustic_ground_truth',
+  return { qualification: 'unverified', reference_kind: 'independent_asr_not_acoustic_ground_truth', duration_ms: durationMs,
     normalization: 'remove_punctuation_whitespace_only_UTF16_offsets', source_asr,
     source_normalized_length: sourceText.length, native_normalized_length: nativeText.length, asr_normalized_length: asrText.length,
     native_timing_issues, asr_timing_issues,
@@ -227,13 +232,15 @@ export function compareRecognition(source: string, native: Word[], asr: AsrWord[
 }
 const output = local('./output/narration-asr-live-20260906');
 export function analyzeSaved() {
-  loadReviewCases();
+  const cases = loadReviewCases();
   const source = readFileSync(local('./output/' + frozen.source.path), 'utf8');
   const results = frozen.cases.map(c => {
     const raw = JSON.parse(readFileSync(local('./output/' + c.events.path), 'utf8'));
     const native = raw.events.flatMap((e: any) => e.data?.payload?.output?.type === 'sentence-end' ? e.data.payload.output.sentence.words : []);
     const row = asrPlan().requests.find(r => r.id === c.identity.candidate_id)!;
-    return { id: c.identity.candidate_id, ...compareRecognition(source, native, loadAsrReference(row, resolve(output, row.id))) };
+    const evidence = cases.find(e => e.identity.candidate_id === row.id)!;
+    return { id: c.identity.candidate_id, frozen_native_structural_issues: evidence.structural_issues,
+      ...compareRecognition(source, native, loadAsrReference(row, resolve(output, row.id)), evidence.duration_ms) };
   });
   save(output, 'comparison.json', { actual_requests: 0, results });
   return { actual_requests: 0, results };
