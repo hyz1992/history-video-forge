@@ -6,14 +6,16 @@
 |---|---|
 | TASK_BASE_SHA | 4914c6f08147943b3b20ff7abfb8ec245c66f3c3 |
 | 审查级别 | T2 |
-| 阶段 | 第 2 轮累计复审收敛；候选待 R5 终审 |
+| 阶段 | 候选 R5 两阶段终审通过；任务 2B 完成 |
 | 整改复审轮数 | 2 / 3 |
-| 终审调用次数 | 0 |
+| 终审调用次数 | 1 |
+| 被终审候选 SHA | ea257c49f1b71bea05924be75b82a3679e7fd2e9 |
+| 终审结果 | C0 / I0 / M0 |
 | 最近验证 | 第 2 轮 28 文件 / 445 项通过；完整后端类型检查、15 场景独立运行探针通过 |
 
 ## 原始验收清单
 
-依据正式实施计划任务 2B 与设计 §2.5；不得只依据实施者摘要验收。下表已修仅表示代码及运行证据支持，尚待独立审查与 R5 终审，不代表主链路开放。
+依据正式实施计划任务 2B 与设计 §2.5；不得只依据实施者摘要验收。下表已修由代码、运行证据与本候选 R5 终审支持，仅覆盖任务 2B，不代表主链路开放。
 
 | 编号 | 要求 | 状态 | 证据 |
 |---|---|---|---|
@@ -62,7 +64,7 @@ baseline-existing-config-and-create.json：5 文件 133 项通过，退出码 0�
 
 有效产品红灯索引：implementation-red-model-policy.json、implementation-red-post.json、implementation-red-save-bootstrap.json、implementation-red-missing-writer.json、implementation-red-unavailable-options.json。它们对应新模式物化、真实创建、保存/目录隔离、Prisma 缺 writer 与当前可用选项；最终统一输出支持绿灯。旧目录数量/首条音色假设以及 PATCH 夹具路径、inject 抛错语义的校准，不冒充产品错误。
 
-初始 diff 为 C0/I1/M0，contract 为 C0/I0/M1；第 1 轮 diff/contract 均 C0/I1/M0（同一 JSON null 遗留），F2 闭环；整改复审轮数 2（本轮已收敛），终审调用 0。审查前后全部任务文件 hash 与 git status 一致。root 独立运行验证不改变产品/测试；所有审查均针对固定 TASK_BASE_SHA 至当前状态的完整累计范围。
+初始 diff 为 C0/I1/M0，contract 为 C0/I0/M1；第 1 轮 diff/contract 均 C0/I1/M0（同一 JSON null 遗留），F2 闭环；整改复审轮数 2（本轮已收敛）；候选形成前终审调用为 0。审查前后全部任务文件 hash 与 git status 一致。root 独立运行验证不改变产品/测试；所有审查均针对固定 TASK_BASE_SHA 至当前状态的完整累计范围。
 
 ## 第 1 轮整改不变量
 
@@ -75,4 +77,12 @@ F1 有效红灯 r1-f1-red.json：4 失败/9 通过；完整共享配置 safePars
 
 F1 仍需闭环：仅无偏好记录时使用默认；已有记录的原始 JSON 必须验证，不得在 safeParse 前通过空值合并替换 JSON null。两位 reviewer 独立定位 project.repository 的 ?? 默认分支，其中合同 reviewer 的不落盘探针确认 JSON null 被创建为新模式且 source revision=5。第二轮保留 legacy 原空值语义，只修新模式的记录存在性判断；补真实 SQLite JSON null 有/无合格 selection 均 422、writer 零调用、DB/Map/磁盘零新增，并保留无偏好记录默认成功/source=null 对照。
 
-第 2 轮有效红灯 r2-json-null-red.json 为 2 失败 / 15 通过；r2-json-null-green.json 为 17 通过。根代理 round2-root-final-regression.json 为 28 文件 / 445 项通过，round2-root-runtime-acceptance.json 为 15 场景通过；完整 npm 后端类型检查 exit 0。第 2 轮 diff 与 contract 均为 C0/I0/M0，F1/F2 均已闭环；审查前后 23 个文件 hash 与 git status 一致。候选待 R5 终审，终审调用仍为 0。
+第 2 轮有效红灯 r2-json-null-red.json 为 2 失败 / 15 通过；r2-json-null-green.json 为 17 通过。根代理 round2-root-final-regression.json 为 28 文件 / 445 项通过，round2-root-runtime-acceptance.json 为 15 场景通过；完整 npm 后端类型检查 exit 0。第 2 轮 diff 与 contract 均为 C0/I0/M0，F1/F2 均已闭环；审查前后 23 个文件 hash 与 git status 一致。候选形成时尚未执行终审；最终结果见下节。
+
+## 候选终审结论
+
+被终审候选：ea257c49f1b71bea05924be75b82a3679e7fd2e9；TASK_BASE_SHA：4914c6f08147943b3b20ff7abfb8ec245c66f3c3。同一候选一次 R5 两阶段：阶段一仅原始需求、正式设计、代码及累计 diff，不提供过程记录/整改叙事/测试结果；阶段二由同一审查者核对原始运行证据。终审 C0/I0/M0，原始验收清单全部已修；28 文件 445 项逐文件合计一致、15 场景真实运行、完整后端类型检查与 Vite 构建证据成立。已执行 final 共 1 次，整改复审累计 2 轮。
+
+终审前后 23 文件 hash 与 git status 一致，见 final-readonly-check.json。candidate-protected-check.json 核对用户四份文件全量及 frontend log 原 4007 字节前缀；后者总长 5275 字节，自动追加不暂存。终审结果仅修改本记录并单独提交，不更改产品/测试/命令/协议。
+
+剩余范围：未单独运行前端类型检查；WS 正式执行、实际音频播放、UI 创建恢复、升级事务及下游失效留给后续任务。部署开关保持关闭；本任务无新增付费调用，不迁移用户数据库。继续任务 3。
