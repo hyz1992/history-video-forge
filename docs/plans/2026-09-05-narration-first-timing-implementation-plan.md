@@ -55,6 +55,8 @@
 
 2026-09-06 [用户确认实际音频末句](../records/2026-09-06-narration-boundary-review.md#用户确认实际音频末句2026-09-06)：此前摘写的是片段开头，实际Cosy停在“县令亲自站在秤旁，仓吏在”，截断已获听审确认；Qwen完整读出原稿最后一句，本次自然段长稿的末句子项通过。全文质量、正文零时长问题和边界精度仍未验收；人工边界测量仍每组0，任务0整体未通过，本次零付费调用。
 
+2026-09-06 连续实施：按用户提前授权，先完成[原生零时长片段适配](../records/2026-09-06-narration-native-span-adaptation.md)，保留raw与来源边界，不以ASR补造时间；随后收口自动音频质量核验、输入方式和资格结论，合格后直接继续任务1。
+
 ### 任务 1：新增口播时间、配置与版本合同
 
 新增：`shared/src/narration/narration.schema.ts`、`shared/src/narration/narration-timing.schema.ts`、`tests/shared/narration-contracts.test.ts`。
