@@ -49,6 +49,8 @@
 
 2026-09-06 补齐[离线人工发声起点核验](../records/2026-09-06-narration-boundary-review.md)：冻结两份自然段长稿的10份原件摘要，各准备30点，正文零时长点不跳过；测量空值保持未验证，完整实测后才计算P95/max，统计不授予模型资格。33项新增/121项回归通过，本次零付费调用，累计费用仍2.33198元；人工真值0，任务0整体未通过。
 
+2026-09-06 收到两组[局部试听反馈](../records/2026-09-06-narration-boundary-review.md#用户局部听审补充2026-09-06)：用户描述“傍晚……”及“孩子从队伍里跑过……”，与各12秒尾段开头附近的原文位置对应；尚未明确实际停止处，末句完整性待确认。人工边界测量仍每组0，资格状态不变；本次零付费调用。
+
 ### 任务 1：新增口播时间、配置与版本合同
 
 新增：`shared/src/narration/narration.schema.ts`、`shared/src/narration/narration-timing.schema.ts`、`tests/shared/narration-contracts.test.ts`。
