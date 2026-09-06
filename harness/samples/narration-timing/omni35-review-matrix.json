@@ -1,0 +1,87 @@
+{
+  "schema_version": "narration_omni35_review_matrix_v1",
+  "frozen_at": "2026-09-06",
+  "baseline_commit": "486b3bfbe816b0ab4b7a0c631660e0a35177b361",
+  "model": "qwen3.5-omni-plus-2026-03-15",
+  "region": "cn-beijing",
+  "endpoint": "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
+  "request_count": 4,
+  "parameters": {
+    "stream": true,
+    "stream_options": {
+      "include_usage": true
+    },
+    "modalities": [
+      "text"
+    ],
+    "max_tokens": 1200,
+    "temperature": 0
+  },
+  "pricing": {
+    "audio_input_cny_per_million": 53,
+    "text_input_cny_per_million": 7,
+    "text_output_cny_per_million": 40,
+    "source": "https://help.aliyun.com/zh/model-studio/model-pricing"
+  },
+  "budget": {
+    "baseline_cny": 3.0021288,
+    "total_cap_cny": 5,
+    "task_cap_cny": 0.65,
+    "probe_cap_cny": 0.25
+  },
+  "prompt": "prompts/asset/narration-audio-review.prompt.md",
+  "rows": [
+    {
+      "id": "sample-k",
+      "duration_ms": 349700,
+      "wav_file": "harness/scripts/runtime/output/narration-audio-review-inputs-20260906/sample-j-full.wav",
+      "wav_sha256": "e18839e9a47309fe37299ce28a4978acbd6144ad1ee1b1acc5f6b83aabaa16c5",
+      "mp3_file": "harness/scripts/runtime/output/narration-audio-review-inputs-20260906/sample-j-full.mp3",
+      "mp3_sha256": "ffa5a58baa59a1c3ce549fcf398e0d4008bc3b9d52e06b94321d6364aec2e3d2",
+      "mp3_bytes": 6995565,
+      "source_file": "harness/scripts/runtime/output/narration-qualification-offline-20260905/samples/long.txt",
+      "source_sha256": "65feb205f0d16844bc5f398defa4a6ebdc7f5203cacf1888018c4baccd3db67d",
+      "focus": "请评估所附整段录音从头到尾的实际声音质量：自然度、声线和语流连贯性、发音可辨度，以及任何重复、跳音、失真或不自然中断。没有目标稿件，不需要校对故事内容，也不要只评价开头和结尾。",
+      "kind": "full"
+    },
+    {
+      "id": "sample-l",
+      "duration_ms": 34690,
+      "wav_file": "harness/scripts/runtime/output/narration-qualification-live-20260905-r1-continued/qwen-yimuling-short.wav",
+      "wav_sha256": "23ebc9ede7a8d9b2c79e3559c146c9b8a811c2d9c6a5b991f27b1e700682c5c3",
+      "mp3_file": "harness/scripts/runtime/output/narration-audio-review-inputs-20260906/sample-c.mp3",
+      "mp3_sha256": "70fa9c07b654c30c6060e3e84b3aeb37a22223515732757a0cd24025bc27d008",
+      "mp3_bytes": 695565,
+      "source_file": "harness/scripts/runtime/output/narration-qualification-offline-20260905/samples/short.txt",
+      "source_sha256": "17296c67741440b2e52ba9a5a0142e76b4423bb7754f8d45756c130410bf8a47",
+      "focus": "请评估所附整段录音从头到尾的实际声音质量：自然度、声线和语流连贯性、发音可辨度，以及任何重复、跳音、失真或不自然中断。没有目标稿件，不需要校对故事内容，也不要只评价开头和结尾。",
+      "kind": "full"
+    },
+    {
+      "id": "sample-m",
+      "duration_ms": 107650,
+      "wav_file": "harness/scripts/runtime/output/narration-qualification-live-20260905-r1-continued/qwen-yimuling-medium.wav",
+      "wav_sha256": "27290873d08230f45fe0cad2ce7a312fd06692526627f64bfae991523b11834b",
+      "mp3_file": "harness/scripts/runtime/output/narration-audio-review-inputs-20260906/sample-d.mp3",
+      "mp3_sha256": "4dc5ef6dc9f2883726b2c141f86c456441da6f352bce6ec6159306e2a9679d98",
+      "mp3_bytes": 2154765,
+      "source_file": "harness/scripts/runtime/output/narration-qualification-offline-20260905/samples/medium.txt",
+      "source_sha256": "a5deb98f9a5147afffb2f4d90f9cb1ac663b119e55e6bc521c2a9fd81302a872",
+      "focus": "请评估所附整段录音从头到尾的实际声音质量：自然度、声线和语流连贯性、发音可辨度，以及任何重复、跳音、失真或不自然中断。没有目标稿件，不需要校对故事内容，也不要只评价开头和结尾。",
+      "kind": "full"
+    },
+    {
+      "id": "sample-n",
+      "duration_ms": 349700,
+      "wav_file": "harness/scripts/runtime/output/narration-paragraph-live-20260906/qwen-yimuling-long.wav",
+      "wav_sha256": "bc862f52cb99ac6a88591e920877f115f227aed6e2a05e04dd13cacb75b9977a",
+      "mp3_file": "harness/scripts/runtime/output/narration-audio-review-inputs-20260906/sample-b.mp3",
+      "mp3_sha256": "8c830b0d40b7bf3ee511c682c627910a48a35f15f5b642d0d161afda8e90c405",
+      "mp3_bytes": 6995565,
+      "source_file": "harness/scripts/runtime/output/narration-qualification-offline-20260905/samples/long.txt",
+      "source_sha256": "65feb205f0d16844bc5f398defa4a6ebdc7f5203cacf1888018c4baccd3db67d",
+      "focus": "请评估所附整段录音从头到尾的实际声音质量：自然度、声线和语流连贯性、发音可辨度，以及任何重复、跳音、失真或不自然中断。没有目标稿件，不需要校对故事内容，也不要只评价开头和结尾。",
+      "kind": "full"
+    }
+  ]
+}
