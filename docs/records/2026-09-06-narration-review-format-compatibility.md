@@ -27,3 +27,11 @@ K裁决必须绑定原capture SHA、原input/plan/id且经过执行者和新上�
 初审合并1 Critical/1 Important：JSON重序列化可能把1e400变成null，以及字符串解释未复用原JSON围栏包装。接纳不变量：格式兼容不能把原始非法数字变成合法null；旧包装与解释字段联合类型正交。新增评分/问题秒数两项溢出及围栏×有效/无效字段4测试，3项红测/77通过后修复。序列化校验拒绝任何非有限数字，包装使用与原解析器同一规则；其他字段仍原严格校验，不生成语义说明。
 
 整改后80目标测试、8文件319项回归通过，strict tsc通过；证据在output/narration-format-compatibility-evidence-20260906/round1-red.json、round1-regression.json、round1-typecheck.json。独立完整累计复审待完成；新增付费0，正式K裁决与正常3份仍未执行，资格未验证。
+
+## 候选1终审机械落盘
+
+- 被审SHA：1c8c1077dea09081f6c77d7e87c4308808d4f3ef；TASK_BASE_SHA：e7b168a8506e25ecde964663f22425aa754f9ade。三文件与终审冻结SHA一致，本节仅记结论。
+- 初审合并C1/I1/M0，整改轮1的diff/contract均C0/I0/M0；有效R5两阶段终审1次，C0/I0/M0。格式兼容工具部分通过。
+- 终审独立核对80目标测试、8文件319回归、strict tsc、零请求dry-run、真实K隔离零网络绑定重放及全对象观察相等。原K仍failed/review=null，50 events/49 chunks、末尾DONE、原SHA不变，旧费用0.151984元。五份用户文件摘要保持，.zcode只确认状态一致。
+- limitations类型兼容、其他严格字段/数值/围栏、完整流与HTTP故障、原件保留、费用单计均已修（工具范围）；正式K裁决、正常三份声音、任务0及原生时间轴整体仍未验证。本任务新增付费0，累计3.1541128元、剩余1.8458872元，非账单。
+- 后续依既有授权落盘真实绑定裁决，再执行原冻结L/M/N各一次；不重发K，不以本次工具通过代替声音门。
