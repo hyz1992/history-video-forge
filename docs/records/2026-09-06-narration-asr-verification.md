@@ -71,3 +71,41 @@ F1不变量：只有处于实测音频范围内的双侧时间可进入统计；
 6项双侧/部分/整体越界回归先红后绿，另4项无效音长测试；本轮39＋33＋6＝78项通过，严格script+test tsc成功，命令/结果在round3-{0,1}.json。离线重算既有两份结果，actual_requests=0，全文差分/有效锚点与旧候选逐项一致，新增保留原生结构问题，证据round3-reanalysis.json；无新增付费调用、总折价仍2.45166元。
 
 第3轮diff和contract均0 Critical / 0 Important / 0 Minor，累计全审及独立离线重算收敛；累计整改3轮，候选1的final_count=1。固定新候选后进入第二个候选周期，R5结果单独机械落盘。
+
+## 候选2终审结果机械落盘
+
+被终审SHA：f54a7fe1342bf16daa008a36865c5944c55259f6。该候选R5一次、两阶段均0 Critical / 0 Important / 0 Minor；阶段二核对最新78项测试、严格tsc、实际两次成功回执及原件摘要，通过范围仅为ASR自动核验子任务。未发现新问题；任务0资格、音质比较、Cosy缺读、Qwen零时长及局部转写矛盾仍未通过，不进入任务1。
+
+全任务整改3轮、候选2个、final共2次（每候选1次，两阶段不重复计数）；阶段一均使用原始需求/合同与代码，阶段二再核对验证证据。费用为usage折价，未核对供应商账单；用户既有6项Git状态前后一致，但没有起始内容摘要，不宣称已独立验证其内容完全未变。终审后的本次落盘只改本记录，不改命令、代码、模型、媒体或计划。
+
+审查事实（机械核对）：
+
+```json
+{
+  "task_base_sha": "42716582393c14e82a9cd47f458be7f672c35b30",
+  "repair_rounds": 3,
+  "candidates": [
+    {
+      "sha": "7de578844b3fcc32ea098e0d2d0d458540104978",
+      "final_calls": 1,
+      "result": "failed",
+      "critical": 0,
+      "important": 1,
+      "minor": 0
+    },
+    {
+      "sha": "f54a7fe1342bf16daa008a36865c5944c55259f6",
+      "final_calls": 1,
+      "result": "passed_subtask_only",
+      "critical": 0,
+      "important": 0,
+      "minor": 0
+    }
+  ],
+  "final_calls_total": 2,
+  "tests_passed": 78,
+  "asr_submissions": 2,
+  "usage_cost_cny": 0.11968,
+  "total_usage_cost_cny": 2.45166
+}
+```
