@@ -1252,3 +1252,17 @@ describe('R3 F5 外部输入下限失败稳定返回ZodError', () => {
     expectTimingZodFailure(input);
   });
 });
+
+describe('任务3真实WS请求身份', () => {
+  const ready = (status: 'ready' | 'confirmed') => ({ ...record(), status, providerTaskId: 'native-task-id', providerRequestId: null, output: output(),
+    ...(status === 'confirmed' ? {confirmedAt:'2026-09-06T00:00:00.000Z',confirmedBy:'user1',acceptedDurationBandSnapshot:{minMs:500,maxMs:2000}} : {}) });
+  it.each(['ready','confirmed'] as const)('%s允许真实缺省request_uuid且保留taskId', status => {
+    const value=ready(status); expect(shared.NarrationRecord.safeParse(value).success).toBe(true);
+  });
+  it.each(['ready','confirmed'] as const)('%s仍拒绝缺taskId、空requestId和无音频bundle', status => {
+    const value=ready(status);
+    expect(shared.NarrationRecord.safeParse({...value,providerTaskId:null}).success).toBe(false);
+    expect(shared.NarrationRecord.safeParse({...value,providerRequestId:''}).success).toBe(false);
+    expect(shared.NarrationRecord.safeParse({...value,output:null}).success).toBe(false);
+  });
+});

@@ -51,9 +51,14 @@ function bundle(record: NarrationRecord) {
     output:{audio:{...ref("audio.wav"),sampleRate:24000,channels:1,bitDepth:16,sampleCount:24000},durationMs:1000,nativeEvents:ref("native.json"),timingMap:ref("timing.json"),initialSubtitleRevisionId:subtitle.id,validationReport:{status:"pass",validatorVersion:"v1",checkedAt:now,nativeTextCoverageComplete:true,nativeTimingValid:true,audioProbeValid:true,issues:[]}}};
   return {ready,subtitle};
 }
-async function fixture() {
+async function fixture(beforeOptionalRequestId = false) {
   const root=mkdtempSync(join(tmpdir(),"narration-repository-")), path=join(root,"test.db"), sqlite=new Database(path);
-  applyAllDatabaseMigrations(sqlite); sqlite.pragma("foreign_keys = ON");
+  if (beforeOptionalRequestId) {
+    const migrations = join(process.cwd(), 'backend', 'prisma', 'migrations');
+    for (const entry of readdirSync(migrations, {withFileTypes:true}).filter(e => e.isDirectory() && e.name < '20260906233000_narration_optional_request_id').sort((a,b)=>a.name.localeCompare(b.name)))
+      sqlite.exec(readFileSync(join(migrations, entry.name, 'migration.sql'), 'utf8'));
+  } else applyAllDatabaseMigrations(sqlite);
+  sqlite.pragma("foreign_keys = ON");
   const client=await createPrismaClient(path), db=createDbClient();
   await client.user.create({data:{id:"owner",username:"owner",displayName:"owner",passwordHash:"hash"}});
   await client.user.create({data:{id:"other",username:"other",displayName:"other",passwordHash:"hash"}});
@@ -135,7 +140,7 @@ describe("narration upgrade, recovery and complete boundary objects",()=>{
     const root=mkdtempSync(join(tmpdir(),"narration-old-row-")),path=join(root,"test.db"),sqlite=new Database(path);
     try {
       const migrations=join(process.cwd(),"backend/prisma/migrations"),entries=readdirSync(migrations,{withFileTypes:true}).filter(e=>e.isDirectory()).sort((a,b)=>a.name.localeCompare(b.name));
-      for(const e of entries.filter(e=>e.name!=="20260906193000_narration_records")) sqlite.exec(readFileSync(join(migrations,e.name,"migration.sql"),"utf8"));
+      for(const e of entries.filter(e=>e.name<"20260906193000_narration_records")) sqlite.exec(readFileSync(join(migrations,e.name,"migration.sql"),"utf8"));
       sqlite.prepare('INSERT INTO User (id,username,displayName,passwordHash,updatedAt) VALUES (?,?,?,?,?)').run('old-owner','old-owner','旧用户','hash',now);
       sqlite.prepare('INSERT INTO Project (id,ownerId,createdById,name,storageKey,storageDisplayName,updatedAt) VALUES (?,?,?,?,?,?,?)').run('old-project','old-owner','old-owner','旧项目','old-project','旧项目',now);
       sqlite.exec(readFileSync(join(migrations,"20260906193000_narration_records/migration.sql"),"utf8"));
@@ -367,5 +372,51 @@ describe("round 1 F2: untrusted persisted JSON passes through full schema valida
       await expectStoredZodFailure(() => new NarrationRepository(fresh).findSubtitleForOwner(f.p.id, 'owner', b.subtitle.id), path);
       await expectStoredZodFailure(() => getProjectSnapshot(fresh, f.p.id), path);
     } finally { await f.close(); }
+  });
+});
+
+
+describe('真实WS省略request_uuid的增量迁移', () => {
+  it('无requestId完整bundle可ready→confirmed→真实Prisma冷读，缺taskId仍拒绝', async () => {
+    const f=await fixture();try {
+      const c=candidate(f.p.id);await f.source(c);await f.repo.createCandidate('owner',c);
+      const b=bundle(c);b.ready.providerRequestId=null;
+      await f.repo.saveReadyBundle('owner',b.ready,b.subtitle);
+      await f.confirm(c.id);
+      const fresh=createDbClient();await hydrateFirstAggregates(fresh,new Map(),f.client,{storageRoot:f.root});
+      expect(await new NarrationRepository(fresh).findByIdForOwner(f.p.id,'owner',c.id)).toMatchObject({status:'confirmed',providerTaskId:'task',providerRequestId:null});
+      const missing=candidate(f.p.id,'missing-task');await f.source(missing);await f.repo.createCandidate('owner',missing);
+      const bad=bundle(missing);bad.ready.providerTaskId=null;bad.ready.providerRequestId=null;
+      await expect(f.repo.saveReadyBundle('owner',bad.ready,bad.subtitle)).rejects.toThrow();
+      const row=f.sqlite.prepare('SELECT * FROM NarrationSubtitleRevision WHERE id=?').get(b.subtitle.id) as Record<string,unknown>;
+      row.id=bad.subtitle.id;row.narrationRecordId=missing.id;const keys=Object.keys(row);
+      f.sqlite.prepare('INSERT INTO NarrationSubtitleRevision ('+keys.map(k=>'"'+k+'"').join(',')+') VALUES ('+keys.map(()=>'?').join(',')+')').run(...Object.values(row));
+      expect(()=>f.sqlite.prepare('UPDATE NarrationRecord SET status=?,outputJson=?,spokenTextSha256=?,initialSubtitleRevisionId=? WHERE id=?').run('ready',JSON.stringify(bad.ready.output),hash,bad.subtitle.id,missing.id)).toThrow(/CHECK/);
+      expect(f.sqlite.pragma('foreign_key_check')).toEqual([]);
+    }finally{await f.close();}
+  });
+  it('旧版含active/ready/confirmed/字幕/来源数据升级后逐列保留，索引触发器及外键仍有效', async () => {
+    const f=await fixture(true);try {
+      const ready=await f.save('old-ready');await f.save('old-confirmed');await f.confirm('old-confirmed');
+      await f.store.updateActiveRecordsForOwner(f.p.id,'owner',{narrationTimingMode:'narration_first_v1',activeNarrationRecordId:'old-confirmed',activeNarrationSubtitleRevisionId:'sub-old-confirmed'});
+      const tables=['NarrationRecord','NarrationSubtitleRevision','Project','ScriptRecord','GenerationRun','RunConfigurationSnapshot','User','TopicPackage'];
+      const snapshots=()=>Object.fromEntries(tables.map(table=>[table,f.sqlite.prepare('SELECT * FROM "'+table+'" ORDER BY id').all()]));
+      const before=snapshots();
+      const schema=()=>f.sqlite.prepare("SELECT type,name,tbl_name,sql FROM sqlite_master WHERE type IN ('trigger','index') ORDER BY type,name").all();
+      const beforeSchema=schema();
+      f.sqlite.exec(readFileSync(join(process.cwd(),'backend/prisma/migrations/20260906233000_narration_optional_request_id/migration.sql'),'utf8'));
+      expect(snapshots()).toEqual(before);expect(schema()).toEqual(beforeSchema);
+      expect(f.sqlite.pragma('foreign_key_check')).toEqual([]);
+      expect(f.sqlite.pragma('foreign_keys',{simple:true})).toBe(1);expect(f.sqlite.pragma('legacy_alter_table',{simple:true})).toBe(0);
+      expect(()=>f.sqlite.prepare('UPDATE NarrationRecord SET outputJson=? WHERE id=?').run('{}','old-ready')).toThrow(/narration_output_immutable/);
+      expect(()=>f.sqlite.prepare('UPDATE NarrationRecord SET scriptRecordId=? WHERE id=?').run('sq','old-ready')).toThrow(/narration_source/);
+      expect(()=>f.sqlite.prepare('UPDATE NarrationSubtitleRevision SET audioHash=? WHERE id=?').run('b'.repeat(64),ready.subtitle.id)).toThrow(/narration_subtitle_immutable/);
+      expect(()=>f.sqlite.prepare('UPDATE Project SET activeNarrationRecordId=? WHERE id=?').run('old-ready',f.p.id)).toThrow(/project_active_narration/);
+      expect(()=>f.sqlite.prepare('DELETE FROM ScriptRecord WHERE id=?').run('s1')).toThrow(/FOREIGN KEY/);
+      const c=candidate(f.p.id,'after-upgrade');await f.source(c);await f.repo.createCandidate('owner',c);const b=bundle(c);b.ready.providerRequestId=null;
+      await f.repo.saveReadyBundle('owner',b.ready,b.subtitle);await f.confirm(c.id);
+      expect(await f.repo.findByIdForOwner(f.p.id,'owner',c.id)).toMatchObject({status:'confirmed',providerRequestId:null});
+      expect(f.sqlite.pragma('foreign_key_check')).toEqual([]);
+    }finally{await f.close();}
   });
 });

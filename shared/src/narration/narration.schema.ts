@@ -74,7 +74,7 @@ export const NarrationRecord = z.object({
   acceptedDurationBandSnapshot: NarrationDurationBand.nullable(), output: NarrationOutput.nullable(),
 }).strict().superRefine((r, ctx) => {
   const fail = (message: string) => ctx.addIssue({ code: z.ZodIssueCode.custom, message });
-  if ((r.status === "ready" || r.status === "confirmed") && (!r.output || !r.spokenTextSha256 || !r.providerTaskId || !r.providerRequestId)) fail("narration_complete_bundle_required");
+  if ((r.status === "ready" || r.status === "confirmed") && (!r.output || !r.spokenTextSha256 || !r.providerTaskId)) fail("narration_complete_bundle_required");
   if (r.status === "generating" && r.output) fail("narration_partial_output_forbidden");
   if ((r.confirmedAt === null) !== (r.confirmedBy === null)) fail("narration_confirmation_identity_invalid");
   if (r.status === "confirmed" && (!r.confirmedAt || !r.acceptedDurationBandSnapshot)) fail("narration_confirmation_required");
