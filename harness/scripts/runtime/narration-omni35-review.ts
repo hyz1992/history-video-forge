@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { calculateCost, extractUsage, loadPromptFile, parseSseStream, type CaptureResult } from './narration-audio-review.js';
+import { calculateCost, extractUsage, loadPromptFile, parseReviewJson, parseSseStream, type CaptureResult } from './narration-audio-review.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const MATRIX = resolve(ROOT, 'harness/samples/narration-timing/omni35-review-matrix.json');
@@ -140,6 +140,22 @@ function validChunk(value: unknown, id: string | null): boolean {
   return Array.isArray(value.choices) && value.choices.every(choice => isObject(choice)
     && (choice.delta === undefined || isObject(choice.delta) && choice.delta.audio === undefined));
 }
+type Observation = Omit<NonNullable<CaptureResult['review']>, 'limitations'> & { limitations: string | string[] };
+export function decodeObservation(text: string): Observation {
+  try { return parseReviewJson(text); } catch { /* 仅兼容解释字段的单个字符串。 */ }
+  const trimmed = text.trim();
+  const fence = trimmed.match(/^```json\s*\r?\n([\s\S]*?)\r?\n```$/i);
+  const json = fence ? fence[1].trim() : trimmed;
+  let value: unknown;
+  try { value = JSON.parse(json); } catch { throw Error('audio_review_output_invalid'); }
+  if (!isObject(value) || typeof value.limitations !== 'string') throw Error('audio_review_output_invalid');
+  const limitations = value.limitations;
+  const checked = parseReviewJson(JSON.stringify({ ...value, limitations: [limitations] }, (_key, item: unknown) => {
+    if (typeof item === 'number' && !Number.isFinite(item)) throw Error('audio_review_output_invalid');
+    return item;
+  }));
+  return { ...checked, limitations };
+}
 async function verifiedCapture(capture: Capture, requireReview = true) {
   if (capture.stream_state !== 'complete' || !Array.isArray(capture.raw_events) || capture.raw_events.some(e => typeof e !== 'string')
     || Buffer.byteLength(capture.raw_events.join('\n\n'), 'utf8') > MAX_WIRE_BYTES)
@@ -149,14 +165,19 @@ async function verifiedCapture(capture: Capture, requireReview = true) {
     if (JSON.stringify(capture[key]) !== JSON.stringify(replay[key])) throw Error('omni35_capture_invalid');
   }
   const doneEvents = replay.raw_events.filter(e => e.trim() === 'data: [DONE]');
-  if (requireReview && replay.status !== 'succeeded' || replay.response_model !== MODEL || !replay.response_id
+  if (replay.response_model !== MODEL || !replay.response_id
     || replay.finish_reason !== 'stop' || !replay.usage || capture.qualification !== 'unverified'
     || doneEvents.length !== 1 || replay.raw_events.at(-1)?.trim() !== 'data: [DONE]'
     || replay.raw_chunks.some(c => !validChunk(c, replay.response_id))) throw Error('omni35_capture_invalid');
   const final = replay.raw_chunks.at(-1) as { usage?: unknown };
   const usage = extractUsage(final?.usage);
   if (JSON.stringify(usage) !== JSON.stringify(replay.usage)) throw Error('omni35_final_usage_invalid');
-  return { replay, cost: calculateCost(usage, loadPricing()) };
+  let observation: Observation | null = null;
+  if (capture.status === 'succeeded' || capture.error === 'response_incomplete_or_invalid') {
+    try { observation = decodeObservation(replay.full_text); } catch { /* 原始失败保留，只记录解释状态。 */ }
+  }
+  if (requireReview && !observation) throw Error('omni35_observation_invalid');
+  return { replay, observation, cost: calculateCost(usage, loadPricing()) };
 }
 function loadPricing(): Pricing {
   return { audio_input_cny_per_million: 53, text_input_cny_per_million: 7, text_output_cny_per_million: 40,
@@ -200,8 +221,8 @@ async function loadControl(plan: ReviewPlan, base: string, reader: Reader) {
     || intent.model !== MODEL || intent.endpoint !== ENDPOINT || intent.max_requests !== 1 || intent.max_cost_cny !== .25
     || intent.qualification !== 'unverified' || capture.qualification !== 'unverified')
     throw Error('omni35_control_binding_invalid');
-  const { cost, replay } = await verifiedCapture(capture);
-  if (replay.review?.acceptable !== false || !replay.review.issues.some(issue => issue.severity === 'major'
+  const { cost, observation } = await verifiedCapture(capture);
+  if (observation?.acceptable !== false || !observation.issues.some(issue => issue.severity === 'major'
     && typeof issue.at_seconds === 'number' && Number.isFinite(issue.at_seconds) && issue.at_seconds >= 129 && issue.at_seconds <= 147))
     throw Error('omni35_control_evidence_invalid');
   if (cost > .25) throw Error('omni35_probe_budget_exceeded');
@@ -246,18 +267,18 @@ export async function executeReview(plan: ReviewPlan, mode: Mode, dispatcher: Di
     try { capture = await dispatcher(row); } catch { capture = failed('dispatcher_failed'); }
     save(rowDirectory, 'capture.json', capture, writer);
     writer(resolve(rowDirectory, 'full-text.txt'), capture.full_text, { flag: 'wx' });
-    let cost: number | null = null;
+    let cost: number | null = null, observation: Observation | null = null;
     try {
       const checked = await verifiedCapture(capture, false);
       if (identities.has(checked.replay.response_id!)) throw Error('response_identity_reused');
-      identities.add(checked.replay.response_id!); cost = checked.cost;
+      identities.add(checked.replay.response_id!); cost = checked.cost; observation = checked.observation;
     } catch { /* 无法核实的计费占用整组预留，并停止。 */ }
     calls.push({ id: row.id, status: capture.status, response_id: capture.response_id, response_model: capture.response_model,
-      finish_reason: capture.finish_reason, usage: capture.usage, usage_cost_cny: cost, qualification: 'unverified' });
+      finish_reason: capture.finish_reason, usage: capture.usage, usage_cost_cny: cost, observation_status: observation ? 'valid' : 'invalid', qualification: 'unverified' });
     if (cost === null) { unknown = true; stoppedReason = 'response_unverified_or_failed'; break; }
     knownCost = round(knownCost + cost);
     if (knownCost > stageCap || plan.budget.baseline_cny + knownCost > 5) { stoppedReason = 'cost_limit'; break; }
-    if (capture.status !== 'succeeded') { stoppedReason = 'response_failed_with_verified_usage'; break; }
+    if (!observation) { stoppedReason = 'response_failed_with_verified_usage'; break; }
   }
   const accounted = unknown ? .65 : knownCost;
   const result = { actual_requests: calls.length, previous_requests: mode === 'samples-live' ? 1 : 0,

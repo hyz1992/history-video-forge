@@ -268,4 +268,48 @@ describe('固定Omni3.5有限核验', () => {
     await expect(q.executeReview(p,'probe-live',d,{outputRoot:base})).rejects.toThrow('omni35_output_exists');expect(d).toHaveBeenCalledTimes(1);
   });
 
+  it.each(['说明原文', ['第一条', '第二条']].map(value=>[value]))('观察解释兼容而原值不变: %j', async limitations => {
+    const q=await api();const answer={...review,limitations};
+    expect(q.decodeObservation(JSON.stringify(answer))).toEqual(answer);
+  });
+  it.each([null, 17, [17], {text:'不可推断'}, undefined].map(value=>[value]))('观察解释非法类型不兼容: %j',async limitations=>{
+    const q=await api();expect(()=>q.decodeObservation(JSON.stringify({...review,limitations}))).toThrow('audio_review_output_invalid');
+  });
+  it.each(['score','extra','missing'])('字符串解释不放宽其余合同: %s',async kind=>{
+    const q=await api();const v:any={...review,limitations:'原文'};
+    if(kind==='score')v.scores={...review.scores,naturalness:99};if(kind==='extra')v.extra=true;if(kind==='missing')delete v.issues;
+    expect(()=>q.decodeObservation(JSON.stringify(v))).toThrow('audio_review_output_invalid');
+  });
+  it('旧K结构失败原件可复核观察，正常字符串回答继续且不重发K',async()=>{
+    const q=await api(),p=q.loadPlan(),base=directory();
+    const k=await q.captureSse((async function*(){yield wire(p.model,'response-k',JSON.stringify({...review,limitations:'无法确定故障来源'}));})());
+    expect(k.status).toBe('failed');expect(k.review).toBeNull();
+    await q.executeReview(p,'probe-live',async()=>k,{outputRoot:base});
+    const file=resolve(output(base),'sample-k/capture.json'),bytes=readFileSync(file);
+    await adjudicate(base);const seen:string[]=[];
+    const result=await q.executeReview(p,'samples-live',async r=>{seen.push(r.id);return q.captureSse((async function*(){yield wire(p.model,'response-'+r.id,JSON.stringify({...review,acceptable:true,issues:[],limitations:'语气未测'}));})());},{outputRoot:base});
+    expect(seen).toEqual(['sample-l','sample-m','sample-n']);expect(readFileSync(file)).toEqual(bytes);
+    expect(result).toMatchObject({actual_requests:3,previous_requests:1,actual_cost_cny:.0748});
+    expect(result.calls.every(c=>c.status==='failed'&&c.observation_status==='valid')).toBe(true);
+  });
+  it.each(['interrupted','missing-done','http'])('字符串观察不绕过完整性或HTTP故障: %s',async mode=>{
+    const q=await api(),p=q.loadPlan(),base=directory();
+    var text=wire(p.model,'response-k',JSON.stringify({...review,limitations:'原文'}));if(mode==='missing-done')text=text.replace('data: [DONE]','');
+    var c=await q.captureSse((async function*(){yield text;if(mode==='interrupted')throw Error('socket');})());
+    if(mode==='http'){const f=vi.fn(async()=>new Response(text,{status:400}));c=await q.dispatchReview(p,p.requests[0],'fixture-key',f);expect(f).toHaveBeenCalledTimes(1);expect(c.error).toBe('response_http_error');}
+    const result=await q.executeReview(p,'probe-live',async()=>c,{outputRoot:base});expect(result.calls[0].observation_status).toBe('invalid');
+    await adjudicate(base);const d=vi.fn(async()=>capture());await expect(q.executeReview(p,'samples-live',d,{outputRoot:base})).rejects.toThrow();expect(d).not.toHaveBeenCalled();
+  });
+
+  it.each(['score','at_seconds'])('字符串解释不得把溢出数值改为null: %s',async field=>{
+    const q=await api();let text=JSON.stringify({...review,limitations:'原文'});
+    text=field==='score'?text.replace('"naturalness":2','"naturalness":1e400'):text.replace('"at_seconds":136','"at_seconds":1e400');
+    expect(text).toContain('1e400');expect(()=>q.decodeObservation(text)).toThrow('audio_review_output_invalid');
+  });
+  it.each(['valid','invalid'])('围栏与字符串解释正交校验: %s',async mode=>{
+    const q=await api();const v={...review,limitations:'说明保留'};if(mode==='invalid')v.scores={...review.scores,naturalness:99};
+    const wrapped=String.fromCharCode(96).repeat(3)+'json\n'+JSON.stringify(v)+'\n'+String.fromCharCode(96).repeat(3);
+    if(mode==='valid')expect(q.decodeObservation(wrapped)).toEqual(v);else expect(()=>q.decodeObservation(wrapped)).toThrow('audio_review_output_invalid');
+  });
+
 });
