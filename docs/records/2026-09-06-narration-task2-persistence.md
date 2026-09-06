@@ -9,17 +9,17 @@
 | 字段 | 当前事实 |
 |---|---|
 | TASK_BASE_SHA | 55e977d3d7247fbafec39529e185efbf93ee18b2 |
-| 审查阶段 | 专项审查收敛，等待R5两阶段终审 |
+| 审查阶段 | R5两阶段终审通过，仅限任务2持久化基础 |
 | 整改轮数 | 2 |
 | 例外授权次数 | 0 |
-| final次数 | 0 |
+| final次数 | 1 |
 | 最新代码验证 | 7文件82项通过，完整npm检查通过 |
 | 最新代码证据 | round1-root-final-combined.json；round1-root-npm-typecheck-raw.json |
-| 候选SHA | 由本记录所在候选提交固定，终审后机械落盘SHA |
+| 候选SHA | 7b7f29481671847e434693b23e30cf14e4abfe5b |
 
 ## 原始验收范围与最新证据
 
-依据：[实施计划任务2](../plans/2026-09-05-narration-first-timing-implementation-plan.md)与[设计§4.2/7](../plans/2026-09-05-narration-first-timing-design.md)。P1–P7及记录流程均已完成专项闭环；尚无R5结论。
+依据：[实施计划任务2](../plans/2026-09-05-narration-first-timing-implementation-plan.md)与[设计§4.2/7](../plans/2026-09-05-narration-first-timing-design.md)。P1–P7及记录流程均已完成专项闭环；R5两阶段终审通过。
 
 | 编号 | 要求 | 状态 | 最新证据 |
 |---|---|---|---|
@@ -96,3 +96,10 @@
 ## 剩余范围
 
 任务5确认策略、CAS、失效事件及完整readiness，后续provider/API/UI与成品尚未验证。本任务只提供持久化基础，业务开关保持关闭。
+
+
+## R5终审机械落盘
+
+被终审候选SHA：7b7f29481671847e434693b23e30cf14e4abfe5b。固定BASE：55e977d3d7247fbafec39529e185efbf93ee18b2。同一全新上下文代理先独立审原始P1–P7、设计与13代码/测试路径，再核对验证证据及记录，两阶段合计一次final。终审C0/I0/M0，P1–P7已修（任务2持久化基础范围）。
+
+终审核对7文件82通过、完整npm prehook/Prisma/tsc退出0、累计diffcheck无错误；14路径审前审后hash及status一致，13代码/测试路径仍与82项运行时冻结值一致。只机械修改本记录并单独提交，不修改已终审代码。后续任务2A先保护legacy候选及协议入口，完整业务验收仍按后续任务执行。
