@@ -6,15 +6,16 @@
 |---|---|
 | TASK_BASE_SHA | 4296dfb7b58205511c80608a5b6bbe97650acbac |
 | 审查级别 | T2 |
-| 阶段 | 第 2 轮累计 diff/contract 均无 finding；准备新候选 R5 终审 |
+| 阶段 | 任务 2A 通过 R5 终审；尚不代表 narration 主链路开放 |
 | 整改复审轮数 | 2 / 3（本轮已收敛） |
-| 终审调用次数 | 1 |
+| 终审调用次数 | 2 |
+| 已通过终审候选 | b01a9eb699eb9c35b4fcafb209e5b19abd65860e |
 | 已失败候选 | 9729f968ef2f2a128233b0bc17ed22da47fbc636 |
 | 最近验证 | 第 2 轮 15 文件 / 165 项通过；完整类型检查、构建及 ADMIN 浏览器验收通过 |
 
 ## 原始验收清单
 
-依据实施计划任务 2A 与设计 §2.5。下表“已修”表示当前代码和实测证据满足该项，第 1 轮独立 diff/contract 曾收敛，R5 随后发现 ADMIN 回归；第 2 轮修复后累计 diff/contract 均收敛，整体尚待新候选 R5 终审；只覆盖本任务兼容隔离，不表示 narration 主链路开放。
+依据实施计划任务 2A 与设计 §2.5。下表“已修”表示当前代码和实测证据满足该项，第 1 轮独立 diff/contract 曾收敛，R5 随后发现 ADMIN 回归；第 2 轮修复后累计 diff/contract 均收敛，新候选已通过 R5 终审；只覆盖本任务兼容隔离，不表示 narration 主链路开放。
 
 | 编号 | 原始要求 | 状态 | 最新证据 |
 |---|---|---|---|
@@ -82,4 +83,15 @@ R5 两阶段独立审查确认 F4 Important：模式读取把操作者等同项�
 
 r2-red.json 的 ADMIN PATCH/两个目录错误拒绝为有效红灯（4 失败/4 通过）；r2-red-2.json 中普通 USER 因旧 Map owner 误拒的扩展方案已放弃，不计为本轮修复证据，其中管理员私有音色误保存红灯仍有效。r2-green-final.json 为 4 文件 85 项通过；根代理累计回归 round2-root-final-combined.json 为 15 文件 165 项通过，新增 8 项候选路由测试覆盖 ADMIN 合法操作、USER/query 伪造角色拒绝、ADMIN 仍不能绕过协议、数据库 mode/owner 权威、项目 owner 私有音色与管理员私有音色隔离、数据库权限撤销与项目缺失拒绝。
 
-第 2 轮两位 reviewer 已按固定 TASK_BASE_SHA 至当前 22 文件累计改动复审，均为 Critical 0 / Important 0 / Minor 0；F4 闭环，F1–F3 保持成立。根代理核对审查前后 git status 与全部任务文件 hash 一致。将形成新候选，交全新上下文 final reviewer 按 R5 两阶段审查；此前候选 9729f968 仍记为失败。
+第 2 轮两位 reviewer 已按固定 TASK_BASE_SHA 至当前 22 文件累计改动复审，均为 Critical 0 / Important 0 / Minor 0；F4 闭环，F1–F3 保持成立。根代理核对审查前后 git status 与全部任务文件 hash 一致。新候选 b01a9eb699eb9c35b4fcafb209e5b19abd65860e 已由全新上下文 final reviewer 按 R5 两阶段审查通过；此前候选 9729f968 仍记为失败。
+
+## 终审结论
+
+| 候选 SHA | 调用序号 | Critical | Important | Minor | 结论 |
+|---|---:|---:|---:|---:|---|
+| 9729f968ef2f2a128233b0bc17ed22da47fbc636 | 1 | 0 | 1 | 0 | 失败，ADMIN 权限回归 |
+| b01a9eb699eb9c35b4fcafb209e5b19abd65860e | 2 | 0 | 0 | 0 | 通过任务 2A 范围 |
+
+第二候选阶段一只提供原始要求、正式设计/计划、base/head 与累计代码 diff，排除过程记录和验证叙事；独立未发现代码 finding 后，阶段二核对原始输出。阶段二指出真实 POST WS 试听组合证据缺口，根代理补充 candidate2-r5-http-preview.mts/json：4 次真实 buildApp.inject POST，WS target+旧 env 与旧 target+WS env 均以 narration_execution_incompatible 拒绝，同一私有 WS 音色缓存 owner 返回 200 cached、其他用户返回 404，所有断言通过且 fetch=0。该探针独立于 Vitest 165 项，不增加其测试计数。候选产品、测试、记录在终审期间 hash 与 git status 均保持冻结；终审完成后本次仅机械写入记录。
+
+最终验收 P1–P7 均已修。验证限制：未单独运行前端 typecheck；Vite 构建通过不替代该命令。数据库权威场景使用 mock，浏览器使用隔离内存项目，未迁移用户数据库、未调用付费 provider、未证明完整口播业务与成品链路。后续按原计划进入任务 2B。
