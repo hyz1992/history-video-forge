@@ -47,6 +47,8 @@
 
 2026-09-06 用户批准[两次自然段输入诊断](../records/2026-09-06-narration-paragraph-comparison.md)：同稿、同任务、多条输入；本项1元，总上限5元。两次已执行，新增0.78096元、累计2.33198元；Cosy仍截断，Qwen全文映射仍完整、旧长等分现象本轮消失但有正文零时长，101项回归通过。人工听审/资格未通过，任务1闸门不变。
 
+2026-09-06 补齐[离线人工发声起点核验](../records/2026-09-06-narration-boundary-review.md)：冻结两份自然段长稿的10份原件摘要，各准备30点，正文零时长点不跳过；测量空值保持未验证，完整实测后才计算P95/max，统计不授予模型资格。33项新增/121项回归通过，本次零付费调用，累计费用仍2.33198元；人工真值0，任务0整体未通过。
+
 ### 任务 1：新增口播时间、配置与版本合同
 
 新增：`shared/src/narration/narration.schema.ts`、`shared/src/narration/narration-timing.schema.ts`、`tests/shared/narration-contracts.test.ts`。

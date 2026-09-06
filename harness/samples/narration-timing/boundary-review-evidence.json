@@ -1,0 +1,91 @@
+{
+  "schema_version": "narration_boundary_evidence_v1",
+  "report": {
+    "path": "narration-paragraph-live-20260906/report.json",
+    "sha256": "763e71af158469ee10394276cd4e58236e0bcab07235070ab08da10419ffb013"
+  },
+  "source": {
+    "path": "narration-qualification-offline-20260905/samples/long.txt",
+    "sha256": "65feb205f0d16844bc5f398defa4a6ebdc7f5203cacf1888018c4baccd3db67d"
+  },
+  "cases": [
+    {
+      "identity": {
+        "candidate_id": "cosy-sanshu",
+        "model": "cosyvoice-v3-flash",
+        "voice": "longsanshu_v3",
+        "region": "cn-beijing",
+        "protocol": "dashscope_ws",
+        "input_mode": "one_task_18_continue_messages",
+        "parameters_version": "neutral-pcm24k-v1",
+        "parameters": {
+          "text_type": "PlainText",
+          "format": "pcm",
+          "sample_rate": 24000,
+          "rate": 1,
+          "pitch": 1,
+          "volume": 50,
+          "word_timestamp_enabled": true,
+          "enable_ssml": false,
+          "seed": 0
+        },
+        "matrix_hash": "5422f1365038411bc0db87e150fb13bb7f34142e1088a20f40b2539f54ce8b59"
+      },
+      "pcm": {
+        "path": "narration-paragraph-live-20260906/cosy-sanshu-long.pcm",
+        "sha256": "59c8f1bb2615827f0354753e6b30b082020abb283cc61094b64cb3dc65716477"
+      },
+      "wav": {
+        "path": "narration-paragraph-live-20260906/cosy-sanshu-long.wav",
+        "sha256": "d52c0773665ae63665d7c1c4a2fdd0bbbd5ceebea666e07a3e77e6fdc5cb873a"
+      },
+      "events": {
+        "path": "narration-paragraph-live-20260906/cosy-sanshu-long.events.json",
+        "sha256": "9a77be245a26425a131b150c120c56a6076d41756962297f1883782ecc995ec7"
+      },
+      "outbound": {
+        "path": "narration-paragraph-live-20260906/cosy-sanshu-long.outbound.json",
+        "sha256": "7c6039cf2f39f8d1be56c0ce368fd50415ad94ed64139e2f849534241badcebd"
+      }
+    },
+    {
+      "identity": {
+        "candidate_id": "qwen-yimuling",
+        "model": "qwen-audio-3.0-tts-plus",
+        "voice": "qwen-audio-3.0-tts-plus-longyimuling",
+        "region": "cn-beijing",
+        "protocol": "dashscope_ws",
+        "input_mode": "one_task_18_continue_messages",
+        "parameters_version": "neutral-pcm24k-v1",
+        "parameters": {
+          "text_type": "PlainText",
+          "format": "pcm",
+          "sample_rate": 24000,
+          "rate": 1,
+          "pitch": 1,
+          "volume": 50,
+          "word_timestamp_enabled": true,
+          "enable_ssml": false,
+          "seed": 0
+        },
+        "matrix_hash": "5422f1365038411bc0db87e150fb13bb7f34142e1088a20f40b2539f54ce8b59"
+      },
+      "pcm": {
+        "path": "narration-paragraph-live-20260906/qwen-yimuling-long.pcm",
+        "sha256": "cc2e57b57111820ef9449bfa21b25c124921633b87d9477f29d753753ef15bf0"
+      },
+      "wav": {
+        "path": "narration-paragraph-live-20260906/qwen-yimuling-long.wav",
+        "sha256": "bc862f52cb99ac6a88591e920877f115f227aed6e2a05e04dd13cacb75b9977a"
+      },
+      "events": {
+        "path": "narration-paragraph-live-20260906/qwen-yimuling-long.events.json",
+        "sha256": "0b8ad0d825405054a6b8e152ae86c07e8b463f7f88ded9ddd3a26c579ce2cb05"
+      },
+      "outbound": {
+        "path": "narration-paragraph-live-20260906/qwen-yimuling-long.outbound.json",
+        "sha256": "cf30e416ea00a3a0b8be36a125fe88c5f052368fa388b8415894d3a3b88cdb12"
+      }
+    }
+  ]
+}
