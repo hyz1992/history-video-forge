@@ -48,4 +48,25 @@ node node_modules/tsx/dist/cli.mjs harness/scripts/runtime/narration-boundary-re
 
 ## 自审与独立审查
 
-自审：只改允许的5个文件；没有改变原生时间、补ASR、提高覆盖率容忍或绕过任务0。同模型、新上下文 diff/contract 初审均 Critical 0 / Important 0 / Minor 0，无需整改（整改复审0轮）。代码审查独立重跑121项及严格类型检查，合同审查核对10份冻结摘要；两者均复核WAV data与PCM一致、空表状态未验证。审查前后5文件hash和git status一致。候选1（e5f1e70d422f7f5b3cb5557ce2a02fba04266c2f）终审阶段一因读取范围失误接触执行进度，审查者主动中止、未评定代码finding，不构成有效终审。按流程Important缺口处理并重开候选：原始合同片段预先独立抽取，第一阶段仅可读该片段和3个代码/测试/冻结索引文件，不读计划/记录全文或执行证据；阶段二再核对全部文档diff与验证。片段机器检查排除了执行进度、测试结果和审查叙事（phase-one-packet-proof.json）。此项为第1轮整改复审，未修改代码或统计规则。diff/contract累计复审均Critical 0 / Important 0 / Minor 0，流程缺口闭合；片段最终SHA256为2fa04c3de73de439bf2bb2b8fa3ac7f2cbace67574d00d8e6b4788b175f05637。候选2待固定后进行有效终审。任务0整体未通过；下一步需要真实听审/测量反馈并处理供应商截断和零时长问题，不能因本工具完成进入任务1。
+自审：只改允许的5个文件；没有改变原生时间、补ASR、提高覆盖率容忍或绕过任务0。同模型、新上下文 diff/contract 初审均 Critical 0 / Important 0 / Minor 0，无需整改（整改复审0轮）。代码审查独立重跑121项及严格类型检查，合同审查核对10份冻结摘要；两者均复核WAV data与PCM一致、空表状态未验证。审查前后5文件hash和git status一致。候选1（e5f1e70d422f7f5b3cb5557ce2a02fba04266c2f）终审阶段一因读取范围失误接触执行进度，审查者主动中止、未评定代码finding，不构成有效终审。按流程Important缺口处理并重开候选：原始合同片段预先独立抽取，第一阶段仅可读该片段和3个代码/测试/冻结索引文件，不读计划/记录全文或执行证据；阶段二再核对全部文档diff与验证。片段机器检查排除了执行进度、测试结果和审查叙事（phase-one-packet-proof.json）。此项为第1轮整改复审，未修改代码或统计规则。diff/contract累计复审均Critical 0 / Important 0 / Minor 0，流程缺口闭合；片段最终SHA256为2fa04c3de73de439bf2bb2b8fa3ac7f2cbace67574d00d8e6b4788b175f05637。候选2的有效终审见下节。任务0整体未通过；下一步需要真实听审/测量反馈并处理供应商截断和零时长问题，不能因本工具完成进入任务1。
+
+
+## 固定候选终审（机械落盘）
+
+FINAL_REVIEW_CANDIDATE: f886d7d73293f2afd9893a1cea3c1ab638f70ab9
+
+FINAL_REVIEW_COUNT: 2
+
+FINAL_REVIEW_ABORTED_COUNT: 1
+
+FINAL_REVIEW_COMPLETED_COUNT: 1
+
+REPAIR_REVIEW_ROUNDS: 1
+
+FINAL_REVIEW_RESULT: Critical=0 Important=0 Minor=0
+
+总共两个候选周期：候选1的终审阶段一因输入隔离失误中止，未评定finding；第1轮整改复审闭合该流程Important后，候选2由全新上下文审查者完成同一次R5两阶段终审。先独立核对原始合同和代码，形成0/0/0 finding，再核对全量文档diff、原件和验证。不能把中止的一次隐去或算作有效终审。
+
+最终审查独立核对10份原件摘要、18条同稿输入、两组各30固定点及Qwen异常点、WAV data/PCM逐字节一致；实际回归日志4文件121/121、独立严格类型检查退出0、只读evaluate退出0且与存档一致。两组人工实测仍为0、P95/max=null，原结构问题保留。五文件及工作树只读不变；有效终审Critical 0 / Important 0 / Minor 0，限定离线入口通过。任务0整体与模型资格仍未通过，任务1继续关闭。
+
+本次提交仅机械记录终审，不改变代码、协议、命令或计划；人工表/原始音频仍不提交。下一步由实际听审者填写核验表并核对完整性，另处理供应商截断与零时长问题；没有新增付费调用。
