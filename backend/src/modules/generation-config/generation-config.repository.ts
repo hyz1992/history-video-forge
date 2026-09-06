@@ -1,3 +1,5 @@
+import { materializeNarrationConfiguration, NarrationPolicyError } from "../narration/narration-model-policy.js";
+import type { NarrationSelectionError } from "../../../../shared/src/index.js";
 import type { UserRole } from "../../auth/auth-context.js";
 import { checkNarrationExecutionCompatibility, readProjectNarrationContext } from "../narration/narration-execution-compatibility.js";
 import { getVoiceProfileById } from "../assets/voice/voice-profile.repository.js";
@@ -249,6 +251,7 @@ export interface ProjectConfigResult {
 }
 
 export type ProjectConfigUpsertResult =
+  | { ok: false; error: { code: "narration_selection_required"; body: NarrationSelectionError } }
   | { ok: false; error: { code: "narration_execution_incompatible"; reason: string } }
   | { ok: true; value: ProjectConfigResult & { invalidation_preview: InvalidationPreview } }
   | { ok: false; error: { code: "project_generation_configuration_revision_conflict"; current_revision: number } }
@@ -385,6 +388,15 @@ export async function upsertProjectGenerationConfiguration(
   }
 
   const projectContext = await readProjectNarrationContext(db, projectId, actorUserId, actorRole);
+  if (projectContext.mode === "narration_first_v1") {
+    try {
+      input = { ...input, configuration: await materializeNarrationConfiguration(db, projectContext.ownerId, input.configuration) };
+    } catch (error) {
+      if (error instanceof NarrationPolicyError)
+        return { ok: false, error: { code: "narration_selection_required", body: error.body } };
+      throw error;
+    }
+  }
   const selection = input.configuration.capabilities["tts.synthesize"];
   const model = selection.mode === "fixed" ? db.providerModelCatalog.get(selection.provider_model_id) : undefined;
   const voiceId = input.configuration.creative.voice_profile_id;

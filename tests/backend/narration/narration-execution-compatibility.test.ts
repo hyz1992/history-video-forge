@@ -290,8 +290,12 @@ describe("完整资格及生命周期", () => {
   });
   it("switched：新模式保存只接受固定合格组合，停用后拒绝且不改原配置", async () => {
     const db = createDbClient();
-    const model = upgrade(db);
-    const { ws } = await voices(db);
+    // 任务2B固定策略绑定正式目录/profile身份；保留停用与协议拒绝断言。
+    catalog(db);
+    const model = buildPricingCatalogSeed({ llm: { mode: "stub" }, media: { deploymentScope: "cn-beijing" } }).find(m => m.modelId === wsModel)!;
+    db.providerModelCatalog.set(model.id, model);
+    await seedGlobalVoiceProfiles(db);
+    const ws = db.voiceProfiles.get("voice_narration_qwen_longyimuling")!;
     db.voiceProfiles.set(ws.voice_profile_id, ws);
     const project = await createProject(db, { name: "new", ownerId: "owner" });
     project.narrationTimingMode = "narration_first_v1";

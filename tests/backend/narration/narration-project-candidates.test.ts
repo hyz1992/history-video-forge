@@ -13,12 +13,12 @@ async function fixture() {
   narration.narrationTimingMode = "narration_first_v1";
   const old = buildPricingCatalogSeed({ llm: { mode: "stub" }, media: { deploymentScope: "cn-beijing" } }).find(e => e.capability === "tts.synthesize")!;
   app.db.providerModelCatalog.set(old.id, old);
-  const ws = { ...old, id: "ws-model", modelId: "qwen-audio-3.0-tts-plus", isDefault: false,
+  const ws = { ...old, id: "tts.synthesize.dashscope.cn-beijing.qwen-audio-3.0-tts-plus", modelId: "qwen-audio-3.0-tts-plus", isDefault: false,
     parameterCapabilitiesJson: { deployment_scope: "cn-beijing", execution_protocol: "dashscope_ws", narration_only: true } };
   app.db.providerModelCatalog.set(ws.id, ws);
   await seedGlobalVoiceProfiles(app.db);
-  const profile = [...app.db.voiceProfiles.values()][0]!;
-  app.db.voiceProfiles.set("ws-voice", { ...profile, voice_profile_id: "ws-voice", provider_status: "ready",
+  const profile = app.db.voiceProfiles.get("voice_preset_crisp_storyteller")!;
+  app.db.voiceProfiles.set("voice_narration_qwen_longyimuling", { ...profile, voice_profile_id: "voice_narration_qwen_longyimuling", provider_status: "ready",
     provider_voice_id: "qwen-audio-3.0-tts-plus-longyimuling", target_model: ws.modelId });
   return { app, legacy, narration, auth: buildTestAuth({ userId: "owner" }) };
 }
@@ -27,12 +27,12 @@ describe("项目音色候选的真实路由", () => {
   it("注册后全局目录保留，旧项目排除WS音色，新项目仅显示合格音色", async () => {
     const { app, legacy, narration, auth } = await fixture();
     const get = async (id?: string) => (await app.inject({ method: "GET", url: "/api/me/voice-profiles" + (id ? "?project_id=" + id : ""), auth })).json().profiles;
-    expect((await get()).some((p: any) => p.voice_profile_id === "ws-voice")).toBe(true);
-    expect((await get(legacy.id)).some((p: any) => p.voice_profile_id === "ws-voice")).toBe(false);
-    expect((await get(narration.id)).map((p: any) => p.voice_profile_id)).toEqual(["ws-voice"]);
-    app.db.providerModelCatalog.get("ws-model")!.status = "disabled";
+    expect((await get()).some((p: any) => p.voice_profile_id === "voice_narration_qwen_longyimuling")).toBe(true);
+    expect((await get(legacy.id)).some((p: any) => p.voice_profile_id === "voice_narration_qwen_longyimuling")).toBe(false);
+    expect((await get(narration.id)).map((p: any) => p.voice_profile_id)).toEqual(["voice_narration_qwen_longyimuling"]);
+    app.db.providerModelCatalog.get("tts.synthesize.dashscope.cn-beijing.qwen-audio-3.0-tts-plus")!.status = "disabled";
     expect(await get(narration.id)).toEqual([]);
-    expect((await get(legacy.id)).some((p: any) => p.voice_profile_id === "ws-voice")).toBe(false);
+    expect((await get(legacy.id)).some((p: any) => p.voice_profile_id === "voice_narration_qwen_longyimuling")).toBe(false);
   });
   it("越权/无效项目参数不能回退全局目录", async () => {
     const { app, legacy } = await fixture();
@@ -47,14 +47,14 @@ afterEach(() => { expect(external).toHaveBeenCalledTimes(0); vi.unstubAllGlobals
 
 async function adminFixture() {
   const result = await fixture();
-  const profile = [...result.app.db.voiceProfiles.values()][0]!;
+  const profile = result.app.db.voiceProfiles.get("voice_preset_crisp_storyteller")!;
   for (const owner of ["owner", "admin"]) {
     result.app.db.voiceProfiles.set(owner + "-private", {
       ...profile, voice_profile_id: owner + "-private", kind: "generated",
       owner_id: owner, visibility: "private",
     });
     result.app.db.voiceProfiles.set(owner + "-private-ws", {
-      ...result.app.db.voiceProfiles.get("ws-voice")!, voice_profile_id: owner + "-private-ws",
+      ...result.app.db.voiceProfiles.get("voice_narration_qwen_longyimuling")!, voice_profile_id: owner + "-private-ws",
       kind: "generated", owner_id: owner, visibility: "private",
     });
   }
@@ -76,14 +76,14 @@ describe("F4 既有ADMIN授权与项目owner音色域", () => {
     expect((await patchConfiguration(app, legacy.id, admin, configuration)).statusCode).toBe(200);
     const models = await app.inject({ method: "GET", url: "/api/generation-capabilities?project_id=" + legacy.id, auth: admin });
     expect(models.statusCode).toBe(200);
-    expect(models.json().capabilities.some((p: any) => p.id === "ws-model")).toBe(false);
+    expect(models.json().capabilities.some((p: any) => p.id === "tts.synthesize.dashscope.cn-beijing.qwen-audio-3.0-tts-plus")).toBe(false);
   });
   it("ADMIN项目音色目录使用项目owner域，全局目录仍使用本人域", async () => {
     const { app, legacy, admin } = await adminFixture();
     const result = await app.inject({ method: "GET", url: "/api/me/voice-profiles?project_id=" + legacy.id, auth: admin });
     expect(result.statusCode).toBe(200);
     const ids = result.json().profiles.map((p: any) => p.voice_profile_id);
-    expect(ids).toContain("owner-private"); expect(ids).not.toContain("admin-private"); expect(ids).not.toContain("ws-voice");
+    expect(ids).toContain("owner-private"); expect(ids).not.toContain("admin-private"); expect(ids).not.toContain("voice_narration_qwen_longyimuling");
     const global = await app.inject({ method: "GET", url: "/api/me/voice-profiles", auth: admin });
     const globalIds = global.json().profiles.map((p: any) => p.voice_profile_id);
     expect(globalIds).toContain("admin-private"); expect(globalIds).not.toContain("owner-private");
@@ -98,7 +98,7 @@ describe("F4 既有ADMIN授权与项目owner音色域", () => {
   it("ADMIN管理legacy项目仍拒绝WS组合，且不推进revision", async () => {
     const { app, legacy, admin } = await adminFixture();
     const configuration = structuredClone(DEFAULT_GENERATION_CONFIGURATION);
-    configuration.capabilities["tts.synthesize"] = { mode: "fixed", provider_model_id: "ws-model" };
+    configuration.capabilities["tts.synthesize"] = { mode: "fixed", provider_model_id: "tts.synthesize.dashscope.cn-beijing.qwen-audio-3.0-tts-plus" };
     configuration.creative.voice_profile_id = "owner-private-ws";
     const before = structuredClone([...app.db.projectGenerationConfigurations.values()].find(r => r.projectId === legacy.id)!);
     const result = await patchConfiguration(app, legacy.id, admin, configuration);
@@ -111,14 +111,17 @@ describe("F4 既有ADMIN授权与项目owner音色域", () => {
     const findFirst = vi.fn().mockResolvedValue({ ...legacy, ownerId: "owner", narrationTimingMode: "narration_first_v1", archivedAt: null });
     app.db.narrationPersistence.prismaClient = { project: { findFirst } } as never;
     const models = await app.inject({ method: "GET", url: "/api/generation-capabilities?project_id=" + legacy.id, auth: admin });
-    expect(models.statusCode).toBe(200); expect(models.json().capabilities.map((p: any) => p.id)).toEqual(["ws-model"]);
+    expect(models.statusCode).toBe(200); expect(models.json().capabilities.map((p: any) => p.id)).toEqual(["tts.synthesize.dashscope.cn-beijing.qwen-audio-3.0-tts-plus"]);
     const voices = await app.inject({ method: "GET", url: "/api/me/voice-profiles?project_id=" + legacy.id, auth: admin });
     expect(voices.statusCode).toBe(200);
-    expect(voices.json().profiles.map((p: any) => p.voice_profile_id)).toEqual(expect.arrayContaining(["ws-voice", "owner-private-ws"]));
+    expect(voices.json().profiles.map((p: any) => p.voice_profile_id)).toEqual(expect.arrayContaining(["voice_narration_qwen_longyimuling", "owner-private-ws"]));
     expect(voices.json().profiles.some((p: any) => p.voice_profile_id === "admin-private-ws")).toBe(false);
     const configuration = structuredClone(DEFAULT_GENERATION_CONFIGURATION);
-    configuration.capabilities["tts.synthesize"] = { mode: "fixed", provider_model_id: "ws-model" };
-    configuration.creative.voice_profile_id = "owner-private-ws";
+    configuration.capabilities["tts.synthesize"] = { mode: "fixed", provider_model_id: "tts.synthesize.dashscope.cn-beijing.qwen-audio-3.0-tts-plus" };
+    // 策略绑定正式档案ID；授权场景将该档案设为项目owner私有，不能复制任意新ID冒充资格。
+    const qualified = app.db.voiceProfiles.get("voice_narration_qwen_longyimuling")!;
+    Object.assign(qualified, { kind: "generated", visibility: "private", owner_id: "owner" });
+    configuration.creative.voice_profile_id = qualified.voice_profile_id;
     expect((await patchConfiguration(app, legacy.id, admin, configuration)).statusCode).toBe(200);
     configuration.creative.voice_profile_id = "admin-private-ws";
     expect((await patchConfiguration(app, legacy.id, admin, configuration)).statusCode).toBe(422);

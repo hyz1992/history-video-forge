@@ -284,8 +284,8 @@ describe("generation capability readiness", () => {
     const result = evaluateGenerationCapabilityReadiness(
       readinessInput({ catalog: seed }),
     );
-    expect(result.ok).toBe(true);
-    for (const entry of seed) {
+    expectLegacyReadyWithWsRejected(result);
+    for (const entry of seed.filter(e => e.id !== QUALIFIED_WS_ID)) {
       const item = result.items[entry.id];
       expect(item?.quotable, entry.id).toBe(true);
       expect(item?.realDispatchAllowed, entry.id).toBe(true);
@@ -368,7 +368,7 @@ describe("generation capability readiness", () => {
     const result = evaluateGenerationCapabilityReadiness(
       readinessInput({ catalog: seed, llm: { mode: "stub" } }),
     );
-    expect(result.ok).toBe(true);
+    expectLegacyReadyWithWsRejected(result);
   });
 
   it("marks media entries without a registered adapter as not quotable", () => {
@@ -446,9 +446,9 @@ describe("generation capability readiness", () => {
     const result = evaluateGenerationCapabilityReadiness(
       readinessInput({ catalog: [...seed, stale] }),
     );
-    expect(result.ok).toBe(true);
+    expectLegacyReadyWithWsRejected(result);
     expect(result.items[stale.id]?.quotable).toBe(false);
-    expect(result.issues).toEqual([]);
+    expect(result.issues.filter(i => i.provider_model_id !== QUALIFIED_WS_ID)).toEqual([]);
   });
 
   it("marks media entries not quotable when the catalog modelId is not the actually configured model", () => {
@@ -484,7 +484,7 @@ describe("generation capability readiness", () => {
         media: { registeredModels: overriddenModels, credentialConfigured: true, deploymentScope: "cn-beijing" as const },
       }),
     );
-    expect(result.ok).toBe(true);
+    expectLegacyReadyWithWsRejected(result);
   });
 
   it("seeds singapore-scoped catalog prices and leaves unverified singapore models unpriced", () => {
@@ -591,11 +591,11 @@ describe("generation cost bootstrap", () => {
   it("applies the seed and keeps all entries active and quotable in a configured environment", async () => {
     const db = createDbClient();
     const result = await bootstrapGenerationCostCatalog(db, REAL_TIER_INPUT);
-    expect(result.readiness.ok).toBe(true);
+    expectLegacyReadyWithWsRejected(result.readiness);
     expect(result.disabledProviderModelIds).toEqual([]);
     const entries = listProviderModelCatalog(db);
     // 媒体 3（image/video 默认 + video 候选 wan2.6-i2v-flash/tts）+ LLM 2。
-    expect(entries.length).toBe(6);
+    expect(entries.length).toBe(7);
     for (const entry of entries) {
       expect(entry.status, entry.id).toBe("active");
     }
@@ -616,7 +616,8 @@ describe("generation cost bootstrap", () => {
     expect(
       listPublicGenerationCapabilities(db).find((e) => e.id === videoEntry.id),
     ).toBeUndefined();
-    expect(listPublicGenerationCapabilities(db).length).toBe(4);
+    expect(listPublicGenerationCapabilities(db).length).toBe(5);
+    expect(result.readiness.items[QUALIFIED_WS_ID]).toMatchObject({ quotable: false, realDispatchAllowed: false });
   });
 
   it("disables media rows when media credentials are unconfigured", async () => {
@@ -658,7 +659,7 @@ describe("generation cost bootstrap", () => {
     await bootstrapGenerationCostCatalog(db, REAL_TIER_INPUT);
     const second = await bootstrapGenerationCostCatalog(db, REAL_TIER_INPUT);
     expect(second.disabledProviderModelIds).toEqual([]);
-    expect(listProviderModelCatalog(db).length).toBe(6);
+    expect(listProviderModelCatalog(db).length).toBe(7);
   });
 
   it("restores active catalog rows when the environment recovers (demo then non-demo restart)", async () => {
@@ -678,7 +679,7 @@ describe("generation cost bootstrap", () => {
     }
 
     const recovered = await bootstrapGenerationCostCatalog(db, REAL_TIER_INPUT);
-    expect(recovered.readiness.ok).toBe(true);
+    expectLegacyReadyWithWsRejected(recovered.readiness);
     const defaultVideoId = listProviderModelCatalog(db).find(
       (e) => e.capability === "video.image_to_video" && e.isDefault,
     )!.id;
@@ -798,3 +799,18 @@ describe("resolve generation cost bootstrap input", () => {
     expect(input.environment).toEqual({ demoMode: false, testEnv: true });
   });
 });
+
+const QUALIFIED_WS_ID = "tts.synthesize.dashscope.cn-beijing.qwen-audio-3.0-tts-plus";
+function expectLegacyReadyWithWsRejected(result: ReturnType<typeof evaluateGenerationCapabilityReadiness>) {
+  expect(result.ok).toBe(false);
+  expect(result.issues.map(i => [i.provider_model_id, i.code]).sort()).toEqual([
+    [QUALIFIED_WS_ID, "media_execution_protocol_incompatible"], [QUALIFIED_WS_ID, "media_model_not_registered"],
+  ]);
+  expect(result.items[QUALIFIED_WS_ID]).toMatchObject({ quotable: false, realDispatchAllowed: false });
+  for (const [id, item] of Object.entries(result.items)) {
+    if (id !== QUALIFIED_WS_ID && item.issues.length === 0) {
+      // 已停用历史行原本不可报价；active旧条目保留独立原断言。
+      expect(item.realDispatchAllowed).toBe(item.quotable);
+    }
+  }
+}

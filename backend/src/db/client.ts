@@ -504,6 +504,7 @@ export interface DbClient {
     createProjectWithGenerationConfiguration(
       project: ProjectRecord,
       configuration: ProjectGenerationConfigurationRecord,
+      creationContext?: { sourceUserPreferenceRevision: number | null },
     ): Promise<void>;
     /**
      * CAS 更新或创建用户偏好。

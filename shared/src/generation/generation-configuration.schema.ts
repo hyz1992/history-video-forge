@@ -1,3 +1,4 @@
+import { NarrationPolicyBasis } from "../narration/narration-model-policy.schema.js";
 import { z } from "zod";
 import { NarrationCreativeSettings } from "../narration/narration.schema.js";
 
@@ -176,6 +177,8 @@ export const GenerationConfigurationV1 = z
       .strict(),
     creative: CreativePreferences,
     capabilities: CapabilitySelectionMap,
+    /** 服务端物化的口播资格依据；旧配置缺省不补造。 */
+    narration_policy: NarrationPolicyBasis.optional(),
   })
   .strict();
 export type GenerationConfigurationV1 = z.infer<typeof GenerationConfigurationV1>;

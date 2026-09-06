@@ -179,4 +179,16 @@ export const SHARED_VOICE_PROFILE_SEEDS: VoiceProfile[] = [
     created_at: SEED_CREATED_AT,
     updated_at: SEED_CREATED_AT,
   },
+  {
+    voice_profile_id: "voice_narration_qwen_longyimuling", kind: "system",
+    name: "龙翼暮凌（口播前置）", description: "任务0基准参数通过机器工程资格，仅供口播前置模式。",
+    design_prompt: "供应商已有音色，不调用音色设计。", preview_text: "完整口播生成后可在文案页试听。",
+    provider_name: "dashscope", provider_voice_id: "qwen-audio-3.0-tts-plus-longyimuling",
+    provider_status: "ready", target_model: "qwen-audio-3.0-tts-plus",
+    recommended_content_families: ["historical-story"], voice_traits: ["narration"], avoid_traits: [],
+    gender_tone: "neutral", age_band: null, pitch: "mid", pace: "medium",
+    energy: 0.5, authority: 0.5, suspense: 0.5, warmth: 0.5,
+    preview_audio_uri: null, usage_count: 0, last_used_at: null, quality_score: null,
+    created_at: "2026-09-06T00:00:00.000Z", updated_at: "2026-09-06T00:00:00.000Z",
+  },
 ] as const;

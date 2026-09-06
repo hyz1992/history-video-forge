@@ -15,6 +15,8 @@ export type AssetPlanningGenerationMode = "legacy" | "intent_compiler";
 export interface AppEnv {
   nodeEnv: string;
   demoMode: boolean;
+  /** 所有真实时间轴消费者完成验收前保持关闭。 */
+  narrationFirstEnabled: boolean;
   allowUnauthenticatedRemote: boolean;
   protectedProjectIds: Set<string>;
   databaseUrl: string;
@@ -116,6 +118,7 @@ function buildEnv(dotEnvValues: Record<string, string>): AppEnv {
   return {
     nodeEnv: readEnvValue("NODE_ENV", dotEnvValues) ?? "development",
     demoMode,
+    narrationFirstEnabled: readEnvValue("NARRATION_FIRST_ENABLED", dotEnvValues) === "true",
     allowUnauthenticatedRemote,
     protectedProjectIds,
     databaseUrl: readEnvValue("DATABASE_URL", dotEnvValues) ?? "file:./dev.db",

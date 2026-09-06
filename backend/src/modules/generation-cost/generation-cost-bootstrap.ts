@@ -1,3 +1,4 @@
+import { NARRATION_FIRST_MODEL_POLICY_V1 } from "../narration/narration-model-policy.js";
 import { env } from "../../config/env.js";
 import path from "node:path";
 import type { DbClient } from "../../db/client.js";
@@ -256,15 +257,27 @@ export async function bootstrapGenerationCostCatalog(
     catalog: listProviderModelCatalog(db),
   });
 
+  // 旧readiness衡量HTTP执行能力；独立WS目录只按正式资格身份和部署上下文保留。
+  // 不修改readiness的拒绝结果，目录active绝不授予旧dispatch WS执行权限。
+  const qualifiedWsIds = new Set(NARRATION_FIRST_MODEL_POLICY_V1.qualified_options
+    .filter(option => {
+      const entry = db.providerModelCatalog.get(option.provider_model_id);
+      const meta = entry?.parameterCapabilitiesJson;
+      return input.media.credentialConfigured && input.media.deploymentScope === option.region &&
+        entry?.modelId === option.model && entry.providerKey === "dashscope" &&
+        entry.capability === "tts.synthesize" && !entry.isDefault &&
+        meta?.execution_protocol === option.protocol && meta?.narration_only === true &&
+        meta?.deployment_scope === option.region;
+    }).map(option => option.provider_model_id));
   const disabledProviderModelIds = await disableProviderModelCatalogEntries(
     db,
-    readiness.nonQuotableProviderModelIds,
+    readiness.nonQuotableProviderModelIds.filter(id => !qualifiedWsIds.has(id)),
   );
 
   if (!readiness.ok) {
     const codes = [...new Set(readiness.issues.map((issue) => issue.code))].join(", ");
     console.warn(
-      `[generation-cost-bootstrap] readiness 未完全通过（已把不可报价项置为 disabled）: ${codes}`,
+      `[generation-cost-bootstrap] 旧执行能力检查未完全通过（不可用目录已禁用，合格WS候选按独立策略保留）: ${codes}`,
     );
   }
 

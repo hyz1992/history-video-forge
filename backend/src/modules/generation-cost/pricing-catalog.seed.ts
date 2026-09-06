@@ -396,6 +396,18 @@ export function buildPricingCatalogSeed(input: {
     );
   }
 
+  // 独立WS资格目录不属于旧HTTP媒体候选；仅北京实测组合，永不全局默认。
+  if (scope === "cn-beijing") entries.push(toRecord({
+    id: "tts.synthesize.dashscope.cn-beijing.qwen-audio-3.0-tts-plus",
+    capability: "tts.synthesize", providerKey: "dashscope", modelId: "qwen-audio-3.0-tts-plus",
+    displayName: "千问口播（龙翼暮凌，原生时间轴）", qualityTier: "qualified", speedTier: null,
+    parameterCapabilitiesJson: { deployment_scope: "cn-beijing", execution_protocol: "dashscope_ws", narration_only: true },
+    pricingVersion: "dashscope-qwen-audio-plus-cn-beijing-2026-09-06",
+    pricingJson: { unit_type: "tts_character", currency: "CNY", unpriced: true,
+      effective_at: "2026-09-06T00:00:00+08:00",
+      source_note: "口播模型价格尚未核实，按未定价处理" },
+    isDefault: false,
+  }));
   entries.push(...buildLlmSeedEntries(input.llm));
   return entries;
 }

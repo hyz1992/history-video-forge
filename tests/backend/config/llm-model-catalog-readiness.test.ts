@@ -264,9 +264,14 @@ describe("readiness 分层校验（S2-2C §7.3）", () => {
         catalog: seed,
       }),
     );
-    expect(result.ok).toBe(true);
+    const wsId = "tts.synthesize.dashscope.cn-beijing.qwen-audio-3.0-tts-plus";
+    expect(result.ok).toBe(false);
+    expect(result.issues.map(i => [i.provider_model_id, i.code]).sort()).toEqual([
+      [wsId, "media_execution_protocol_incompatible"], [wsId, "media_model_not_registered"],
+    ]);
+    expect(result.items[wsId]).toMatchObject({ quotable: false, realDispatchAllowed: false });
     for (const entry of seed) {
-      if (entry.status === "active") {
+      if (entry.status === "active" && entry.id !== wsId) {
         expect(result.items[entry.id]?.quotable, entry.id).toBe(true);
       }
     }

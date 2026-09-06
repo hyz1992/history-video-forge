@@ -1,3 +1,4 @@
+export * from "./narration/narration-model-policy.schema.js";
 export {
   TopicCandidateCard,
   ViralRubric,

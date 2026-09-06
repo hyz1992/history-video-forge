@@ -125,6 +125,9 @@ export const patchProjectConfigController = guardOwnedRoute(
       configuration: parsed.configuration,
     }, user.userId, user.role);
     if (!result.ok) {
+      if (result.error.code === "narration_selection_required") {
+        return { statusCode: 422, body: result.error.body };
+      }
       if (result.error.code === "narration_execution_incompatible") {
         return { statusCode: 422, body: { error: result.error.code, reason: result.error.reason } };
       }

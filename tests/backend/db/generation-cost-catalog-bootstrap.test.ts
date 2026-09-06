@@ -104,7 +104,14 @@ describe("generation cost catalog bootstrap (prisma)", () => {
       media: CONFIGURED_MEDIA_INPUT,
       environment: NORMAL_ENVIRONMENT,
     });
-    expect(result.readiness.ok).toBe(true);
+    // 新增正式WS目录保持active供新模式fixed选择；旧HTTP执行量尺仍明确拒绝该项。
+    const wsId = "tts.synthesize.dashscope.cn-beijing.qwen-audio-3.0-tts-plus";
+    expect(result.readiness.ok).toBe(false);
+    expect(result.readiness.issues.map(issue => [issue.provider_model_id, issue.code]).sort()).toEqual([
+      [wsId, "media_execution_protocol_incompatible"], [wsId, "media_model_not_registered"],
+    ]);
+    expect(result.readiness.items[wsId]).toMatchObject({ quotable: false, realDispatchAllowed: false });
+    expect(Object.entries(result.readiness.items).filter(([id]) => id !== wsId && db.providerModelCatalog.get(id)?.status === "active").every(([, item]) => item.quotable && item.realDispatchAllowed)).toBe(true);
     expect(result.disabledProviderModelIds).toEqual([]);
 
     // 数据库断言：占位行 disabled+非默认；seed 行 active+默认。
@@ -128,7 +135,7 @@ describe("generation cost catalog bootstrap (prisma)", () => {
     expect(mediaRow?.isDefault).toBe(true);
 
     const totalRows = await client.providerModelCatalog.count();
-    expect(totalRows).toBe(11); // 5 占位（disabled）+ 6 seed（active，含 wan2.6-i2v-flash 候选）
+    expect(totalRows).toBe(12); // 5 占位 + 6旧seed + 1口播专用非默认WS
   });
 
   it("persists readiness-materialized disables for demo environments", async () => {
@@ -188,7 +195,14 @@ describe("generation cost catalog bootstrap (prisma)", () => {
       media: CONFIGURED_MEDIA_INPUT,
       environment: NORMAL_ENVIRONMENT,
     });
-    expect(result.readiness.ok).toBe(true);
+    // 新增正式WS目录保持active供新模式fixed选择；旧HTTP执行量尺仍明确拒绝该项。
+    const wsId = "tts.synthesize.dashscope.cn-beijing.qwen-audio-3.0-tts-plus";
+    expect(result.readiness.ok).toBe(false);
+    expect(result.readiness.issues.map(issue => [issue.provider_model_id, issue.code]).sort()).toEqual([
+      [wsId, "media_execution_protocol_incompatible"], [wsId, "media_model_not_registered"],
+    ]);
+    expect(result.readiness.items[wsId]).toMatchObject({ quotable: false, realDispatchAllowed: false });
+    expect(Object.entries(result.readiness.items).filter(([id]) => id !== wsId && db.providerModelCatalog.get(id)?.status === "active").every(([, item]) => item.quotable && item.realDispatchAllowed)).toBe(true);
     expect(result.disabledProviderModelIds).toEqual([]);
 
     // 候选条目落库 active + 非默认；元数据来自候选声明（与默认条目统一）

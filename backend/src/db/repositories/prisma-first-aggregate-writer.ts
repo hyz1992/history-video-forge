@@ -176,6 +176,7 @@ export class PrismaFirstAggregateWriter {
   async createProjectWithGenerationConfiguration(
     project: ProjectRecord,
     configuration: ProjectGenerationConfigurationRecord,
+    creationContext?: { sourceUserPreferenceRevision: number | null },
   ): Promise<void> {
     // P1-3：冻结配置必须绑定到被创建的项目本身；configuration.projectId 不等于
     // project.id 时直接拒绝（防止创建无配置的新项目或把配置写到另一个项目）。
@@ -183,6 +184,12 @@ export class PrismaFirstAggregateWriter {
       throw new Error("project_configuration_project_mismatch: configuration must bind to the project being created");
     }
     await this.client.$transaction(async (transaction) => {
+      if (creationContext) {
+        const preference = await transaction.userGenerationPreference.findUnique({ where: { userId: project.ownerId } });
+        if ((preference?.revision ?? null) !== creationContext.sourceUserPreferenceRevision ||
+            configuration.sourceUserPreferenceRevision !== creationContext.sourceUserPreferenceRevision)
+          throw new Error("narration_creation_context_changed");
+      }
       const scoped = await transaction.project.findFirst({
         where: { id: project.id, ownerId: project.ownerId },
         select: { id: true },

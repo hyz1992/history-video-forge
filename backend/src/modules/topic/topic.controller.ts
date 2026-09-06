@@ -1,3 +1,4 @@
+import { NarrationPolicyError, narrationPolicyErrorForOwner } from "../narration/narration-model-policy.js";
 import { randomUUID } from "node:crypto";
 
 import { TopicRecommendationFilterInputSchema } from "../../../../shared/src/index.js";
@@ -191,15 +192,27 @@ export async function createProjectController(
   context: RouteContext,
 ): Promise<AppResponse> {
   const user = requireUser(context.auth);
-  const project = await createProject(context.app.db, {
-    name: context.payload?.name ?? "Untitled Project",
-    ownerId: user.userId,
-    createdById: user.userId,
-  });
+  let project;
+  try {
+    project = await createProject(context.app.db, {
+      name: context.payload?.name ?? "Untitled Project",
+      ownerId: user.userId,
+      createdById: user.userId,
+      narrationFirstEnabled: context.app.narrationFirstEnabled,
+      narrationSelection: context.payload?.narration_selection,
+    });
+  } catch (error) {
+    if (error instanceof NarrationPolicyError) return { statusCode: error.statusCode, body: error.body };
+    if (error instanceof Error && error.message === "narration_creation_context_changed") {
+      const conflict = await narrationPolicyErrorForOwner(context.app.db, user.userId, "narration_creation_context_changed", "创建依据的用户偏好已改变，请重新确认后提交");
+      return { statusCode: conflict.statusCode, body: conflict.body };
+    }
+    throw error;
+  }
 
   // 同步创建 Prisma Project 行，确保后续 EventLibraryDraft 等 FK 可用
   const prismaClient = context.app.prismaClient;
-  if (prismaClient && !context.auth.anonymous) {
+  if (prismaClient && !context.auth.anonymous && project.narrationTimingMode !== "narration_first_v1") {
     await prismaClient.project.upsert({
       where: { id: project.id },
       create: {
