@@ -2,7 +2,7 @@
 
 日期：2026-09-05。状态：三轮有限自审修复后，文档可实施性终审通过，可从任务 0 离线实施开始；尚未实现业务，最终模型/音色须经有限对比后确定，真实音质及时间戳精度尚未验收。见[审查闭环记录](../records/2026-09-05-narration-first-design-review-loops.md)。
 
-2026-09-06 实施状态：原生零时长片段适配和音频核验工具已通过局部验证；新工具的隐藏故障观察已通过，正常短中长声音验收尚因自动审批要求当前任务明确出站授权而未执行，任务0仍未授予资格。累计用量折价3.1541128元；详见[最新续接记录](../records/2026-09-06-narration-qualification-continuation.md)。
+2026-09-06 实施状态：原生/ASR与正常短中长声音、隐藏故障观察的六项机器工程证据已齐；Qwen基准参数形成样例范围资格候选，当前最终闸门以[机器工程资格记录](../records/2026-09-06-narration-engineering-qualification.md)为准，终审前不放行任务1。累计用量折价3.3866178元，未改业务或全局默认。
 
 实施入口：[实施计划](./2026-09-05-narration-first-timing-implementation-plan.md)。
 
@@ -10,7 +10,7 @@
 
 采用“确认文案 → 生成并确认整篇口播 → 按真实口播规划分镜 → 资产规划/生成 → 合成”的方案。口播准备归属现有文案步骤，不增加第七个产品阶段，不改变 Topic Package 合同、script writer 主链路和 reviewer shadow-only 边界。
 
-**最终默认模型尚未选定。** 首轮比较 `cosyvoice-v3-flash` 的 `longsanshu_v3`（龙三叔）、`longanyang`（龙安洋）与 `qwen-audio-3.0-tts-plus` 的一个预复刻叙事音色，统一通过百炼 WebSocket 验证。先过长文/时间戳硬门，再用同稿试听比较；不能把“CosyVoice 能用”写成“CosyVoice 最适合”。比较对象是模型、音色及参数组合，而非抽象模型排名。
+**新模式推荐组合以任务0最终资格记录为准，实际默认物化仍在任务2B实现，全局默认不变。** 首轮比较 `cosyvoice-v3-flash` 的 `longsanshu_v3`（龙三叔）、`longanyang`（龙安洋）与 `qwen-audio-3.0-tts-plus` 的一个预复刻叙事音色，统一通过百炼 WebSocket 验证。先过长文/时间戳硬门，再用同稿试听比较；不能把“CosyVoice 能用”写成“CosyVoice 最适合”。比较对象是模型、音色及参数组合，而非抽象模型排名。
 
 核心约束：
 
