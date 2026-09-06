@@ -24,6 +24,9 @@ export async function createProject(
     status: "topic_pending",
     activeTopicPackageId: null,
     activeScriptRecordId: null,
+    activeNarrationRecordId: null,
+    activeNarrationSubtitleRevisionId: null,
+    narrationTimingMode: "legacy_estimated",
     activeStoryboardRecordId: null,
     activeAssetPlanRecordId: null,
     activeAssetManifestRecordId: null,
@@ -100,6 +103,13 @@ export async function deleteProject(
   }
   await db.firstAggregateWriter?.archiveProject(projectId);
   db.projects.delete(projectId);
+
+  for (const [id, record] of db.narrationSubtitleRevisions) {
+    if (record.projectId === projectId) db.narrationSubtitleRevisions.delete(id);
+  }
+  for (const [id, record] of db.narrationRecords) {
+    if (record.projectId === projectId) db.narrationRecords.delete(id);
+  }
 
   // Clean up related records
   for (const [id, record] of db.topicPackages) {

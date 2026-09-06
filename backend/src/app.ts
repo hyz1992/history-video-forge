@@ -186,6 +186,7 @@ export function buildApp(options: BuildAppOptions = {}): AppInstance {
     itemCount: 0,
     error: null,
   };
+  db.narrationPersistence.prismaClient = options.prismaClient;
   configureVoiceProfilePersistence(db, {
     rootDir: runtimeStorageRoot,
     prismaClient: options.prismaClient,

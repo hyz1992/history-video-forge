@@ -56,6 +56,13 @@ model Project {
   storageRenameLocked          Boolean                        @default(false)
   archivedAt                   DateTime?
   activeTopicPackageId         String?
+  activeNarrationRecordId      String?
+  activeNarrationSubtitleRevisionId String?
+  narrationTimingMode         String @default("legacy_estimated")
+  activeNarrationRecord NarrationRecord? @relation("ActiveNarration", fields: [activeNarrationRecordId], references: [id], onDelete: Restrict)
+  activeNarrationSubtitleRevision NarrationSubtitleRevision? @relation("ActiveNarrationSubtitle", fields: [activeNarrationSubtitleRevisionId], references: [id], onDelete: Restrict)
+  narrationRecords NarrationRecord[]
+  narrationSubtitleRevisions NarrationSubtitleRevision[]
   activeScriptRecordId         String?
   activeStoryboardRecordId     String?
   activeAssetPlanRecordId      String?
@@ -289,6 +296,7 @@ model ScriptRecord {
   project                  Project                @relation("ProjectScriptRecords", fields: [projectId], references: [id], onDelete: Restrict)
   topicPackage             TopicPackage           @relation(fields: [topicPackageId], references: [id], onDelete: Restrict)
   activeForProjects        Project[]              @relation("ActiveScriptRecord")
+  narrationRecords         NarrationRecord[]
   storyboardRecords        StoryboardRecord[]
   assetPlanRecords         AssetPlanRecord[]
   assetManifestRecords     AssetManifestRecord[]
@@ -683,6 +691,7 @@ model RunConfigurationSnapshot {
   updatedAt                     DateTime @updatedAt
   project                       Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
   quote                         GenerationCostQuote? @relation(fields: [quoteId], references: [id], onDelete: SetNull)
+  narrationRecords              NarrationRecord[]
   generationRuns                GenerationRun[]
   usageCostRecords              UsageCostRecord[]
 
@@ -709,6 +718,7 @@ model GenerationRun {
   project                       Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
   snapshot                      RunConfigurationSnapshot @relation(fields: [runConfigurationSnapshotId], references: [id], onDelete: Restrict)
   quote                         GenerationCostQuote? @relation(fields: [quoteId], references: [id], onDelete: Restrict)
+  narrationRecord               NarrationRecord?
   events                        GenerationRunEvent[]
   providerJobs                  AssetProviderJobRecord[]
 
@@ -784,4 +794,60 @@ model VoiceProfile {
   owner            User?     @relation(fields: [ownerId], references: [id], onDelete: SetNull)
 
   @@index([ownerId, visibility])
+}
+
+
+model NarrationRecord {
+  id String @id
+  projectId String
+  scriptRecordId String
+  generationRunId String @unique
+  configurationSnapshotId String
+  schemaVersion String
+  sourceTextSha256 String
+  spokenTextSha256 String?
+  settingsSha256 String
+  sourceProjectTtsSettingsSha256 String
+  textMappingVersion String
+  settingsJson Json
+  timingSource String
+  providerTaskId String?
+  providerRequestId String?
+  status String
+  errorCode String?
+  confirmedAt DateTime?
+  confirmedBy String?
+  acceptedDurationBandSnapshotJson Json?
+  outputJson Json?
+  initialSubtitleRevisionId String? @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  project Project @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  script ScriptRecord @relation(fields: [scriptRecordId], references: [id], onDelete: Restrict)
+  generationRun GenerationRun @relation(fields: [generationRunId], references: [id], onDelete: Restrict)
+  configurationSnapshot RunConfigurationSnapshot @relation(fields: [configurationSnapshotId], references: [id], onDelete: Restrict)
+  initialSubtitleRevision NarrationSubtitleRevision? @relation("InitialNarrationSubtitle", fields: [initialSubtitleRevisionId], references: [id], onDelete: Restrict)
+  subtitleRevisions NarrationSubtitleRevision[] @relation("NarrationSubtitles")
+  activeForProjects Project[] @relation("ActiveNarration")
+  @@index([projectId, scriptRecordId, createdAt])
+}
+
+model NarrationSubtitleRevision {
+  id String @id
+  projectId String
+  narrationRecordId String
+  audioHash String
+  timingHash String
+  subtitleSettingsSnapshotJson Json
+  subtitleSettingsHash String
+  builderVersion String
+  srtJson Json
+  vttJson Json
+  createdAt DateTime @default(now())
+  project Project @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  narrationRecord NarrationRecord @relation("NarrationSubtitles", fields: [narrationRecordId], references: [id], onDelete: Restrict)
+  initialForNarration NarrationRecord? @relation("InitialNarrationSubtitle")
+  activeForProjects Project[] @relation("ActiveNarrationSubtitle")
+  @@unique([narrationRecordId, subtitleSettingsHash, builderVersion])
+  @@index([projectId, createdAt])
 }

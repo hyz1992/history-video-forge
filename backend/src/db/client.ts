@@ -7,6 +7,9 @@ import type {
   ExportArtifact,
   GenerationConfigurationV1,
   MediaLibraryItem,
+  NarrationRecord,
+  NarrationSubtitleRevision,
+  NarrationTimingMode,
   RenderJobStatus,
   RenderValidationResult,
   VoiceProfile,
@@ -22,6 +25,9 @@ export interface ProjectRecord {
   status: string;
   activeTopicPackageId: string | null;
   activeScriptRecordId: string | null;
+  activeNarrationRecordId?: string | null;
+  activeNarrationSubtitleRevisionId?: string | null;
+  narrationTimingMode?: NarrationTimingMode;
   activeStoryboardRecordId: string | null;
   activeAssetPlanRecordId: string | null;
   activeAssetManifestRecordId: string | null;
@@ -429,6 +435,9 @@ export interface AuditLogRecord {
 }
 
 export interface DbClient {
+  narrationRecords: Map<string, NarrationRecord>;
+  narrationSubtitleRevisions: Map<string, NarrationSubtitleRevision>;
+  narrationPersistence: { prismaClient?: AppPrismaClient };
   generateId: () => string;
   projects: Map<string, ProjectRecord>;
   events: Map<string, EventRegistryRecord>;
@@ -468,6 +477,7 @@ export interface DbClient {
   usageCostRecords: Map<string, UsageCostRecordRecord>;
   auditLogs: Map<string, AuditLogRecord>;
   firstAggregateWriter?: {
+    readonly narrationPrismaClient?: AppPrismaClient;
     ownerId: string;
     createProject(record: ProjectRecord): Promise<void>;
     syncProject(record: ProjectRecord): Promise<void>;
@@ -578,6 +588,9 @@ export interface DbClient {
 
 export function createDbClient(): DbClient {
   return {
+    narrationRecords: new Map(),
+    narrationSubtitleRevisions: new Map(),
+    narrationPersistence: {},
     generateId: () => randomUUID(),
     projects: new Map<string, ProjectRecord>(),
     events: new Map<string, EventRegistryRecord>(),

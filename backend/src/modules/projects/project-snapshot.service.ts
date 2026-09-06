@@ -1,3 +1,4 @@
+import { NarrationRepository } from "../narration/narration.repository.js";
 import { statSync } from "node:fs";
 import type { DbClient, ScriptRecord } from "../../db/client";
 import { getProjectStorageProfile } from "../../runtime/trace/project-storage.js";
@@ -192,6 +193,11 @@ export async function getProjectSnapshot(
     return null;
   }
   const storageProfile = getProjectStorageProfile(project);
+  const narrationRepository = new NarrationRepository(db);
+  const narrationProject = await narrationRepository.projectForOwner(projectId, project.ownerId);
+  const narration = narrationProject.activeNarrationRecordId ? await narrationRepository.findByIdForOwner(projectId, project.ownerId, narrationProject.activeNarrationRecordId) : null;
+  const narrationSubtitle = narrationProject.activeNarrationSubtitleRevisionId ? await narrationRepository.findSubtitleForOwner(projectId, project.ownerId, narrationProject.activeNarrationSubtitleRevisionId) : null;
+  const latestNarration = narrationProject.activeScriptRecordId ? await narrationRepository.findLatestForScriptForOwner(projectId, project.ownerId, narrationProject.activeScriptRecordId) : null;
 
   const topicRecord = project.activeTopicPackageId
     ? db.topicPackages.get(project.activeTopicPackageId) ?? null
@@ -299,6 +305,10 @@ export async function getProjectSnapshot(
   }
 
   return {
+    narration_timing_mode: narrationProject.narrationTimingMode ?? "legacy_estimated",
+    active_narration: summarizeNarration(narration),
+    active_narration_subtitle_revision: narrationSubtitle ? { id: narrationSubtitle.id, narration_record_id: narrationSubtitle.narrationRecordId, subtitle_settings_hash: narrationSubtitle.subtitleSettingsHash, builder_version: narrationSubtitle.builderVersion } : null,
+    latest_narration_candidate: summarizeNarration(latestNarration),
     project_id: project.id,
     name: project.name,
     owner_id: project.ownerId,
@@ -502,4 +512,12 @@ export async function getProjectSnapshot(
       record_count: 0,
     },
   };
+}
+
+function summarizeNarration(record: import("../../../../shared/src/index.js").NarrationRecord | null) {
+  return record ? { narration_record_id: record.id, source_script_record_id: record.scriptRecordId,
+    generation_run_id: record.generationRunId, status: record.status, error_code: record.errorCode,
+    duration_ms: record.output?.durationMs ?? null, timing_source: record.timingSource,
+    audio_hash: record.output?.audio.sha256 ?? null, timing_hash: record.output?.timingMap.sha256 ?? null,
+    created_at: record.createdAt, confirmed_at: record.confirmedAt } : null;
 }

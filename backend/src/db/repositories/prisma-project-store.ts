@@ -1,3 +1,4 @@
+import { NarrationOutput } from "../../../../shared/src/index.js";
 import type { AppPrismaClient } from "../prisma-client.types.js";
 import type {
   ActiveProjectRecordPatch,
@@ -21,6 +22,9 @@ function mapProject(row: PrismaProjectRow): StoredProjectRecord {
     archivedAt: row.archivedAt,
     activeTopicPackageId: row.activeTopicPackageId,
     activeScriptRecordId: row.activeScriptRecordId,
+    narrationTimingMode: row.narrationTimingMode as StoredProjectRecord["narrationTimingMode"],
+    activeNarrationRecordId: row.activeNarrationRecordId,
+    activeNarrationSubtitleRevisionId: row.activeNarrationSubtitleRevisionId,
     activeStoryboardRecordId: row.activeStoryboardRecordId,
     activeAssetPlanRecordId: row.activeAssetPlanRecordId,
     activeAssetManifestRecordId: row.activeAssetManifestRecordId,
@@ -89,8 +93,21 @@ export class PrismaProjectStore implements ProjectStore {
 
   async updateActiveRecordsForOwner(projectId: string, ownerId: string, patch: ActiveProjectRecordPatch): Promise<StoredProjectRecord> {
     return this.client.$transaction(async (transaction) => {
-      const project = await transaction.project.findFirst({ where: { id: projectId, ownerId }, select: { id: true } });
+      const project = await transaction.project.findFirst({ where: { id: projectId, ownerId, archivedAt: null } });
       if (!project) throw new Error("project_scope_denied");
+      // 检查更新后的完整组合，包括仅切口播/仅切字幕/清空口播的反向情况。
+      const narrationId = patch.activeNarrationRecordId === undefined ? project.activeNarrationRecordId : patch.activeNarrationRecordId;
+      const subtitleId = patch.activeNarrationSubtitleRevisionId === undefined ? project.activeNarrationSubtitleRevisionId : patch.activeNarrationSubtitleRevisionId;
+      let narrationOutput: NarrationOutput | null = null;
+      if (narrationId) {
+        const narration = await transaction.narrationRecord.findUnique({ where: { id: narrationId } });
+        if (!narration || narration.projectId !== projectId || !narration.outputJson) throw new Error("project_active_narration_mismatch");
+        narrationOutput = NarrationOutput.parse(narration.outputJson);
+      }
+      if (subtitleId) {
+        const subtitle = await transaction.narrationSubtitleRevision.findUnique({ where: { id: subtitleId } });
+        if (!subtitle || subtitle.projectId !== projectId || subtitle.narrationRecordId !== narrationId || subtitle.audioHash !== narrationOutput?.audio.sha256 || subtitle.timingHash !== narrationOutput?.timingMap.sha256) throw new Error("project_active_narration_subtitle_mismatch");
+      }
       const checks: Array<Promise<{ projectId: string } | null>> = [];
       const fields: string[] = [];
       if (patch.activeTopicPackageId) {

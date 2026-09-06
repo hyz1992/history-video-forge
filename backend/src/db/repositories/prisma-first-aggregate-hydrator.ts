@@ -37,9 +37,8 @@ function buildShortId(projectId: string): string {
  *  - UUID 格式（早期/部分环境写入路径）：storage/projects/<storageKey>/
  *
  *  仅靠目录是否存在或 project.json 都不可靠（残留空壳目录也可能带
- *  project.json）。这里用「目录下是否有 assets-runs 子目录」作为真实
- *  内容的判定标志——assets-runs 是实际分镜图/视频/音频的存放位置，
- *  只有真正跑过生成的项目才会有。 */
+ *  project.json）。这里以生成产物目录（含独立 narration-runs）作为真实
+ *  内容的判定标志，避免空壳目录遮蔽只生成了口播的项目。 */
 function resolveProjectStorageRoot(input: {
   storageRoot: string;
   createdAt: Date;
@@ -60,7 +59,7 @@ function resolveProjectStorageRoot(input: {
   const uuidLayout = join(input.storageRoot, "storage", "projects", input.storageKey);
   if (hasRealContent(uuidLayout)) return uuidLayout;
 
-  // 两种布局都没有 assets-runs：可能是还没生成资源的新项目，
+  // 两种布局都没有生成产物目录：可能是还没生成资源的新项目，
   // 或只有 trace 的早期项目。按 project.json 兜底，再按目录存在兜底，
   // 最终回退日期格式（project-storage.ts 后续写入会走这条路径）。
   if (existsSync(join(dateLayout, "project.json"))) return dateLayout;
@@ -70,11 +69,12 @@ function resolveProjectStorageRoot(input: {
   return dateLayout;
 }
 
-/** 判断目录是否有真实生成内容（assets-runs / renders / publish 任一存在）。 */
+/** 判断目录是否有真实生成内容（assets-runs / renders / publish / narration-runs 任一存在）。 */
 function hasRealContent(dir: string): boolean {
   return existsSync(join(dir, "assets-runs"))
     || existsSync(join(dir, "renders"))
-    || existsSync(join(dir, "publish"));
+    || existsSync(join(dir, "publish"))
+    || existsSync(join(dir, "narration-runs"));
 }
 
 export async function hydrateFirstAggregates(
@@ -83,6 +83,7 @@ export async function hydrateFirstAggregates(
   client: AppPrismaClient,
   options: { storageRoot: string },
 ): Promise<void> {
+  db.narrationPersistence.prismaClient = client;
   const [projects, events, packages, caches, rounds, userPreferences, projectConfigurations, catalog] = await Promise.all([
     client.project.findMany({ where: { archivedAt: null } }), client.eventRegistryEntry.findMany(), client.topicPackage.findMany(),
     client.recommendationCandidateCache.findMany(),
@@ -102,6 +103,8 @@ export async function hydrateFirstAggregates(
     const record: ProjectRecord = {
       id: row.id, name: row.name, ownerId: row.ownerId, createdById: row.createdById,
       status: row.status, activeTopicPackageId: row.activeTopicPackageId,
+      narrationTimingMode: row.narrationTimingMode as ProjectRecord["narrationTimingMode"],
+      activeNarrationRecordId: row.activeNarrationRecordId, activeNarrationSubtitleRevisionId: row.activeNarrationSubtitleRevisionId,
       activeScriptRecordId: row.activeScriptRecordId, activeStoryboardRecordId: row.activeStoryboardRecordId,
       activeAssetPlanRecordId: row.activeAssetPlanRecordId, activeAssetManifestRecordId: row.activeAssetManifestRecordId,
       activeComposeRecordId: row.activeComposeRecordId, activeRenderJobRecordId: row.activeRenderJobRecordId,

@@ -14,6 +14,8 @@ import { PrismaRecommendationStore } from "./prisma-recommendation-store.js";
 export class PrismaFirstAggregateWriter {
   private constructor(private readonly client: AppPrismaClient, readonly ownerId: string) {}
 
+  get narrationPrismaClient(): AppPrismaClient { return this.client; }
+
   static async create(client: AppPrismaClient, ownerId: string): Promise<PrismaFirstAggregateWriter> {
     const owner = await client.user.findUnique({ where: { id: ownerId } });
     if (!owner || owner.status !== "ACTIVE") throw new Error("local_project_owner_not_active");
@@ -23,6 +25,8 @@ export class PrismaFirstAggregateWriter {
   async createProject(record: ProjectRecord): Promise<void> {
     await this.client.project.create({ data: {
       id: record.id, ownerId: record.ownerId, createdById: record.createdById, name: record.name, status: record.status,
+      narrationTimingMode: record.narrationTimingMode ?? "legacy_estimated",
+      activeNarrationRecordId: record.activeNarrationRecordId ?? null, activeNarrationSubtitleRevisionId: record.activeNarrationSubtitleRevisionId ?? null,
       storageKey: record.id, storageDisplayName: record.storageDisplayName, storageRenameLocked: record.storageRenameLocked,
     } });
   }
@@ -186,6 +190,8 @@ export class PrismaFirstAggregateWriter {
       if (scoped) throw new Error("project_already_exists");
       await transaction.project.create({ data: {
         id: project.id, ownerId: project.ownerId, createdById: project.createdById, name: project.name, status: project.status,
+        narrationTimingMode: project.narrationTimingMode ?? "legacy_estimated",
+        activeNarrationRecordId: project.activeNarrationRecordId ?? null, activeNarrationSubtitleRevisionId: project.activeNarrationSubtitleRevisionId ?? null,
         storageKey: project.id, storageDisplayName: project.storageDisplayName, storageRenameLocked: project.storageRenameLocked,
       } });
       await transaction.projectGenerationConfiguration.create({ data: {

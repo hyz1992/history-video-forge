@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import Database from "better-sqlite3";
@@ -8,11 +8,8 @@ import { createPrismaClient } from "../../../backend/src/db/prisma-client.js";
 import { PrismaProjectStore } from "../../../backend/src/db/repositories/prisma-project-store.js";
 import { PrismaRecommendationStore } from "../../../backend/src/db/repositories/prisma-recommendation-store.js";
 
-const migrationSql = [
-  readFileSync(join(process.cwd(), "backend/prisma/migrations/0001_v2_baseline/migration.sql"), "utf8"),
-  readFileSync(join(process.cwd(), "backend/prisma/migrations/20260719090219_0002_event_library/migration.sql"), "utf8"),
-  readFileSync(join(process.cwd(), "backend/prisma/migrations/20260808155000_topic_recommendation_filter/migration.sql"), "utf8"),
-].join("\n");
+import { applyAllDatabaseMigrations } from "./migration-test-utils.js";
+
 const tempDirectories: string[] = [];
 
 function createMigratedDatabase(): string {
@@ -21,7 +18,7 @@ function createMigratedDatabase(): string {
   const databasePath = join(directory, "test.db");
   const database = new Database(databasePath);
   try {
-    database.exec(migrationSql);
+    applyAllDatabaseMigrations(database);
   } finally {
     database.close();
   }

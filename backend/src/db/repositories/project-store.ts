@@ -10,6 +10,9 @@ export interface StoredProjectRecord {
   archivedAt: Date | null;
   activeTopicPackageId: string | null;
   activeScriptRecordId: string | null;
+  activeNarrationRecordId: string | null;
+  activeNarrationSubtitleRevisionId: string | null;
+  narrationTimingMode: "legacy_estimated" | "narration_first_v1";
   activeStoryboardRecordId: string | null;
   activeAssetPlanRecordId: string | null;
   activeAssetManifestRecordId: string | null;
@@ -31,6 +34,9 @@ export interface CreateProjectRecordInput {
 export interface ActiveProjectRecordPatch {
   activeTopicPackageId?: string | null;
   activeScriptRecordId?: string | null;
+  activeNarrationRecordId?: string | null;
+  activeNarrationSubtitleRevisionId?: string | null;
+  narrationTimingMode?: "legacy_estimated" | "narration_first_v1";
   activeStoryboardRecordId?: string | null;
   activeAssetPlanRecordId?: string | null;
   activeAssetManifestRecordId?: string | null;
