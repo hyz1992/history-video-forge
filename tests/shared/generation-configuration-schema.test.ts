@@ -173,58 +173,21 @@ describe("GenerationConfigurationV1 schema", () => {
     });
   });
 
-  describe("budget currency and cost micros", () => {
-    it("currency is fixed to CNY", () => {
-      const parsed = GenerationConfigurationV1.parse(DEFAULT_GENERATION_CONFIGURATION);
-      expect(parsed.budget.currency).toBe("CNY");
+  describe("已移除的产品预算字段", () => {
+    it("默认配置与解析结果不携带预算", () => {
+      expect(DEFAULT_GENERATION_CONFIGURATION).not.toHaveProperty("budget");
+      expect(GenerationConfigurationV1.parse(DEFAULT_GENERATION_CONFIGURATION)).not.toHaveProperty("budget");
     });
 
-    it("rejects any currency other than CNY", () => {
-      for (const currency of ["USD", "EUR", "cny", "", "RMB"]) {
-        expect(() =>
-          GenerationConfigurationV1.parse({
-            ...DEFAULT_GENERATION_CONFIGURATION,
-            budget: { ...DEFAULT_GENERATION_CONFIGURATION.budget, currency },
-          }),
-        ).toThrow();
-      }
-    });
-
-    it("max_paid_cost_micros_per_run accepts null (no cap)", () => {
-      const parsed = GenerationConfigurationV1.parse(DEFAULT_GENERATION_CONFIGURATION);
-      expect(parsed.budget.max_paid_cost_micros_per_run).toBeNull();
-    });
-
-    it("max_paid_cost_micros_per_run accepts a decimal string micro amount", () => {
-      const parsed = GenerationConfigurationV1.parse({
+    it.each([null, "1234567", 1234567])("拒绝旧预算字段，不按额度值 %s 恢复预算合同", (limit) => {
+      const result = GenerationConfigurationV1.safeParse({
         ...DEFAULT_GENERATION_CONFIGURATION,
-        budget: { ...DEFAULT_GENERATION_CONFIGURATION.budget, max_paid_cost_micros_per_run: "1234567" },
+        budget: { currency: "CNY", max_paid_cost_micros_per_run: limit },
       });
-      expect(parsed.budget.max_paid_cost_micros_per_run).toBe("1234567");
-    });
-
-    it("max_paid_cost_micros_per_run is a decimal string, not a number", () => {
-      // JSON API boundary serializes money as decimal strings to avoid number overflow.
-      expect(() =>
-        GenerationConfigurationV1.parse({
-          ...DEFAULT_GENERATION_CONFIGURATION,
-          budget: {
-            ...DEFAULT_GENERATION_CONFIGURATION.budget,
-            max_paid_cost_micros_per_run: 1234567,
-          },
-        }),
-      ).toThrow();
-    });
-
-    it("max_paid_cost_micros_per_run rejects non-decimal string content", () => {
-      for (const value of ["1.5", "abc", "0x10", "1e3", "-1", "12 34"]) {
-        expect(() =>
-          GenerationConfigurationV1.parse({
-            ...DEFAULT_GENERATION_CONFIGURATION,
-            budget: { ...DEFAULT_GENERATION_CONFIGURATION.budget, max_paid_cost_micros_per_run: value },
-          }),
-        ).toThrow();
-      }
+      expect(result.success).toBe(false);
+      if (!result.success) expect(result.error.issues).toContainEqual(expect.objectContaining({
+        code: "unrecognized_keys", path: [], keys: ["budget"],
+      }));
     });
   });
 
@@ -266,16 +229,12 @@ describe("GenerationConfigurationV1 schema", () => {
   });
 
   describe("default configuration matches the design 3.2 baseline", () => {
-    it("matches prefer_remotion + standard_720p + no cap + creative all null + capabilities all auto", () => {
+    it("matches prefer_remotion + standard_720p + creative all null + capabilities all auto", () => {
       expect(DEFAULT_GENERATION_CONFIGURATION).toEqual({
         schema_version: "generation_configuration_v1",
         video: {
           strategy: "prefer_remotion",
           api_quality: "standard_720p",
-        },
-        budget: {
-          currency: "CNY",
-          max_paid_cost_micros_per_run: null,
         },
         creative: {
           voice_profile_id: null,
@@ -328,11 +287,11 @@ describe("GenerationConfigurationV1 schema", () => {
       ).toThrow();
     });
 
-    it("rejects an unknown budget sub-field", () => {
+    it("rejects removed budget field even when only a legacy extra key is supplied", () => {
       expect(() =>
         GenerationConfigurationV1.parse({
           ...DEFAULT_GENERATION_CONFIGURATION,
-          budget: { ...DEFAULT_GENERATION_CONFIGURATION.budget, hard_cap: "100" },
+          budget: { hard_cap: "100" },
         }),
       ).toThrow();
     });
@@ -852,11 +811,10 @@ describe("S2-2B creative 配置扩展", () => {
   });
 
   describe("S2_2B PATCH schema（两阶段替换：本任务新增 B 版）", () => {
-    it("用户 PATCH：video+budget+creative 全量可用", () => {
+    it("用户 PATCH：video+creative 全量可用", () => {
       const parsed = S2_2B_ConfigPatchRequest.parse({
         expected_revision: 3,
         video: { strategy: "prefer_api_video", api_quality: "high_1080p" },
-        budget: { currency: "CNY", max_paid_cost_micros_per_run: "1000000" },
         creative: {
           voice_profile_id: "voice_preset_steady_documentary",
           art_style_preset_id: null,
@@ -870,7 +828,6 @@ describe("S2-2B creative 配置扩展", () => {
       const parsed = S2_2B_ConfigPatchRequest.parse({
         expected_revision: 3,
         video: { strategy: "prefer_remotion", api_quality: "standard_720p" },
-        budget: { currency: "CNY", max_paid_cost_micros_per_run: null },
       });
       expect(parsed.creative).toBeUndefined();
     });
@@ -880,14 +837,12 @@ describe("S2-2B creative 配置扩展", () => {
         S2_2B_ProjectConfigPatchRequest.safeParse({
           expected_revision: null,
           video: { strategy: "prefer_remotion", api_quality: "standard_720p" },
-          budget: { currency: "CNY", max_paid_cost_micros_per_run: null },
         }).success,
       ).toBe(false);
       expect(
         S2_2B_ProjectConfigPatchRequest.safeParse({
           expected_revision: 1,
           video: { strategy: "prefer_remotion", api_quality: "standard_720p" },
-          budget: { currency: "CNY", max_paid_cost_micros_per_run: null },
           creative: { voice_profile_id: null, art_style_preset_id: null, subtitle_style_preset_id: null },
         }).success,
       ).toBe(true);
@@ -898,7 +853,6 @@ describe("S2-2B creative 配置扩展", () => {
         S2_2B_ConfigPatchRequest.safeParse({
           expected_revision: 1,
           video: { strategy: "prefer_remotion", api_quality: "standard_720p" },
-          budget: { currency: "CNY", max_paid_cost_micros_per_run: null },
           capabilities: { "llm.smart": { mode: "fixed", provider_model_id: "x" } },
         }).success,
       ).toBe(false);

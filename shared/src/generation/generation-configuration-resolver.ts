@@ -45,6 +45,7 @@ import { applySubtitleStyleOverrides } from "../creative/subtitle-style-resolver
 export const GenerationOperationSchema = z.enum([
   "topic.generate",
   "script.generate",
+  "script.narration.generate",
   "storyboard.generate",
   "asset_plan.generate",
   "assets.generate",
@@ -54,6 +55,11 @@ export const GenerationOperationSchema = z.enum([
   "voice.preview",
 ]);
 export type GenerationOperation = z.infer<typeof GenerationOperationSchema>;
+
+/** 媒体 operation 仍复用既有 slot，不新增产品阶段。 */
+export const GENERATION_OPERATION_CAPABILITY = {
+  "script.narration.generate": "tts.synthesize",
+} as const satisfies Partial<Record<GenerationOperation, CapabilitySlot>>;
 
 export const SystemGenerationConstraintsSchema = z
   .object({
@@ -150,6 +156,10 @@ function applyCreativeRunOverrides(
         : project.subtitle_style_preset_id,
     subtitle_style_overrides:
       overrides.subtitle_style_overrides ?? project.subtitle_style_overrides,
+    ...(project.narration || overrides.narration ? { narration: {
+      tone: overrides.narration?.tone ?? project.narration?.tone ?? "neutral",
+      rate: overrides.narration?.rate ?? project.narration?.rate ?? 1,
+    } } : {}),
   };
 }
 

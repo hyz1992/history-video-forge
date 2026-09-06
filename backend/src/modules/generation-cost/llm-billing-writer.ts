@@ -59,6 +59,8 @@ export const OPERATION_FALLBACK_TIER: Record<GenerationOperation, "llm.smart" | 
   "publish.generate": "llm.flash",
   // voice.preview 不产生 LLM 记账（媒体操作）；占位保持 Record 完整性
   "voice.preview": "llm.flash",
+  // 纯媒体口播不创建 LLM writer；与既有试听相同的类型占位。
+  "script.narration.generate": "llm.flash",
 };
 
 export interface LlmBillingContext {

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { NarrationCreativeSettings } from "../narration/narration.schema.js";
 
 import {
   ArtStyleResolvedParams,
@@ -138,6 +139,8 @@ export const CreativePreferences = z
     art_style_preset_id: z.string().min(1).nullable(),
     subtitle_style_preset_id: z.string().min(1).nullable(),
     subtitle_style_overrides: SubtitleStyleOverrideSet.default({}),
+    // 缺省保持旧 JSON 形状；新模式解析时使用基准值，旧消费者不会被改写。
+    narration: NarrationCreativeSettings.optional(),
   })
   .strict();
 export type CreativePreferences = z.infer<typeof CreativePreferences>;
@@ -155,6 +158,7 @@ export const CreativeRunOverrideSchema = z
     art_style_preset_id: z.string().min(1).nullable().optional(),
     subtitle_style_preset_id: z.string().min(1).nullable().optional(),
     subtitle_style_overrides: SubtitleStyleOverrideSet.optional(),
+    narration: NarrationCreativeSettings.partial().optional(),
   })
   .strict();
 export type CreativeRunOverride = z.infer<typeof CreativeRunOverrideSchema>;

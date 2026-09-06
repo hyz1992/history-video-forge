@@ -215,3 +215,10 @@ export {
   TitleCandidate,
   TitleStyle,
 } from "./publish/publish-package.schema";
+
+// 口播前置共享合同：独立版本联合，旧消费者导出不变。
+export * from "./narration/narration.schema";
+export * from "./narration/narration-timing.schema";
+export * from "./narration/narration-configuration";
+export * from "./narration/narration-versioned.schema";
+export { GENERATION_OPERATION_CAPABILITY } from "./generation/generation-configuration-resolver";

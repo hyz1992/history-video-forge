@@ -80,6 +80,7 @@ export const OPERATION_TOKEN_ESTIMATES: Record<
 > = {
   "topic.generate": { estimated_input_tokens: 40000, estimated_output_tokens: 20000 },
   "script.generate": { estimated_input_tokens: 30000, estimated_output_tokens: 15000 },
+  "script.narration.generate": { estimated_input_tokens: 0, estimated_output_tokens: 0 },
   "storyboard.generate": { estimated_input_tokens: 40000, estimated_output_tokens: 25000 },
   "asset_plan.generate": { estimated_input_tokens: 50000, estimated_output_tokens: 30000 },
   "assets.generate": { estimated_input_tokens: 8000, estimated_output_tokens: 4000 },

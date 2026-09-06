@@ -150,6 +150,7 @@ export const OPERATION_TOKEN_BUDGETS: Record<
   GenerationOperation,
   { max_input_tokens: number; max_output_tokens: number }
 > = {
+  "script.narration.generate": { max_input_tokens: 0, max_output_tokens: 0 },
   "topic.generate": { max_input_tokens: 80000, max_output_tokens: 40000 },
   "script.generate": { max_input_tokens: 60000, max_output_tokens: 30000 },
   "storyboard.generate": { max_input_tokens: 80000, max_output_tokens: 60000 },
