@@ -1,3 +1,4 @@
+import { assertNarrationExecutionCompatibility, checkNarrationExecutionCompatibility } from "../../narration/narration-execution-compatibility.js";
 import {
   VoiceIntent,
   VoiceMatchResult,
@@ -64,7 +65,13 @@ export async function resolveVoiceProfile(
     const requested = await getVoiceProfileById(input.db, requestedId, {
       ownerId: input.ownerId,
     });
-    if (requested && requested.provider_status !== "deleted") {
+    if (!requested || requested.provider_status === "deleted") throw new Error("generation_creative_voice_profile_unavailable");
+    if (requested) {
+      assertNarrationExecutionCompatibility({
+        catalog: input.db.providerModelCatalog.values(),
+        operation: "assets.generate",
+        voice: requested,
+      });
       await recordVoiceProfileUsage(input.db, requested.voice_profile_id);
       return {
         voiceProfileId: requested.voice_profile_id,
@@ -83,7 +90,11 @@ export async function resolveVoiceProfile(
   const profiles = await listVoiceProfiles(input.db, { ownerId: input.ownerId });
   const matchResult = matchVoiceProfile({
     intent,
-    profiles,
+    profiles: profiles.filter(voice => checkNarrationExecutionCompatibility({
+      catalog: input.db.providerModelCatalog.values(),
+      operation: "assets.generate",
+      voice,
+    }).compatible),
     allowLocalProfileCreation: true,
   });
 

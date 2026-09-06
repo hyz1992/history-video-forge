@@ -1,3 +1,5 @@
+import { assertNarrationExecutionCompatibility } from "../../../narration/narration-execution-compatibility.js";
+import { getVoiceProfileById } from "../../voice/voice-profile.repository.js";
 /**
  * DashScope TTS provider shell.
  *
@@ -279,6 +281,15 @@ export function createDashscopeTtsProvider(
 
       const endpoint = String(prepared.rawRequestJson.endpoint);
       const voiceProfileId = ctx.manifest.audio_summary.voice_profile_id;
+      const profile = options.db ? await getVoiceProfileById(options.db, voiceProfileId) : null;
+      const compatibility = {
+        catalog: [...options.db?.providerModelCatalog.values() ?? []],
+        operation: "assets.generate" as const,
+        providerKey: "dashscope",
+        modelId: options.model,
+        voice: profile,
+      };
+      assertNarrationExecutionCompatibility(compatibility);
       const providerVoice = options.db
         ? await resolveProviderVoice({
             db: options.db,
@@ -293,6 +304,11 @@ export function createDashscopeTtsProvider(
             matchScore: null,
             matchReasons: [] as string[],
           };
+      assertNarrationExecutionCompatibility({
+        ...compatibility,
+        actualVoiceTarget: providerVoice.targetModel,
+        actualProviderVoiceId: providerVoice.providerVoiceId,
+      });
       const allChunks = ctx.assetPlan.tts_plan.chunks;
       const fullText = allChunks.map((c) => c.script_excerpt).join("");
       const totalEstimatedDuration = allChunks.reduce(

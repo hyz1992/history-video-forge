@@ -1,3 +1,4 @@
+import { checkNarrationExecutionCompatibility } from "../narration/narration-execution-compatibility.js";
 import type { DbClient } from "../../db/client.js";
 
 /**
@@ -39,7 +40,8 @@ export type ProviderDispatchGateDecision =
         | "catalog_entry_missing"
         | "catalog_entry_disabled"
         | "catalog_entry_mismatch"
-        | "catalog_entry_scope_mismatch";
+        | "catalog_entry_scope_mismatch"
+        | "catalog_entry_execution_incompatible";
       capability: PaidMediaCapability;
       provider_key: string;
       model_id: string;
@@ -71,6 +73,7 @@ export function checkProviderDispatchGate(
     message,
   });
 
+  let incompatible = false;
   let capabilityHasActiveRow = false;
   let scopeMismatchEntry: { id: string; scope: unknown } | null = null;
   let disabledExactEntry: { id: string } | null = null;
@@ -87,6 +90,14 @@ export function checkProviderDispatchGate(
       target.deploymentScope === undefined || declaredScope === target.deploymentScope;
 
     if (entry.status === "active" && scopeMatches) {
+      if (target.capability === "tts.synthesize" && !checkNarrationExecutionCompatibility({
+        catalog: db.providerModelCatalog.values(),
+        operation: "assets.generate",
+        model: entry,
+      }).compatible) {
+        incompatible = true;
+        continue;
+      }
       return { allowed: true };
     }
     if (entry.status === "active") {
@@ -97,6 +108,7 @@ export function checkProviderDispatchGate(
     }
   }
 
+  if (incompatible) return deny("catalog_entry_execution_incompatible", "该目录项不支持旧媒体执行协议");
   if (scopeMismatchEntry) {
     return deny(
       "catalog_entry_scope_mismatch",

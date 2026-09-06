@@ -1,3 +1,4 @@
+import { assertNarrationExecutionCompatibility } from "../../narration/narration-execution-compatibility.js";
 import type { DbClient, GenerationRunRecord, RunConfigurationSnapshotRecord, UsageCostRecordRecord } from "../../../db/client.js";
 import { priceGenerationWorkload, type PricingWorkloadItem } from "../../generation-cost/pricing.service.js";
 import { listProviderModelCatalog } from "../../generation-cost/provider-model-catalog.repository.js";
@@ -60,6 +61,17 @@ export async function executeVoicePreview(
     };
   }
 
+  const synthesisModel =
+    input.synthesisModel?.trim() ||
+    process.env.ALIYUN_DASHSCOPE_TTS_MODEL?.trim() ||
+    "qwen3-tts-instruct-flash";
+  assertNarrationExecutionCompatibility({
+    catalog: db.providerModelCatalog.values(),
+    operation: "voice.preview",
+    providerKey: "dashscope",
+    modelId: synthesisModel,
+    voice: profile,
+  });
   const apiKey = process.env.ALIYUN_DASHSCOPE_API_KEY?.trim();
   if (apiKey) {
     const resolved = await resolveProviderVoice({
@@ -71,10 +83,15 @@ export async function executeVoicePreview(
     // P1-1 + P1-2（外部审查两轮）：试听合成模型 = 快照冻结的
     // tts.synthesize 模型（报价/执行/usage 同源）；仅免 quote 本地路径回退 env。
     // 设计音色档案的 target_model（qwen3-tts-vd）只承担音色设计 API。
-    const synthesisModel =
-      input.synthesisModel?.trim() ||
-      process.env.ALIYUN_DASHSCOPE_TTS_MODEL?.trim() ||
-      "qwen3-tts-instruct-flash";
+    assertNarrationExecutionCompatibility({
+      catalog: db.providerModelCatalog.values(),
+      operation: "voice.preview",
+      providerKey: "dashscope",
+      modelId: synthesisModel,
+      voice: profile,
+      actualVoiceTarget: resolved.targetModel,
+      actualProviderVoiceId: resolved.providerVoiceId,
+    });
     const audioBase64 = await synthesizeWithDashscope({
       apiKey,
       baseUrl: process.env.ALIYUN_DASHSCOPE_BASE_URL,

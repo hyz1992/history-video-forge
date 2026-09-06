@@ -129,7 +129,7 @@ export interface GenerationConfigApi {
       capabilities?: CapabilitySlotSelectionMap;
     },
   ): Promise<ProjectGenerationConfigurationDto>;
-  listCapabilities(): Promise<{ capabilities: PublicCapabilityEntryDto[] }>;
+  listCapabilities(projectId?: string): Promise<{ capabilities: PublicCapabilityEntryDto[] }>;
 }
 
 export function createFetchGenerationConfigApi(baseUrl = ""): GenerationConfigApi {
@@ -166,9 +166,10 @@ export function createFetchGenerationConfigApi(baseUrl = ""): GenerationConfigAp
         { method: "PATCH", body },
       );
     },
-    async listCapabilities() {
+    async listCapabilities(projectId) {
+      const query = projectId === undefined ? "" : `?project_id=${encodeURIComponent(projectId)}`;
       return await apiFetch<{ capabilities: PublicCapabilityEntryDto[] }>(
-        `${baseUrl}/api/generation-capabilities`,
+        `${baseUrl}/api/generation-capabilities${query}`,
       );
     },
   };
@@ -317,6 +318,7 @@ interface ProjectConfigStateSlice {
 export interface GenerationConfigStoreState {
   userPreference: PreferenceStateSlice;
   capabilities: PublicCapabilityEntryDto[];
+  projectCapabilities: Record<string, PublicCapabilityEntryDto[]>;
   capabilitiesLoading: boolean;
   projectConfigs: Record<string, ProjectConfigStateSlice>;
 }
@@ -325,7 +327,7 @@ export interface GenerationConfigStore {
   state: Readonly<GenerationConfigStoreState>;
   loadUserPreference: () => Promise<void>;
   saveUserPreference: (input: GenerationConfigPatchInput) => Promise<{ ok: true } | { ok: false; conflict: boolean }>;
-  loadCapabilities: () => Promise<void>;
+  loadCapabilities: (projectId?: string) => Promise<void>;
   loadProjectConfig: (projectId: string) => Promise<void>;
   saveProjectConfig: (
     projectId: string,
@@ -348,6 +350,7 @@ export function createGenerationConfigStore(api: GenerationConfigApi): Generatio
   const state = reactive<GenerationConfigStoreState>({
     userPreference: { data: null, loading: false, saving: false, conflict: false, conflictEpoch: 0, error: null },
     capabilities: [],
+    projectCapabilities: {},
     capabilitiesLoading: false,
     projectConfigs: {},
   });
@@ -415,15 +418,24 @@ export function createGenerationConfigStore(api: GenerationConfigApi): Generatio
     }
   }
 
-  async function loadCapabilities(): Promise<void> {
-    state.capabilitiesLoading = true;
+  const capabilityLoads = new Map<string | undefined, number>();
+  async function loadCapabilities(projectId?: string): Promise<void> {
+    const epoch = (capabilityLoads.get(projectId) ?? 0) + 1;
+    capabilityLoads.set(projectId, epoch);
+    if (projectId === undefined) state.capabilitiesLoading = true;
+    else state.projectCapabilities[projectId] = [];
+    const apply = (entries: PublicCapabilityEntryDto[]) => {
+      if (capabilityLoads.get(projectId) !== epoch) return;
+      if (projectId === undefined) state.capabilities = entries;
+      else state.projectCapabilities[projectId] = entries;
+    };
     try {
-      const response = await api.listCapabilities();
-      state.capabilities = response.capabilities.filter((entry) => entry.availability === "enabled");
+      const response = await api.listCapabilities(projectId);
+      apply(response.capabilities.filter((entry) => entry.availability === "enabled"));
     } catch {
-      state.capabilities = [];
+      apply([]);
     } finally {
-      state.capabilitiesLoading = false;
+      if (projectId === undefined && capabilityLoads.get(projectId) === epoch) state.capabilitiesLoading = false;
     }
   }
 

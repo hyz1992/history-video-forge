@@ -1,3 +1,4 @@
+import { readProjectNarrationMode } from "../narration/narration-execution-compatibility.js";
 import type { AppResponse, RouteContext } from "../../app.js";
 import { requireUser } from "../../auth/authorization.js";
 import { guardOwnedRoute, guardUserRoute } from "../../auth/authorization.js";
@@ -124,6 +125,9 @@ export const patchProjectConfigController = guardOwnedRoute(
       configuration: parsed.configuration,
     }, user.userId);
     if (!result.ok) {
+      if (result.error.code === "narration_execution_incompatible") {
+        return { statusCode: 422, body: { error: result.error.code, reason: result.error.reason } };
+      }
       if (result.error.code === "configuration_invalid_s2_2c_scope") {
         return { statusCode: 400, body: { error: result.error.code, reason: result.error.reason } };
       }
@@ -148,8 +152,23 @@ export const patchProjectConfigController = guardOwnedRoute(
 // --- 目录只读 ---
 
 export const getGenerationCapabilitiesController = guardUserRoute(
-  (context: RouteContext): AppResponse => {
-    const entries = listPublicGenerationCapabilities(context.app.db);
+  async (context: RouteContext): Promise<AppResponse> => {
+    const projectId = (context.payload as { project_id?: unknown } | undefined)?.project_id;
+    if (projectId !== undefined && (typeof projectId !== "string" || !projectId.trim())) {
+      return { statusCode: 400, body: { error: "invalid_project_id" } };
+    }
+    let mode;
+    if (typeof projectId === "string") {
+      try {
+        mode = await readProjectNarrationMode(context.app.db, projectId, requireUser(context.auth).userId);
+      } catch (error) {
+        if (error instanceof Error && error.message === "project_scope_denied") {
+          return { statusCode: 404, body: { error: "project_not_found" } };
+        }
+        throw error;
+      }
+    }
+    const entries = listPublicGenerationCapabilities(context.app.db, mode);
     const body = GenerationCapabilitiesResponse.parse({ capabilities: entries });
     return { statusCode: 200, body };
   },

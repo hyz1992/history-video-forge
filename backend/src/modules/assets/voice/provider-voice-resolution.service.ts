@@ -1,3 +1,4 @@
+import { assertNarrationExecutionCompatibility } from "../../narration/narration-execution-compatibility.js";
 import type { DbClient } from "../../../db/client.js";
 import {
   createDashscopeDesignedVoice,
@@ -37,6 +38,14 @@ export async function resolveProviderVoice(
   if (profile.provider_status === "deleted") {
     throw new Error(`voice_profile_deleted:${input.localVoiceProfileId}`);
   }
+
+  // 此次读取的档案才是设计/就绪音色的执行来源；调用者的较早检查不能替代。
+  // 在 try 之前拒绝，协议不兼容不应触发设计请求或失败状态写入。
+  assertNarrationExecutionCompatibility({
+    catalog: input.db.providerModelCatalog.values(),
+    operation: "assets.generate",
+    voice: profile,
+  });
 
   if (
     (profile.kind === "system" || profile.provider_status === "ready") &&

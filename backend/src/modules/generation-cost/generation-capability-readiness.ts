@@ -1,3 +1,4 @@
+import { checkNarrationExecutionCompatibility } from "../narration/narration-execution-compatibility.js";
 import type { ProviderModelCatalogRecord } from "../../db/client.js";
 import { CAPABILITY_SLOTS } from "../../../../shared/src/index.js";
 import {
@@ -35,6 +36,7 @@ export type ReadinessIssueCode =
   | "llm_candidate_not_declared"
   | "media_adapter_unregistered"
   | "media_model_not_registered"
+  | "media_execution_protocol_incompatible"
   | "media_credential_unconfigured"
   | "media_deployment_scope_unknown"
   | "media_deployment_scope_mismatch"
@@ -325,6 +327,18 @@ function validateMediaEntry(
     issue: GenerationCapabilityReadinessIssue,
   ) => void,
 ): void {
+  if (entry.capability === "tts.synthesize" && !checkNarrationExecutionCompatibility({
+    catalog: input.catalog,
+    operation: "assets.generate",
+    model: entry,
+  }).compatible) {
+    pushIssue(entry, {
+      code: "media_execution_protocol_incompatible",
+      capability: entry.capability,
+      provider_model_id: entry.id,
+      message: "旧媒体 adapter 不支持口播专用 WS 协议",
+    });
+  }
   const registered = input.media.registeredModels;
   const providerRegistered = registered.some((m) => m.providerKey === entry.providerKey);
   if (!providerRegistered) {

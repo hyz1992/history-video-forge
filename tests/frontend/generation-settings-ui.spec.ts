@@ -94,6 +94,7 @@ function createMockStore(overrides: Partial<GenerationConfigStore> = {}): Genera
         availability: "enabled",
       },
     ],
+    projectCapabilities: { "proj-1": [] },
     capabilitiesLoading: false,
     projectConfigs: {
       "proj-1": {

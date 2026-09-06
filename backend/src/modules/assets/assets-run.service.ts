@@ -1,3 +1,4 @@
+import { checkNarrationExecutionCompatibility } from "../narration/narration-execution-compatibility.js";
 import type {
   DbClient,
   ProjectRecord,
@@ -700,6 +701,17 @@ function applyArtifactToManifestRoutes(input: {
 
 export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
   const { db, project } = input;
+  const frozenTts = input.resolvedCapabilities?.["tts.synthesize"];
+  const compatibility = checkNarrationExecutionCompatibility({
+    catalog: db.providerModelCatalog.values(),
+    operation: "assets.generate",
+    projectMode: project.narrationTimingMode,
+    modelId: frozenTts?.model_id,
+    providerKey: frozenTts?.provider_key,
+  });
+  if (!compatibility.compatible) {
+    return { statusCode: 422, body: { error: compatibility.code, reason: compatibility.reason } };
+  }
   const previousActiveAssetManifestRecordId = project.activeAssetManifestRecordId;
   if (!db.voiceProfilePersistence.enabled) {
     const voiceRoot = process.env.VITEST

@@ -55,7 +55,7 @@ export interface VoicePreviewRequestOptions {
 
 export interface CreativePresetsApi {
   listCreativePresets(): Promise<{ art_style: CreativePresetDto[]; subtitle: CreativePresetDto[] }>;
-  listVoiceProfiles(): Promise<{ profiles: VoiceProfileDto[] }>;
+  listVoiceProfiles(projectId?: string): Promise<{ profiles: VoiceProfileDto[] }>;
   requestVoicePreview(
     projectId: string,
     voiceProfileId: string,
@@ -70,8 +70,9 @@ export function createFetchCreativePresetsApi(baseUrl = ""): CreativePresetsApi 
         `${baseUrl}/api/creative-presets`,
       );
     },
-    async listVoiceProfiles() {
-      return await apiFetch<{ profiles: VoiceProfileDto[] }>(`${baseUrl}/api/me/voice-profiles`);
+    async listVoiceProfiles(projectId) {
+      const query = projectId === undefined ? "" : `?project_id=${encodeURIComponent(projectId)}`;
+      return await apiFetch<{ profiles: VoiceProfileDto[] }>(`${baseUrl}/api/me/voice-profiles${query}`);
     },
     async requestVoicePreview(projectId, voiceProfileId, options) {
       const body: Record<string, unknown> = {};
@@ -91,6 +92,7 @@ export interface CreativePresetsStoreState {
   artStylePresets: CreativePresetDto[];
   subtitlePresets: CreativePresetDto[];
   voiceProfiles: VoiceProfileDto[];
+  projectVoiceProfiles: Record<string, VoiceProfileDto[]>;
   loading: boolean;
   previewing: Record<string, boolean>;
   error: string | null;
@@ -99,7 +101,7 @@ export interface CreativePresetsStoreState {
 export interface CreativePresetsStore {
   state: Readonly<CreativePresetsStoreState>;
   loadCreativePresets: () => Promise<void>;
-  loadVoiceProfiles: () => Promise<void>;
+  loadVoiceProfiles: (projectId?: string) => Promise<void>;
   previewVoice: (
     projectId: string,
     voiceProfileId: string,
@@ -114,6 +116,7 @@ export function createCreativePresetsStore(api: CreativePresetsApi): CreativePre
     artStylePresets: [],
     subtitlePresets: [],
     voiceProfiles: [],
+    projectVoiceProfiles: {},
     loading: false,
     previewing: {},
     error: null,
@@ -133,16 +136,28 @@ export function createCreativePresetsStore(api: CreativePresetsApi): CreativePre
     }
   }
 
-  async function loadVoiceProfiles(): Promise<void> {
-    state.loading = true;
+  const voiceLoads = new Map<string | undefined, number>();
+  async function loadVoiceProfiles(projectId?: string): Promise<void> {
+    const epoch = (voiceLoads.get(projectId) ?? 0) + 1;
+    voiceLoads.set(projectId, epoch);
+    if (projectId === undefined) state.loading = true;
+    else state.projectVoiceProfiles[projectId] = [];
     state.error = null;
+    const apply = (profiles: VoiceProfileDto[]) => {
+      if (voiceLoads.get(projectId) !== epoch) return;
+      if (projectId === undefined) state.voiceProfiles = profiles;
+      else state.projectVoiceProfiles[projectId] = profiles;
+    };
     try {
-      const response = await api.listVoiceProfiles();
-      state.voiceProfiles = response.profiles;
+      const response = await api.listVoiceProfiles(projectId);
+      apply(response.profiles);
     } catch (error) {
-      state.error = error instanceof Error ? error.message : "voice_profiles_load_failed";
+      if (voiceLoads.get(projectId) === epoch) {
+        apply([]);
+        state.error = error instanceof Error ? error.message : "voice_profiles_load_failed";
+      }
     } finally {
-      state.loading = false;
+      if (projectId === undefined && voiceLoads.get(projectId) === epoch) state.loading = false;
     }
   }
 

@@ -115,6 +115,7 @@ function createMockStore(overrides: Partial<GenerationConfigStore> = {}): Genera
       error: null,
     },
     capabilities: MULTI_CAPABILITIES,
+    projectCapabilities: { "proj-1": MULTI_CAPABILITIES },
     capabilitiesLoading: false,
     projectConfigs: {
       "proj-1": {

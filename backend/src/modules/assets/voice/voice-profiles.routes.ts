@@ -1,3 +1,4 @@
+import { checkNarrationExecutionCompatibility, readProjectNarrationMode } from "../../narration/narration-execution-compatibility.js";
 import type { AppResponse, RouteContext } from "../../../app.js";
 import { guardOwnedRoute, guardUserRoute, requireUser } from "../../../auth/authorization.js";
 import { getProjectById } from "../../projects/project.repository.js";
@@ -20,7 +21,28 @@ export const listMyVoiceProfilesController = guardUserRoute(
     // P1-3（外部审查）：fresh 数据库首次打开设置页也能看到公共 seed 音色——
     // 幂等 seed 不依赖业务请求顺序（执行链路的 seed 保持不变）。
     await seedGlobalVoiceProfiles(context.app.db);
-    const profiles = await listVoiceProfiles(context.app.db, { ownerId: user.userId });
+    const projectId = (context.payload as { project_id?: unknown } | undefined)?.project_id;
+    if (projectId !== undefined && (typeof projectId !== "string" || !projectId.trim())) {
+      return { statusCode: 400, body: { error: "invalid_project_id" } };
+    }
+    let projectMode: Awaited<ReturnType<typeof readProjectNarrationMode>> | undefined;
+    if (typeof projectId === "string") {
+      try {
+        projectMode = await readProjectNarrationMode(context.app.db, projectId, user.userId);
+      } catch {
+        return { statusCode: 404, body: { error: "project_not_found" } };
+      }
+    }
+    const visibleProfiles = await listVoiceProfiles(context.app.db, { ownerId: user.userId });
+    const catalog = [...context.app.db.providerModelCatalog.values()];
+    const profiles = projectMode === undefined ? visibleProfiles : visibleProfiles.filter(voice => {
+      if (projectMode === "legacy_estimated") {
+        return checkNarrationExecutionCompatibility({ catalog, operation: "project.configuration", projectMode, voice }).compatible;
+      }
+      return catalog.some(model => checkNarrationExecutionCompatibility({
+        catalog, operation: "project.configuration", projectMode, model, voice,
+      }).compatible);
+    });
     const body = {
       profiles: profiles.map((profile) => ({
         voice_profile_id: profile.voice_profile_id,

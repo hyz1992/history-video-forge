@@ -1,3 +1,4 @@
+import { assertNarrationExecutionCompatibility } from "../../narration/narration-execution-compatibility.js";
 import type { DbClient, ProjectRecord } from "../../../db/client.js";
 import { getProjectGenerationConfiguration } from "../../generation-config/generation-config.repository.js";
 import { getVoiceProfileById } from "./voice-profile.repository.js";
@@ -19,6 +20,14 @@ export async function resolveCreativeVoiceForExecution(
   project: ProjectRecord,
 ): Promise<string> {
   const config = await getProjectGenerationConfiguration(db, project.id, project.ownerId);
+  const selection = config.configuration.capabilities["tts.synthesize"];
+  const selectedModel = selection.mode === "fixed" ? db.providerModelCatalog.get(selection.provider_model_id) : undefined;
+  assertNarrationExecutionCompatibility({
+    catalog: db.providerModelCatalog.values(),
+    operation: "assets.generate",
+    projectMode: project.narrationTimingMode,
+    model: selectedModel,
+  });
   const creative = config.configuration.creative;
   if (creative.voice_profile_id === null) {
     return "";
@@ -31,6 +40,13 @@ export async function resolveCreativeVoiceForExecution(
     throw new Error("generation_creative_voice_profile_unavailable");
   }
 
+  assertNarrationExecutionCompatibility({
+    catalog: db.providerModelCatalog.values(),
+    operation: "assets.generate",
+    projectMode: project.narrationTimingMode,
+    model: selectedModel,
+    voice: profile,
+  });
   const ttsDefault = [...db.providerModelCatalog.values()].find(
     (entry) =>
       entry.capability === "tts.synthesize" &&

@@ -90,10 +90,11 @@ watch(
     await store.loadProjectConfig(projectId);
     await Promise.all([
       creativeStore.loadCreativePresets(),
-      creativeStore.loadVoiceProfiles(),
+      creativeStore.loadVoiceProfiles(projectId),
       // S2-2C：高级设置区候选列表与目录同源（store 统一加载）
-      store.loadCapabilities(),
+      store.loadCapabilities(projectId),
     ]);
+    if (props.projectId !== projectId || !props.open) return;
     applyServerData();
     loaded.value = true;
   },
@@ -244,7 +245,7 @@ function playPreviewAudio(uri: string): void {
         <section class="creative-section" data-testid="project-creative-settings">
           <CreativeVoiceSettings
             v-model="draft.voiceProfileId"
-            :profiles="creativeStore.state.voiceProfiles"
+            :profiles="creativeStore.state.projectVoiceProfiles[projectId] ?? []"
             :disabled="configState?.saving"
             :project-id="props.projectId"
             :on-preview="handleVoicePreview"
@@ -265,7 +266,7 @@ function playPreviewAudio(uri: string): void {
           <h4 class="project-capability-title">高级设置：Provider/Model 选择</h4>
           <CapabilitySlotSettings
             v-model="draft.capabilities"
-            :entries="store.state.capabilities"
+            :entries="store.state.projectCapabilities[projectId] ?? []"
             :disabled="configState?.saving"
             test-id-prefix="project-"
           />

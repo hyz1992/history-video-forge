@@ -1,3 +1,5 @@
+import { checkNarrationExecutionCompatibility, readProjectNarrationMode } from "../narration/narration-execution-compatibility.js";
+import { getVoiceProfileById } from "../assets/voice/voice-profile.repository.js";
 import type {
   DbClient,
   ProjectGenerationConfigurationRecord,
@@ -8,6 +10,7 @@ import {
   DEFAULT_GENERATION_CONFIGURATION,
   assertS22CScopeConstraints,
   type CapabilitySlot,
+  type NarrationTimingMode,
   type GenerationConfigurationV1,
 } from "../../../../shared/src/index.js";
 
@@ -245,6 +248,7 @@ export interface ProjectConfigResult {
 }
 
 export type ProjectConfigUpsertResult =
+  | { ok: false; error: { code: "narration_execution_incompatible"; reason: string } }
   | { ok: true; value: ProjectConfigResult & { invalidation_preview: InvalidationPreview } }
   | { ok: false; error: { code: "project_generation_configuration_revision_conflict"; current_revision: number } }
   | { ok: false; error: { code: "configuration_invalid_s2_2c_scope"; reason: string } };
@@ -378,6 +382,21 @@ export async function upsertProjectGenerationConfiguration(
     return { ok: false, error: { code: "configuration_invalid_s2_2c_scope", reason: scopeCheck.reason } };
   }
 
+  const projectMode = await readProjectNarrationMode(db, projectId, actorUserId);
+  const selection = input.configuration.capabilities["tts.synthesize"];
+  const model = selection.mode === "fixed" ? db.providerModelCatalog.get(selection.provider_model_id) : undefined;
+  const voiceId = input.configuration.creative.voice_profile_id;
+  const voice = voiceId ? await getVoiceProfileById(db, voiceId, { ownerId: actorUserId }) : null;
+  const compatibility = checkNarrationExecutionCompatibility({
+    catalog: db.providerModelCatalog.values(),
+    projectMode,
+    operation: "project.configuration",
+    model,
+    voice,
+  });
+  if (!compatibility.compatible) {
+    return { ok: false, error: { code: compatibility.code, reason: compatibility.reason } };
+  }
   const current = await getProjectGenerationConfiguration(db, projectId, actorUserId);
 
   if (input.expected_revision !== current.revision) {
@@ -499,10 +518,20 @@ export interface PublicCapabilityEntry {
   availability: "enabled" | "disabled";
 }
 
-export function listPublicGenerationCapabilities(db: DbClient): PublicCapabilityEntry[] {
+export function listPublicGenerationCapabilities(db: DbClient, projectMode?: NarrationTimingMode): PublicCapabilityEntry[] {
   const entries: PublicCapabilityEntry[] = [];
   for (const record of db.providerModelCatalog.values()) {
     if (record.status !== "active") continue;
+    if (projectMode && record.capability === "tts.synthesize") {
+      const compatibility = checkNarrationExecutionCompatibility({
+        catalog: db.providerModelCatalog.values(),
+        operation: "project.configuration",
+        projectMode,
+        model: record,
+        candidateOnly: true,
+      });
+      if (!compatibility.compatible) continue;
+    }
     entries.push({
       id: record.id,
       capability: record.capability,

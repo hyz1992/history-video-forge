@@ -129,8 +129,9 @@ describe("generation-config repository", () => {
 
     it("updates project configuration with correct expected_revision", async () => {
       const db = createDbClient();
-      getProjectGenerationConfiguration(db, "p1");
-      const result = await upsertProjectGenerationConfiguration(db, "p1", {
+      const project = await createProject(db, { name: "配置测试", ownerId: "u1" });
+      await getProjectGenerationConfiguration(db, project.id, "u1");
+      const result = await upsertProjectGenerationConfiguration(db, project.id, {
         expected_revision: 1,
         configuration: { ...DEFAULT_GENERATION_CONFIGURATION, video: { strategy: "all_remotion", api_quality: "standard_720p" } },
       }, "u1");
@@ -144,9 +145,10 @@ describe("generation-config repository", () => {
     // GET 的 diff 与 invalidation_preview 必须正确（不能返回 null/none）。
     it("computes diff against implicit DEFAULT when user has no persisted preference", async () => {
       const db = createDbClient();
-      // 用户 u1 无偏好记录；项目 p1 改为 all_api_video
-      await getProjectGenerationConfiguration(db, "p1", "u1");
-      const patch = await upsertProjectGenerationConfiguration(db, "p1", {
+      const project = await createProject(db, { name: "配置测试", ownerId: "u1" });
+      // 用户 u1 无偏好记录；项目改为 all_api_video
+      await getProjectGenerationConfiguration(db, project.id, "u1");
+      const patch = await upsertProjectGenerationConfiguration(db, project.id, {
         expected_revision: 1,
         configuration: { ...DEFAULT_GENERATION_CONFIGURATION, video: { strategy: "all_api_video", api_quality: "standard_720p" } },
       }, "u1");
@@ -157,14 +159,15 @@ describe("generation-config repository", () => {
       expect(patch.value.diff_from_user_default).toHaveProperty("video");
 
       // 随后 GET 的 diff 与 preview 一致
-      const read = await getProjectGenerationConfiguration(db, "p1", "u1");
+      const read = await getProjectGenerationConfiguration(db, project.id, "u1");
       expect(read.diff_from_user_default).toHaveProperty("video");
     });
 
     it("rejects project config update with stale revision", async () => {
       const db = createDbClient();
-      getProjectGenerationConfiguration(db, "p1");
-      const result = await upsertProjectGenerationConfiguration(db, "p1", {
+      const project = await createProject(db, { name: "配置测试", ownerId: "u1" });
+      await getProjectGenerationConfiguration(db, project.id, "u1");
+      const result = await upsertProjectGenerationConfiguration(db, project.id, {
         expected_revision: 99,
         configuration: DEFAULT_GENERATION_CONFIGURATION,
       }, "u1");
@@ -245,9 +248,12 @@ describe("generation-config repository", () => {
 
     it("project backfill loser syncs memory so subsequent PATCH works", async () => {
       const db = createDbClient();
+      const project = await createProject(db, { name: "配置测试", ownerId: "u1" });
+      // 保留真实项目身份，清配置以进入并发 backfill loser 分支。
+      db.projectGenerationConfigurations.clear();
       const dbRecord: ProjectGenerationConfigurationRecord = {
         id: "db-id",
-        projectId: "p1",
+        projectId: project.id,
         schemaVersion: "generation_configuration_v1",
         revision: 1,
         sourceUserPreferenceRevision: null,
@@ -266,11 +272,11 @@ describe("generation-config repository", () => {
       };
 
       // loser 读取（backfill 冲突 → stored）
-      const result = await getProjectGenerationConfiguration(db, "p1");
+      const result = await getProjectGenerationConfiguration(db, project.id);
       expect(result.source).toBe("stored");
       expect(result.revision).toBe(1);
       // 内存已同步：后续 PATCH 不再 project_config_not_found_after_backfill
-      const patch = await upsertProjectGenerationConfiguration(db, "p1", {
+      const patch = await upsertProjectGenerationConfiguration(db, project.id, {
         expected_revision: 1,
         configuration: { ...DEFAULT_GENERATION_CONFIGURATION, video: { strategy: "all_remotion", api_quality: "standard_720p" } },
       }, "u1");
@@ -401,7 +407,7 @@ describe("generation-config repository", () => {
 
     it("失效预览去重：llm.smart + llm.flash 同时变化只输出一个 llm_generation", async () => {
       const db = createDbClient();
-      const project = await createProject(db, { name: "Dedup Preview" });
+      const project = await createProject(db, { name: "Dedup Preview", ownerId: "u1" });
       await upsertProjectGenerationConfiguration(db, project.id, {
         expected_revision: 1,
         configuration: DEFAULT_GENERATION_CONFIGURATION,
