@@ -123,7 +123,7 @@ export const patchProjectConfigController = guardOwnedRoute(
     const result = await upsertProjectGenerationConfiguration(context.app.db, context.params.projectId, {
       expected_revision: parsed.expected_revision!,
       configuration: parsed.configuration,
-    }, user.userId);
+    }, user.userId, user.role);
     if (!result.ok) {
       if (result.error.code === "narration_execution_incompatible") {
         return { statusCode: 422, body: { error: result.error.code, reason: result.error.reason } };
@@ -160,7 +160,8 @@ export const getGenerationCapabilitiesController = guardUserRoute(
     let mode;
     if (typeof projectId === "string") {
       try {
-        mode = await readProjectNarrationMode(context.app.db, projectId, requireUser(context.auth).userId);
+        const user = requireUser(context.auth);
+        mode = await readProjectNarrationMode(context.app.db, projectId, user.userId, user.role);
       } catch (error) {
         if (error instanceof Error && error.message === "project_scope_denied") {
           return { statusCode: 404, body: { error: "project_not_found" } };

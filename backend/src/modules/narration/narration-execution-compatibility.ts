@@ -1,3 +1,5 @@
+import type { UserRole } from "../../auth/auth-context.js";
+import { AuthorizationError } from "../../auth/authorization.js";
 import {
   QualifiedNarrationSettings,
   NarrationTimingMode,
@@ -134,16 +136,35 @@ export function assertNarrationExecutionCompatibility(input: NarrationCompatibil
   if (!decision.compatible) throw new Error(decision.code);
 }
 
-/** 仅读取模式：持久化启用时项目由数据库决定，历史 Map 测试保持原路径。 */
+/** 模式和音色可见域均来自同一次权威项目读取。角色只能由可信auth调用者传入。 */
+export async function readProjectNarrationContext(
+  db: DbClient,
+  projectId: string,
+  actorUserId: string,
+  actorRole: UserRole = "USER",
+): Promise<{ mode: NarrationTimingMode; ownerId: string }> {
+  const client = db.narrationPersistence.prismaClient ?? db.firstAggregateWriter?.narrationPrismaClient;
+  const project = client
+    ? await client.project.findFirst({ where: { id: projectId, archivedAt: null } })
+    : db.projects.get(projectId);
+  // 对齐 authorization.requireOwner：ADMIN可管理其他owner，USER只能管理本人项目。
+  if (!project || project.id !== projectId ||
+    ("archivedAt" in project && project.archivedAt !== null) ||
+    (actorRole !== "ADMIN" && project.ownerId !== actorUserId)) {
+    throw new AuthorizationError(404, "project_not_found", "project_scope_denied");
+  }
+  return {
+    mode: NarrationTimingMode.parse(project.narrationTimingMode ?? "legacy_estimated"),
+    ownerId: project.ownerId,
+  };
+}
+
+/** 兼容内部owner调用；未显式传入可信角色时始终按USER检查。 */
 export async function readProjectNarrationMode(
   db: DbClient,
   projectId: string,
-  ownerId: string,
+  actorUserId: string,
+  actorRole: UserRole = "USER",
 ): Promise<NarrationTimingMode> {
-  const client = db.narrationPersistence.prismaClient ?? db.firstAggregateWriter?.narrationPrismaClient;
-  const project = client
-    ? await client.project.findFirst({ where: { id: projectId, ownerId, archivedAt: null } })
-    : db.projects.get(projectId);
-  if (!project || project.ownerId !== ownerId) throw new Error("project_scope_denied");
-  return NarrationTimingMode.parse(project.narrationTimingMode ?? "legacy_estimated");
+  return (await readProjectNarrationContext(db, projectId, actorUserId, actorRole)).mode;
 }

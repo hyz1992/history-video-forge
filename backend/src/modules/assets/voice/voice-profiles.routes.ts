@@ -1,4 +1,4 @@
-import { checkNarrationExecutionCompatibility, readProjectNarrationMode } from "../../narration/narration-execution-compatibility.js";
+import { checkNarrationExecutionCompatibility, readProjectNarrationContext } from "../../narration/narration-execution-compatibility.js";
 import type { AppResponse, RouteContext } from "../../../app.js";
 import { guardOwnedRoute, guardUserRoute, requireUser } from "../../../auth/authorization.js";
 import { getProjectById } from "../../projects/project.repository.js";
@@ -25,15 +25,16 @@ export const listMyVoiceProfilesController = guardUserRoute(
     if (projectId !== undefined && (typeof projectId !== "string" || !projectId.trim())) {
       return { statusCode: 400, body: { error: "invalid_project_id" } };
     }
-    let projectMode: Awaited<ReturnType<typeof readProjectNarrationMode>> | undefined;
+    let projectContext: Awaited<ReturnType<typeof readProjectNarrationContext>> | undefined;
     if (typeof projectId === "string") {
       try {
-        projectMode = await readProjectNarrationMode(context.app.db, projectId, user.userId);
+        projectContext = await readProjectNarrationContext(context.app.db, projectId, user.userId, user.role);
       } catch {
         return { statusCode: 404, body: { error: "project_not_found" } };
       }
     }
-    const visibleProfiles = await listVoiceProfiles(context.app.db, { ownerId: user.userId });
+    const projectMode = projectContext?.mode;
+    const visibleProfiles = await listVoiceProfiles(context.app.db, { ownerId: projectContext?.ownerId ?? user.userId });
     const catalog = [...context.app.db.providerModelCatalog.values()];
     const profiles = projectMode === undefined ? visibleProfiles : visibleProfiles.filter(voice => {
       if (projectMode === "legacy_estimated") {

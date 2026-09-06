@@ -1,4 +1,5 @@
-import { checkNarrationExecutionCompatibility, readProjectNarrationMode } from "../narration/narration-execution-compatibility.js";
+import type { UserRole } from "../../auth/auth-context.js";
+import { checkNarrationExecutionCompatibility, readProjectNarrationContext } from "../narration/narration-execution-compatibility.js";
 import { getVoiceProfileById } from "../assets/voice/voice-profile.repository.js";
 import type {
   DbClient,
@@ -375,6 +376,7 @@ export async function upsertProjectGenerationConfiguration(
   projectId: string,
   input: { expected_revision: number; configuration: GenerationConfigurationV1 },
   actorUserId: string,
+  actorRole: UserRole = "USER",
 ): Promise<ProjectConfigUpsertResult> {
   // S2-2C：capabilities 开放；scope 校验换 C 版
   const scopeCheck = assertS22CScopeConstraints(input.configuration);
@@ -382,14 +384,19 @@ export async function upsertProjectGenerationConfiguration(
     return { ok: false, error: { code: "configuration_invalid_s2_2c_scope", reason: scopeCheck.reason } };
   }
 
-  const projectMode = await readProjectNarrationMode(db, projectId, actorUserId);
+  const projectContext = await readProjectNarrationContext(db, projectId, actorUserId, actorRole);
   const selection = input.configuration.capabilities["tts.synthesize"];
   const model = selection.mode === "fixed" ? db.providerModelCatalog.get(selection.provider_model_id) : undefined;
   const voiceId = input.configuration.creative.voice_profile_id;
-  const voice = voiceId ? await getVoiceProfileById(db, voiceId, { ownerId: actorUserId }) : null;
+  const voice = voiceId ? await getVoiceProfileById(db, voiceId, { ownerId: projectContext.ownerId }) : null;
+  // 已存在但不属于项目可见域的私有档案不得借ADMIN身份写入。
+  // 历史未加载/不存在的legacy引用仍由原执行入口处理，不在此扩大可用性合同。
+  if (voiceId && !voice && await getVoiceProfileById(db, voiceId)) {
+    return { ok: false, error: { code: "narration_execution_incompatible", reason: "音色不在项目owner的可见范围内" } };
+  }
   const compatibility = checkNarrationExecutionCompatibility({
     catalog: db.providerModelCatalog.values(),
-    projectMode,
+    projectMode: projectContext.mode,
     operation: "project.configuration",
     model,
     voice,
