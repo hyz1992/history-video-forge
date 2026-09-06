@@ -39,7 +39,7 @@ function buildShortId(projectId: string): string {
  *  仅靠目录是否存在或 project.json 都不可靠（残留空壳目录也可能带
  *  project.json）。这里以生成产物目录（含独立 narration-runs）作为真实
  *  内容的判定标志，避免空壳目录遮蔽只生成了口播的项目。 */
-function resolveProjectStorageRoot(input: {
+export function resolveProjectStorageRoot(input: {
   storageRoot: string;
   createdAt: Date;
   displayName: string;

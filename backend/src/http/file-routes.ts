@@ -4,6 +4,9 @@ import { writeFileStream } from "./file-response.js";
 import { exportPublishPackage } from "../modules/publish/publish-export.service.js";
 import type { AuthContext } from "../auth/auth-context.js";
 import { createAnonymousAuthContext } from "../auth/auth-context.js";
+import { NarrationRepository } from '../modules/narration/narration.repository.js';
+import { NarrationBundleStorage } from '../modules/narration/narration-bundle-storage.js';
+import { resolveProjectStorageRoot } from '../db/repositories/prisma-first-aggregate-hydrator.js';
 import {
   AuthorizationError,
   handleControllerAuthError,
@@ -12,13 +15,20 @@ import {
 } from "../auth/authorization.js";
 
 interface FileRouteMatch {
-  type: "artifact_file" | "render_preview" | "render_download" | "publish_export";
+  type: "artifact_file" | "render_preview" | "render_download" | "publish_export" | 'narration_file' | 'narration_subtitle_file';
   projectId: string;
   artifactId?: string;
+  recordId?: string;
+  revisionId?: string;
+  kind?: string;
 }
 
 export function matchFileRoute(method: string, pathname: string): FileRouteMatch | null {
   if (method !== "GET") return null;
+  const narration = pathname.match(/^\/api\/projects\/([A-Za-z0-9_-]+)\/script\/narrations\/([A-Za-z0-9_-]+)\/files\/(audio|timing|events)$/);
+  if(narration)return {type:'narration_file',projectId:narration[1]!,recordId:narration[2]!,kind:narration[3]!};
+  const subtitle = pathname.match(/^\/api\/projects\/([A-Za-z0-9_-]+)\/script\/narrations\/([A-Za-z0-9_-]+)\/subtitles\/([A-Za-z0-9_-]+)\/files\/(srt|vtt)$/);
+  if(subtitle)return {type:'narration_subtitle_file',projectId:subtitle[1]!,recordId:subtitle[2]!,revisionId:subtitle[3]!,kind:subtitle[4]!};
   // GET /api/projects/:projectId/artifacts/:artifactId/file
   let match = pathname.match(/^\/api\/projects\/([^/]+)\/artifacts\/([^/]+)\/file$/);
   if (match) return { type: "artifact_file", projectId: match[1]!, artifactId: match[2]! };
@@ -48,6 +58,28 @@ export async function handleFileRoute(
 ): Promise<void> {
   try {
     const user = requireUser(auth);
+    if(match.type==='narration_file'||match.type==='narration_subtitle_file'){
+      const client=app.db.narrationPersistence.prismaClient??app.db.firstAggregateWriter?.narrationPrismaClient;
+      if(!client&&(app.db.firstAggregateWriter||app.db.secondAggregateWriter||app.db.thirdAggregateWriter))throw new Error('narration_persistence_client_missing');
+      const project=client?await client.project.findFirst({where:{id:match.projectId,archivedAt:null}}):app.db.projects.get(match.projectId);
+      if(!project)throw new AuthorizationError(404,'project_not_found','project_not_found');
+      requireOwner(user,project.ownerId);
+      const repo=new NarrationRepository(app.db);
+      const record=await repo.findByIdForOwner(match.projectId,project.ownerId,match.recordId??'');
+      if(!record?.output||record.projectId!==match.projectId||record.id!==match.recordId){endJson(response,404,{error:'narration_not_found'});return;}
+      const revision=match.type==='narration_subtitle_file'?await repo.findSubtitleForOwner(match.projectId,project.ownerId,match.revisionId??''):undefined;
+      if(match.type==='narration_subtitle_file'&&(!revision||revision.projectId!==match.projectId||revision.narrationRecordId!==record.id||revision.id!==match.revisionId)){
+        endJson(response,404,{error:'narration_subtitle_not_found'});return;
+      }
+      let storageRootDir:string;
+      if('storageKey' in project){
+        const shortId=`p_${(project.id.replace(/[^a-zA-Z0-9]/g,'').toLowerCase().slice(0,8)||'00000000').padEnd(8,'0')}`;
+        storageRootDir=resolveProjectStorageRoot({storageRoot:app.storageBaseDir,createdAt:project.createdAt,displayName:project.storageDisplayName,shortId,storageKey:project.storageKey});
+      }else storageRootDir=project.storageRootDir;
+      const store=new NarrationBundleStorage({projectId:project.id,storageRootDir});
+      const bytes=await store.readFile({record,kind:match.kind,...(revision?{revision}:{})});
+      writeNarrationBytes(response,bytes,match.kind!);return;
+    }
     const project = app.db.projects.get(match.projectId);
     if (!project) {
       throw new AuthorizationError(404, "project_not_found", "project_not_found");
@@ -113,4 +145,27 @@ export async function handleFileRoute(
     }
     endJson(response, 500, { error: "file_serve_error" });
   }
+}
+
+function writeNarrationBytes(response:ServerResponse,data:Buffer,kind:string):void{
+  const mime:Record<string,string>={audio:'audio/wav',timing:'application/json; charset=utf-8',events:'application/json; charset=utf-8',srt:'application/x-subrip; charset=utf-8',vtt:'text/vtt; charset=utf-8'};
+  response.setHeader('content-type',mime[kind]!);response.setHeader('x-content-type-options','nosniff');
+  response.setHeader('cache-control','private, no-store');
+  if(kind==='audio'){
+    response.setHeader('accept-ranges','bytes');
+    const range=response.req?.headers.range;
+    if(range){
+      const match=/^bytes=(\d*)-(\d*)$/.exec(range);
+      let start=0,end=data.length-1;
+      if(match){
+        if(!match[1]){const suffix=Number(match[2]);start=Math.max(0,data.length-suffix);if(suffix<=0)start=data.length;}
+        else {start=Number(match[1]);end=match[2]?Math.min(Number(match[2]),data.length-1):end;}
+      }
+      if(!match||(!match[1]&&!match[2])||!Number.isSafeInteger(start)||!Number.isSafeInteger(end)||start>=data.length||start>end){
+        response.statusCode=416;response.setHeader('content-range',`bytes */${data.length}`);response.end();return;
+      }
+      response.statusCode=206;response.setHeader('content-range',`bytes ${start}-${end}/${data.length}`);response.setHeader('content-length',end-start+1);response.end(data.subarray(start,end+1));return;
+    }
+  }
+  response.statusCode=200;response.setHeader('content-length',data.length);response.end(data);
 }

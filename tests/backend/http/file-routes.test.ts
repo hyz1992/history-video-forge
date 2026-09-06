@@ -16,6 +16,9 @@ import { join } from "node:path";
 import type { ServerResponse } from "node:http";
 import type { AuthenticatedAuthContext } from "../../../backend/src/auth/auth-context.js";
 import { createAuthenticatedAuthContext, createAnonymousAuthContext } from "../../../backend/src/auth/auth-context.js";
+import { NarrationRepository } from '../../../backend/src/modules/narration/narration.repository.js';
+import { NarrationBundleStorage } from '../../../backend/src/modules/narration/narration-bundle-storage.js';
+import { buildProjectStorageRelativeDir } from '../../../backend/src/runtime/trace/project-storage.js';
 
 const OWNER_USER_ID = "owner-1";
 
@@ -71,6 +74,11 @@ describe("matchFileRoute", () => {
 
   it("不相关路径不匹配", () => {
     expect(matchFileRoute("GET", "/api/projects/p1/assets/generate")).toBeNull();
+  });
+  it('新口播仅匹配记录标识及白名单kind，拒绝编码/路径',()=>{
+    expect(matchFileRoute('GET','/api/projects/p1/script/narrations/n1/files/audio')).toMatchObject({type:'narration_file',projectId:'p1',recordId:'n1',kind:'audio'});
+    expect(matchFileRoute('GET','/api/projects/p1/script/narrations/n1/subtitles/s1/files/srt')).toMatchObject({type:'narration_subtitle_file',revisionId:'s1',kind:'srt'});
+    for(const path of ['files/srt','files/manifest','files/..%2faudio','subtitles/s1/files/audio','subtitles/%2e%2e/files/vtt'])expect(matchFileRoute('GET',`/api/projects/p1/script/narrations/n1/${path}`)).toBeNull();
   });
 });
 
@@ -140,6 +148,7 @@ describe("handleFileRoute authorization", () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     rmSync(TEST_DIR, { recursive: true, force: true });
   });
 
@@ -199,6 +208,57 @@ describe("handleFileRoute authorization", () => {
     const res = await callHandleFileRoute(match, buildAuth());
     expect(res.statusCode).toBe(404);
     expect(res.bodyJson).toMatchObject({ error: "artifact_not_found" });
+  });
+  it('口播文件授权：owner/ADMIN可读，其他用户拒绝且不读取媒体',async()=>{
+    const record={id:'n1',projectId:'test-project',generationRunId:'run1',output:{audio:{sha256:'a'.repeat(64)}}};
+    const repo=vi.spyOn(NarrationRepository.prototype,'findByIdForOwner').mockResolvedValue(record as never);
+    const read=vi.spyOn(NarrationBundleStorage.prototype,'readFile').mockResolvedValue(Buffer.from('audio bytes'));
+    const match=matchFileRoute('GET','/api/projects/test-project/script/narrations/n1/files/audio');
+    expect((await callHandleFileRoute(match,buildAuth())).statusCode).toBe(200);
+    expect((await callHandleFileRoute(match,buildAuth({userId:'admin',role:'ADMIN'}))).statusCode).toBe(200);
+    expect(repo).toHaveBeenLastCalledWith('test-project',OWNER_USER_ID,'n1');
+    expect((await callHandleFileRoute(match,buildAuth({userId:'other'}))).statusCode).toBe(404);
+    expect(read).toHaveBeenCalledTimes(2);
+  });
+  it('Prisma项目归属为权威，Map伪owner不能越权且缺client failclosed',async()=>{
+    const client={project:{findFirst:vi.fn().mockResolvedValue({id:'test-project',ownerId:'real-owner',createdAt:new Date(),displayName:'DB项目',storageKey:'test-project'})}};
+    app.db.narrationPersistence.prismaClient=client as never;
+    const match=matchFileRoute('GET','/api/projects/test-project/script/narrations/n1/files/audio');
+    expect((await callHandleFileRoute(match,buildAuth())).statusCode).toBe(404);
+    app.db.narrationPersistence.prismaClient=undefined;
+    app.db.firstAggregateWriter={} as never;
+    expect((await callHandleFileRoute(match,buildAuth())).statusCode).toBe(500);
+  });
+  it('同owner另一项目的字幕来源拒绝',async()=>{
+    vi.spyOn(NarrationRepository.prototype,'findByIdForOwner').mockResolvedValue({id:'n1',projectId:'test-project',output:{}} as never);
+    vi.spyOn(NarrationRepository.prototype,'findSubtitleForOwner').mockResolvedValue({id:'s1',projectId:'p2',narrationRecordId:'n1'} as never);
+    const read=vi.spyOn(NarrationBundleStorage.prototype,'readFile').mockResolvedValue(Buffer.from('srt'));
+    const res=await callHandleFileRoute(matchFileRoute('GET','/api/projects/test-project/script/narrations/n1/subtitles/s1/files/srt'),buildAuth());
+    expect(res.statusCode).toBe(404);expect(read).not.toHaveBeenCalled();
+  });
+  it('冷Prisma读取使用配置storageBaseDir和DB日期布局，缺Map不影响owner',async()=>{
+    app.storageBaseDir=TEST_DIR;
+    const createdAt=new Date('2026-09-06T10:00:00.000Z'),displayName='数据库项目';
+    const expected=join(TEST_DIR,buildProjectStorageRelativeDir({createdAt,displayName,shortId:'p_testproj'}));
+    mkdirSync(join(expected,'narration-runs'),{recursive:true});
+    app.db.projects.clear();
+    app.db.narrationPersistence.prismaClient={project:{findFirst:vi.fn().mockResolvedValue({id:'test-project',ownerId:OWNER_USER_ID,createdAt,storageDisplayName:displayName,storageKey:'test-project'})}} as never;
+    vi.spyOn(NarrationRepository.prototype,'findByIdForOwner').mockResolvedValue({id:'n1',projectId:'test-project',output:{}} as never);
+    vi.spyOn(NarrationBundleStorage.prototype,'readFile').mockImplementation(async function(this: NarrationBundleStorage){
+      expect((this as unknown as {options:{storageRootDir:string}}).options.storageRootDir).toBe(expected);
+      return Buffer.from('audio');
+    });
+    const res=await callHandleFileRoute(matchFileRoute('GET','/api/projects/test-project/script/narrations/n1/files/audio'),buildAuth());
+    expect(res.statusCode).toBe(200);
+  });
+  it('已校验音频bytes支持Range/206和416',async()=>{
+    vi.spyOn(NarrationRepository.prototype,'findByIdForOwner').mockResolvedValue({id:'n1',projectId:'test-project',output:{}} as never);
+    vi.spyOn(NarrationBundleStorage.prototype,'readFile').mockResolvedValue(Buffer.from('0123456789'));
+    for(const [range,status,body] of [['bytes=2-4',206,'234'],['bytes=-2',206,'89'],['bytes=99-',416,'']] as const){
+      const res=new MockResponse();(res as any).req={headers:{range}};
+      await handleFileRoute(matchFileRoute('GET','/api/projects/test-project/script/narrations/n1/files/audio')!,res as unknown as ServerResponse,app,buildAuth());
+      expect(res.statusCode).toBe(status);expect(res.body).toBe(body);
+    }
   });
 });
 
