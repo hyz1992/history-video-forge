@@ -14,7 +14,7 @@ import { buildApp } from "../../../backend/src/app.js";
 import { prepareQuoteProject, seedQuotableCatalog } from "../cost/quote-test-context.js";
 import { buildTestAuth } from "../auth/test-utils.js";
 import { narrationTextHash } from "../../../backend/src/modules/narration/narration-readiness.js";
-import { canonicalStringify, DEFAULT_GENERATION_CONFIGURATION } from "../../../shared/src/index.js";
+import { canonicalStringify, DEFAULT_GENERATION_CONFIGURATION, DEFAULT_SUBTITLE_STYLE, NarrationRecord, NarrationSubtitleRevision } from "../../../shared/src/index.js";
 import { seedGlobalVoiceProfiles } from "../../../backend/src/modules/assets/voice/voice-profile.repository.js";
 import { NARRATION_FIRST_MODEL_POLICY_V1 as policy } from "../../../backend/src/modules/narration/narration-model-policy.js";
 const auth = buildTestAuth({ userId: "u" });
@@ -288,4 +288,275 @@ it.each(['request_key','request_hash','map_snapshot'] as const)('真实SQLite in
 it.each(['map','sqlite'] as const)('已有intent 后来源变化 %s 仍返回false且不再创建intent',async mode=>{
  const f=mode==='sqlite'?await sqliteFixture(syntheticProvider()):null,m=mode==='map'?await fixture(syntheticProvider()):null,s=f?.submission??await prepared(m!),app=f?.app??m!.app,p=s.run.dispatchPayloadJson as any,repo=new NarrationRepository(app.db);await app.generationRunRepository.claimRun(s.run.id,'direct',new Date(Date.now()+30000),new Date());const hash=narrationTextHash(canonicalStringify({sourceText:p.source_text,settings:p.settings})),args=['u',s.run.projectId,s.run.id,{owner:'direct',claimCount:1},p.provider_request_key,hash] as const;
  try{expect(await repo.claimProviderIntent(...args)).toBe(true);if(f)await f.client.scriptRecord.update({where:{id:'s'},data:{scriptText:'变化正文'}});else m!.app.db.scriptRecords.get('s')!.scriptText='变化正文';expect(await repo.claimProviderIntent(...args)).toBe(false);const count=f?await f.client.generationRunEvent.count({where:{generationRunId:s.run.id,eventType:'narration_provider_intent'}}):app.db.generationRunEvents.get(s.run.id)!.filter(e=>e.eventType==='narration_provider_intent').length;expect(count).toBe(1)}finally{await f?.client.$disconnect()}
+});
+
+
+// 不变量：Map 的 candidate/字幕写入必须与当前 claim 校验构成同一原子步骤。
+// 竞争允许旧操作先完成；一旦 cancel 或新 claim 已生效，迟到操作不得覆盖。
+describe('EX3 Map 生命周期写入原子性', () => {
+ async function claimedFixture() {
+  const f = await fixture(), s = await prepared(f);
+  const lease = { owner: 'worker', claimCount: 1 };
+  expect(await f.app.generationRunRepository.claimRun(s.run.id, lease.owner, new Date(Date.now() + 60000), new Date(), 0)).toBe(true);
+  return { ...f, s, lease, repo: new NarrationRepository(f.app.db) };
+ }
+ function readyBundle(record: NarrationRecord) {
+  const hash = 'a'.repeat(64), now = new Date().toISOString();
+  const ref = (file: string) => ({ uri: 'narration-runs/' + record.generationRunId + '/' + file, sha256: hash });
+  const subtitle = NarrationSubtitleRevision.parse({
+   id: 'subtitle-' + record.id, projectId: record.projectId, narrationRecordId: record.id, audioHash: hash, timingHash: hash,
+   subtitleSettingsSnapshotJson: { presetId: null, presetVersion: null, resolvedStyle: DEFAULT_SUBTITLE_STYLE, overrides: {}, lineBreak: { strategy: 'punctuation_and_length', maxCharactersPerLine: 20, version: 'v1' }, resolverVersion: 'v1' },
+   subtitleSettingsHash: hash, builderVersion: 'v1', srt: ref('captions.srt'), vtt: ref('captions.vtt'), createdAt: now,
+  });
+  const ready = NarrationRecord.parse({ ...record, status: 'ready', spokenTextSha256: hash, providerTaskId: 'task', providerRequestId: 'request', output: {
+   audio: { ...ref('audio.wav'), sampleRate: 24000, channels: 1, bitDepth: 16, sampleCount: 24000 }, durationMs: 1000,
+   nativeEvents: ref('native.json'), timingMap: ref('timing.json'), initialSubtitleRevisionId: subtitle.id,
+   validationReport: { status: 'pass', validatorVersion: 'v1', checkedAt: now, nativeTextCoverageComplete: true, nativeTimingValid: true, audioProbeValid: true, issues: [] },
+  } });
+  return { ready, subtitle };
+ }
+ function state(f: Awaited<ReturnType<typeof claimedFixture>>) {
+  return structuredClone({ record: f.app.db.narrationRecords.get(f.s.record.id), run: f.app.db.generationRuns.get(f.s.run.id), subtitles: [...f.app.db.narrationSubtitleRevisions.values()], events: f.app.db.generationRunEvents.get(f.s.run.id) ?? [] });
+ }
+ async function reclaim(f: Awaited<ReturnType<typeof claimedFixture>>, owner: string) {
+  const now = new Date(f.app.db.generationRuns.get(f.s.run.id)!.dispatchLeaseExpiresAt!.getTime() + 1);
+  expect(await f.app.generationRunRepository.claimRun(f.s.run.id, owner, new Date(+now + 60000), now, 1)).toBe(true);
+  expect(f.app.db.generationRuns.get(f.s.run.id)).toMatchObject({ status: 'running', dispatchLeaseOwner: owner, dispatchClaimCount: 2, dispatchLeaseExpiresAt: new Date(+now + 60000) });
+ }
+ it.each(['unknown', 'failed'] as const)('%s 与 cancel 并发只允许一种串行结果', async status => {
+  const f = await claimedFixture(), before = state(f);
+  const [transition, cancel] = await Promise.allSettled([
+   f.repo.transitionCandidate('u', f.project.id, f.s.record.id, status, 'test_failure', f.lease),
+   f.repo.cancel('u', f.project.id, f.s.record.id),
+  ]);
+  const after = state(f);
+  expect(after.subtitles).toEqual(before.subtitles);
+  expect(f.project.activeNarrationRecordId ?? null).toBeNull();
+  if (cancel.status === 'fulfilled') {
+   expect(after.record).toEqual(cancel.value);
+   expect(after.record?.status).toBe('cancelled');
+   expect(after.run).toMatchObject({ status: 'failed', dispatchClaimCount: 1, dispatchLeaseOwner: null, dispatchLeaseExpiresAt: null });
+   expect(after.events.slice(before.events.length)).toMatchObject([{ eventType: 'narration_cancelled', eventJson: { record_id: f.s.record.id } }]);
+   expect(after.events).toHaveLength(before.events.length + 1);
+   if (transition.status === 'fulfilled') expect(transition.value).toBeNull();
+   else expect(transition.reason.message).toBe('narration_lease_lost');
+  } else {
+   expect(cancel.reason.message).toBe('narration_state_conflict');
+   expect(transition.status).toBe('fulfilled');
+   if (transition.status === 'fulfilled') expect(after.record).toEqual(transition.value);
+   expect(after.record).toMatchObject({ status, errorCode: 'test_failure' });
+   expect(after.run).toEqual(before.run);
+   expect(after.events).toEqual(before.events);
+  }
+ });
+ it.each(['unknown', 'failed'] as const)('cancel 先完成后迟到 %s 无副作用', async status => {
+  const f = await claimedFixture();
+  await f.repo.cancel('u', f.project.id, f.s.record.id);
+  const cancelled = state(f);
+  expect(await f.repo.transitionCandidate('u', f.project.id, f.s.record.id, status, 'late_failure', f.lease)).toBeNull();
+  expect(state(f)).toEqual(cancelled);
+  expect(cancelled.record?.status).toBe('cancelled');
+  expect(cancelled.run).toMatchObject({ status: 'failed', dispatchLeaseOwner: null, dispatchLeaseExpiresAt: null });
+ });
+ for (const owner of ['worker', 'other']) {
+  it.each(['unknown', 'failed'] as const)(owner + ' 新 claim 先完成后拒绝迟到 %s', async status => {
+   const f = await claimedFixture();
+   await reclaim(f, owner);
+   const current = state(f);
+   await expect(f.repo.transitionCandidate('u', f.project.id, f.s.record.id, status, 'late_failure', f.lease)).rejects.toThrow('narration_lease_lost');
+   expect(state(f)).toEqual(current);
+  });
+  it(owner + ' 与 ready 竞争时按实际写入先后裁决', async () => {
+   const f = await claimedFixture(), { ready, subtitle } = readyBundle(f.s.record);
+   const pending = f.repo.saveReadyBundle('u', ready, subtitle, f.lease);
+   const settled = Promise.allSettled([pending]);
+   // 保留原始反例调度，同时观察新 claim 前的实际状态；不假定 await 的数量。
+   await Promise.resolve();
+   const beforeClaim = state(f);
+   await reclaim(f, owner);
+   const current = state(f), [result] = await settled;
+   if (beforeClaim.record?.status === 'ready') {
+    expect(result.status).toBe('fulfilled');
+    expect(beforeClaim.record).toEqual(ready);
+    expect(beforeClaim.subtitles).toEqual([subtitle]);
+   } else {
+    expect(result.status).toBe('rejected');
+    if (result.status === 'rejected') expect(result.reason.message).toBe('narration_lease_lost');
+    expect(current.record).toEqual(beforeClaim.record);
+    expect(current.subtitles).toEqual(beforeClaim.subtitles);
+   }
+   expect(state(f)).toEqual(current);
+   expect(current.events).toEqual(beforeClaim.events);
+   expect(f.project.activeNarrationRecordId ?? null).toBeNull();
+  });
+  it(owner + ' 在项目读取窗口取得新 claim 后旧 ready 不得写入', async () => {
+   const f = await claimedFixture(), { ready, subtitle } = readyBundle(f.s.record);
+   const entered = deferred<void>(), release = deferred<void>();
+   const original = f.repo.projectForOwner.bind(f.repo);
+   vi.spyOn(f.repo, 'projectForOwner').mockImplementationOnce(async (...args) => {
+    const project = await original(...args);
+    entered.resolve();
+    await release.promise;
+    return project;
+   });
+   const result = Promise.allSettled([f.repo.saveReadyBundle('u', ready, subtitle, f.lease)]);
+   await entered.promise;
+   await reclaim(f, owner);
+   const current = state(f);
+   release.resolve();
+   const [old] = await result;
+   expect(old.status).toBe('rejected');
+   if (old.status === 'rejected') expect(old.reason.message).toBe('narration_lease_lost');
+   expect(state(f)).toEqual(current);
+   expect(current.record?.status).toBe('generating');
+   expect(current.subtitles).toEqual([]);
+  });
+ }
+ it('当前 claim 正常原子写入 ready 和字幕', async () => {
+  const f = await claimedFixture(), before = state(f), { ready, subtitle } = readyBundle(f.s.record);
+  expect(await f.repo.saveReadyBundle('u', ready, subtitle, f.lease)).toEqual(ready);
+  expect(state(f)).toEqual({ ...before, record: ready, subtitles: [subtitle] });
+  expect(f.project.activeNarrationRecordId ?? null).toBeNull();
+ });
+ it('cancel 先完成后旧 ready 不得留下字幕或改变租约', async () => {
+  const f = await claimedFixture(), { ready, subtitle } = readyBundle(f.s.record);
+  await f.repo.cancel('u', f.project.id, f.s.record.id);
+  const cancelled = state(f);
+  await expect(f.repo.saveReadyBundle('u', ready, subtitle, f.lease)).rejects.toThrow('narration_lease_lost');
+  expect(state(f)).toEqual(cancelled);
+ });
+});
+
+
+describe('EX3 Map confirm 最终来源复查', () => {
+ async function readyFixture(qualifiedOverride = false) {
+  const f = await fixture(syntheticProvider());
+  await confirmScript(f);
+  const config = [...f.app.db.projectGenerationConfigurations.values()][0];
+  if (qualifiedOverride) delete (config.configurationJson as any).creative.narration;
+  const s = await prepareNarrationRun(f.app, f.project.id, 'u', 'u', { source_script_record_id: 's', expected_configuration_revision: 1, idempotency_key: 'confirm-window', ...(qualifiedOverride ? { settings_override: { rate: 1 as const } } : {}) });
+  expect(await f.app.generationRunDispatcher.dispatch(s.run.id)).toMatchObject({ outcome: { status: 'succeeded' } });
+  const record = structuredClone(f.app.db.narrationRecords.get(s.record.id)!);
+  const request = { source_text_sha256: record.sourceTextSha256, settings_sha256: record.settingsSha256, expected_active_narration_record_id: null, target_duration_band_snapshot: { minMs: 1000, maxMs: 5000 }, accept_duration_outside_band: false };
+  return { ...f, s, config, record, request, repo: new NarrationRepository(f.app.db) };
+ }
+ type ReadyFixture = Awaited<ReturnType<typeof readyFixture>>;
+ function state(f: ReadyFixture) {
+  return structuredClone({ project: f.app.db.projects.get(f.project.id), records: [...f.app.db.narrationRecords.values()], runs: [...f.app.db.generationRuns.values()], snapshots: [...f.app.db.runConfigurationSnapshots.values()], subtitles: [...f.app.db.narrationSubtitleRevisions.values()], events: [...f.app.db.generationRunEvents.entries()] });
+ }
+ function hashWindow(kind: 'project' | 'settings') {
+  const entered = deferred<void>(), release = deferred<void>();
+  const digest = globalThis.crypto.subtle.digest.bind(globalThis.crypto.subtle);
+  let hits = 0;
+  const spy = vi.spyOn(globalThis.crypto.subtle, 'digest').mockImplementation(async (...args) => {
+   const result = await digest(...args);
+   const input = JSON.parse(new TextDecoder().decode(args[1]));
+   // 按正式 hash 输入形状选屏障，不依赖 digest 的调用次数。
+   const matches = kind === 'project' ? 'modelSelection' in input : 'parametersVersion' in input;
+   if (matches && hits++ === 0) { entered.resolve(); await release.promise; }
+   return result;
+  });
+  return { entered, release, spy, hits: () => hits };
+ }
+ async function mutateDuringHash(f: ReadyFixture, kind: 'project' | 'settings', mutate: () => void) {
+  const gate = hashWindow(kind);
+  const pending = Promise.allSettled([f.repo.confirm('u', 'u', f.project.id, f.record, f.request)]);
+  await gate.entered.promise;
+  mutate();
+  const afterMutation = state(f);
+  gate.release.resolve();
+  const [result] = await pending;
+  expect(gate.hits()).toBeGreaterThan(0);
+  gate.spy.mockRestore();
+  return { result, afterMutation };
+ }
+ const sourceChanges = ['script_replaced', 'script_mutated', 'active_script', 'confirmation_missing', 'confirmation_hash', 'tts_voice'] as const;
+ for (const window of ['project', 'settings'] as const) {
+  it.each(sourceChanges)(window + ' hash 后来源 %s 改变不能激活旧口播', async change => {
+   const f = await readyFixture();
+   const { result, afterMutation } = await mutateDuringHash(f, window, () => {
+    const db = f.app.db, script = db.scriptRecords.get('s')!;
+    if (change === 'script_replaced') db.scriptRecords.set('s', { ...script, scriptText: '替换后的正文' });
+    if (change === 'script_mutated') script.scriptText = '原地改写的正文';
+    if (change === 'active_script') { db.scriptRecords.set('next', { ...script, id: 'next' }); f.project.activeScriptRecordId = 'next'; }
+    if (change === 'confirmation_missing') db.scriptConfirmations.delete('s');
+    if (change === 'confirmation_hash') db.scriptConfirmations.get('s')!.sourceTextSha256 = 'a'.repeat(64);
+    if (change === 'tts_voice') (f.config.configurationJson as any).creative.voice_profile_id = 'changed-voice';
+   });
+   expect(result.status).toBe('rejected');
+   if (result.status === 'rejected') expect(result.reason.message).toBe('narration_stale');
+   expect(state(f)).toEqual(afterMutation);
+  });
+ }
+ it.each(['unrelated', 'explicit_default', 'implicit_default', 'qualified_override'] as const)('%s 不误触发来源冲突', async change => {
+  const f = await readyFixture(change === 'explicit_default' || change === 'qualified_override');
+  const { result, afterMutation } = await mutateDuringHash(f, 'project', () => {
+   const config = f.config.configurationJson as any;
+   if (change === 'unrelated' || change === 'qualified_override') { f.config.revision++; f.project.name = '只改名称'; config.creative.subtitle_style_preset_id = 'unrelated-subtitle'; config.video.strategy = 'all_remotion'; }
+   if (change === 'explicit_default') config.creative.narration = { tone: 'neutral', rate: 1 };
+   if (change === 'implicit_default') delete config.creative.narration;
+  });
+  expect(result.status).toBe('fulfilled');
+  expect(f.app.db.projects.get(f.project.id)).toMatchObject({ activeNarrationRecordId: f.record.id, activeNarrationSubtitleRevisionId: f.record.output!.initialSubtitleRevisionId });
+  expect(f.app.db.narrationRecords.get(f.record.id)?.status).toBe('confirmed');
+  expect([...f.app.db.generationRuns.values()]).toEqual(afterMutation.runs);
+  expect([...f.app.db.narrationSubtitleRevisions.values()]).toEqual(afterMutation.subtitles);
+  expect(f.app.db.generationRunEvents.get(f.s.run.id)!.filter(e => e.eventType === 'narration_confirmed')).toHaveLength(1);
+ });
+ it.each(['record_status', 'record_output', 'record_settings_hash', 'run_status', 'run_replaced', 'snapshot_removed', 'snapshot_project'] as const)('最终读取当前 %s 并拒绝失效候选', async change => {
+  const f = await readyFixture();
+  const { result, afterMutation } = await mutateDuringHash(f, 'settings', () => {
+   const db = f.app.db, record = db.narrationRecords.get(f.record.id)!, run = db.generationRuns.get(f.s.run.id)!;
+   if (change === 'record_status') db.narrationRecords.set(record.id, { ...record, status: 'stale' });
+   if (change === 'record_output') record.output!.audio.sha256 = 'b'.repeat(64);
+   if (change === 'record_settings_hash') record.settingsSha256 = 'b'.repeat(64);
+   if (change === 'run_status') run.status = 'failed';
+   if (change === 'run_replaced') db.generationRuns.set(run.id, { ...run, projectId: 'other-project' });
+   if (change === 'snapshot_removed') db.runConfigurationSnapshots.delete(record.configurationSnapshotId);
+   if (change === 'snapshot_project') db.runConfigurationSnapshots.get(record.configurationSnapshotId)!.projectId = 'other-project';
+  });
+  expect(result.status).toBe('rejected');
+  if (result.status === 'rejected') expect(result.reason.message).toBe(change === 'record_status' ? 'narration_not_confirmed' : 'narration_source_conflict');
+  expect(state(f)).toEqual(afterMutation);
+ });
+ it('项目对象被等价替换后仅更新当前对象', async () => {
+  const f = await readyFixture(), oldProject = f.project;
+  const { result, afterMutation } = await mutateDuringHash(f, 'settings', () => {
+   f.app.db.projects.set(f.project.id, { ...f.project, name: '新的项目对象' });
+  });
+  expect(result.status).toBe('fulfilled');
+  expect(f.app.db.projects.get(f.project.id)).toMatchObject({ name: '新的项目对象', activeNarrationRecordId: f.record.id, activeNarrationSubtitleRevisionId: f.record.output!.initialSubtitleRevisionId });
+  expect(oldProject.activeNarrationRecordId ?? null).toBeNull();
+  expect([...f.app.db.generationRuns.values()]).toEqual(afterMutation.runs);
+  expect([...f.app.db.narrationSubtitleRevisions.values()]).toEqual(afterMutation.subtitles);
+  expect(f.app.db.generationRunEvents.get(f.s.run.id)!.filter(e => e.eventType === 'narration_confirmed')).toHaveLength(1);
+ });
+ it('同候选并发确认幂等且只追加一个事件', async () => {
+  const f = await readyFixture(), before = state(f);
+  const results = await Promise.allSettled([f.repo.confirm('u', 'u', f.project.id, f.record, f.request), f.repo.confirm('u', 'u', f.project.id, f.record, f.request)]);
+  expect(results.map(r => r.status)).toEqual(['fulfilled', 'fulfilled']);
+  if (results[0].status === 'fulfilled' && results[1].status === 'fulfilled') expect(results[0].value).toEqual(results[1].value);
+  expect(f.app.db.generationRunEvents.get(f.s.run.id)!.filter(e => e.eventType === 'narration_confirmed')).toHaveLength(1);
+  expect([...f.app.db.generationRuns.values()]).toEqual(before.runs);
+  expect([...f.app.db.narrationSubtitleRevisions.values()]).toEqual(before.subtitles);
+  const confirmed = state(f);
+  await expect(f.repo.confirm('u', 'u', f.project.id, f.record, f.request)).resolves.toMatchObject({ status: 'confirmed' });
+  expect(state(f)).toEqual(confirmed);
+ });
+ it('不同候选竞争同一active快照只允许一个成功', async () => {
+  const f = await readyFixture();
+  const s = await prepareNarrationRun(f.app, f.project.id, 'u', 'u', { source_script_record_id: 's', expected_configuration_revision: 1, idempotency_key: 'second-confirm' });
+  expect(await f.app.generationRunDispatcher.dispatch(s.run.id)).toMatchObject({ outcome: { status: 'succeeded' } });
+  const second = structuredClone(f.app.db.narrationRecords.get(s.record.id)!), before = state(f);
+  const results = await Promise.allSettled([f.repo.confirm('u', 'u', f.project.id, f.record, f.request), f.repo.confirm('u', 'u', f.project.id, second, f.request)]);
+  expect(results.filter(r => r.status === 'fulfilled')).toHaveLength(1);
+  const rejected = results.find(r => r.status === 'rejected')!;
+  if (rejected.status === 'rejected') expect(rejected.reason.message).toBe('narration_active_conflict');
+  const winner = f.app.db.projects.get(f.project.id)!.activeNarrationRecordId;
+  expect([f.record.id, second.id]).toContain(winner);
+  expect([...f.app.db.narrationRecords.values()].map(r => r.status).sort()).toEqual(['confirmed', 'ready']);
+  expect([...f.app.db.generationRunEvents.values()].flat().filter(e => e.eventType === 'narration_confirmed')).toHaveLength(1);
+  expect([...f.app.db.generationRuns.values()]).toEqual(before.runs);
+  expect([...f.app.db.narrationSubtitleRevisions.values()]).toEqual(before.subtitles);
+ });
 });

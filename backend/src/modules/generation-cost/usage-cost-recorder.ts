@@ -417,11 +417,16 @@ export async function recordNarrationUsage(input: {
         const status = row?.status === "succeeded" ? "succeeded" : row?.status === "canceled" && input.status === "submitted" ? "canceled" : input.status;
         const now = new Date();
         const value: UsageCostRecordRecord = { id: row?.id ?? db.generateId(), ...key, assetProviderJobRecordId: null, interactionId: null, capability: "tts.synthesize", providerKey: "dashscope", modelId: "qwen-audio-3.0-tts-plus", status, unitType: "tts_character", inputUnits: null, outputUnits: maximum, estimatedCostMicros: price(input.sourceCharacters) ?? "0", actualCostMicros: actual, costBasis: maximum !== null && actual !== null ? "provider_usage" : "estimate", unitDetailJson: { stage: "script", actual_cost_state: actual === null ? "unknown" : "provider_usage_priced", provider_cumulative_characters: maximum, provider_receipt_kind: maximum === null ? "none" : row?.unitDetailJson && (row.unitDetailJson as Record<string, unknown>).provider_receipt_kind === "final" ? "final" : input.receiptKind ?? (input.status === "succeeded" && input.usageCharacters !== null ? "final" : "partial"), estimated_source_characters: input.sourceCharacters, estimate_count_basis: "source_utf16_length", provider_model_id: input.providerModelId, pricing_version: input.pricingVersion, price_micros_per_10k_characters: input.priceMicrosPer10k }, durationMs: input.durationMs ?? row?.durationMs ?? null, createdAt: row?.createdAt ?? now, updatedAt: now };
-        if (tx)
+        if (tx) {
             await tx.usageCostRecord.upsert({ where: { runConfigurationSnapshotId_providerRequestKey_attemptIndex: key }, create: { ...value, unitDetailJson: value.unitDetailJson as never }, update: { ...value, unitDetailJson: value.unitDetailJson as never } });
+        } else {
+            // Map 的读取、合并和写入必须在同一同步段完成，避免并发回执覆盖。
+            db.usageCostRecords.set(value.id, value);
+        }
         return value;
     };
-    const value = client ? await client.$transaction(tx => action(tx)) : await action();
+    if (!client) return action();
+    const value = await client.$transaction(tx => action(tx));
     db.usageCostRecords.set(value.id, value);
     return value;
 }

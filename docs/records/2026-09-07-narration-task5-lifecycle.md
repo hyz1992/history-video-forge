@@ -6,11 +6,11 @@
 |---|---|
 | TASK_BASE_SHA | d6542fa64ad1cf2d2a56822cfd684cf761f72ef3 |
 | 审查级别 | T2 |
-| 当前被终审候选 SHA | 8003a80e49f13e529924655a66d92299cba3a7b7 |
-| 阶段 | 第二次 R5 终审失败；Map 并发账本缺口未修，停止追加整改 |
+| 最近已终审候选 SHA | 8003a80e49f13e529924655a66d92299cba3a7b7 |
+| 阶段 | 第三次例外累计复审未收敛；真实 SQLite 暂错恢复缺口未修，停止追加整改 |
 | 整改复审轮数 | 3 / 3 |
 | 终审调用次数 | 2 |
-| 受限例外 | 第 1、2 次均已用完；第 2 次追加复审 1 / 1；无第 3 次授权 |
+| 受限例外 | 第 1、2、3 次均已用完；第 3 次追加复审 1 / 1；无第 4 次授权 |
 
 ## 原始验收清单
 
@@ -18,14 +18,14 @@
 
 | 编号 | 原始要求 | 状态 | 证据 |
 |---|---|---|---|
-| L1 | 文案已确认、来源 hash/revision 与完整 owner 权限前置校验 | 已修 | root-original-dispatch-source-window-ex2-final-command.json 与 root-dispatch-source-window-ex2-final-command.json：原反例与 12 组矩阵通过，来源冲突零 intent/零外呼 |
-| L2 | 有限 overrides 进入冻结快照；正文/设置指纹幂等，旧 operation 不变 | 已修 | root-ex2-final-regression.json：幂等/冻结 override 及旧 operation 回归；root-api-ex2-final-command.json 同 key 只生成一次 |
-| L3 | 纯 readiness；真实模型/音色/协议与资格一致，非法组合零外呼 | 已修 | narration-lifecycle 10 项、narration-api 19 项；非法 rate/revision 零外呼，纯 readiness 读取正式本地报告 |
-| L4 | 持久化后 202、既有 dispatcher/lease；缺快照拒绝，未知结果不自动重发 | 已修 | root-recovery-ex2-final-command.json、root-intent-ex2-final-command.json、root-failure-boundary-ex2-final-command.json、root-storage-outcome-combinations-ex2-final-command.json、root-same-owner-claim-fencing-ex2-final-command.json、root-same-owner-successor-completion-ex2-final-command.json：正常与暂时 DB 故障恢复均不重发 |
-| L5 | 完整 bundle 后才 ready，取消持久化优先，迟到结果受状态和 lease fencing | 已修 | root-failure-ex2-final-command.json、root-failure-boundary-ex2-final-command.json、root-same-owner-claim-fencing-ex2-final-command.json、root-same-owner-successor-completion-ex2-final-command.json：真实 abort 保全用量，延期后取消仍 cancelled，lease 反向组合见正式测试 |
-| L6 | confirm 复查来源与接受区间；同 active 幂等、区间更新保留视觉、不同候选 CAS | 已修 | root-confirm-ex2-final-command.json：重复确认无副作用、区间重接受保留视觉、并发 CAS 200/409 |
-| L7 | 外呼 intent 先落事件；无资产任务媒体账本、文案归属、累计最大值、未知不记零 | 部分修 | Prisma/本地事实恢复证据已通过；root-ex2-final-map-ledger-race-command.json 实测同 key Map 并发产生重复行、累计用量/最终回执回退，exit 1 |
-| L8 | 独立新模型价格，不改变旧全局默认；回归和完整后端类型检查 | 已修 | pricing-catalog.seed.ts 独立北京单价；root-ex2-final-regression.json 26 文件 648 项，root-ex2-full-typecheck.json exit 0 |
+| L1 | 文案已确认、来源 hash/revision 与完整 owner 权限前置校验 | 已修 | root-original-dispatch-source-window-ex3-final-command.json 与 root-dispatch-source-window-ex3-final-command.json：原反例及 12 组来源矩阵通过，冲突零 intent/零外呼 |
+| L2 | 有限 overrides 进入冻结快照；正文/设置指纹幂等，旧 operation 不变 | 已修 | root-ex3-final-regression.json；root-api-ex3-final-command.json：冻结 override、请求指纹幂等、旧 operation 回归 |
+| L3 | 纯 readiness；真实模型/音色/协议与资格一致，非法组合零外呼 | 已修 | root-ex3-final-regression.json：narration-lifecycle 24 项、narration-api 19 项；非法组合零外呼 |
+| L4 | 持久化后 202、既有 dispatcher/lease；缺快照拒绝，未知结果不自动重发 | 部分修 | root-recovery-ex3-final-command.json、root-intent-ex3-final-command.json、root-claim-atomic-cas-ex3-final-command.json、root-map-lifecycle-ex3-final-command.json：恢复不重发、完整 claim 身份与 Map 原子写入验证 ；root-ex3-real-ready-read-window-command.json 真实暂错错误分类失败 |
+| L5 | 完整 bundle 后才 ready，取消持久化优先，迟到结果受状态和 lease fencing | 部分修 | root-failure-ex3-final-command.json、root-failure-boundary-ex3-final-command.json、root-map-lifecycle-ex3-final-command.json：取消保全、旧 claim 拒绝、bundle 后 ready；EX3-C1/C2 正式测试已通过 ；Map 取消/ready 已闭环，完整 bundle 的真实暂错恢复仍受 I1 影响 |
+| L6 | confirm 复查来源与接受区间；同 active 幂等、区间更新保留视觉、不同候选 CAS | 已修 | root-confirm-ex3-final-command.json、root-map-confirm-matrix-ex3-final-command.json：Prisma 确认 CAS/区间幂等及 Map 当前来源 14 组矩阵；EX3-C3 正式 26 项已通过 |
+| L7 | 外呼 intent 先落事件；无资产任务媒体账本、文案归属、累计最大值、未知不记零 | 已修 | root-map-ledger-ex3-final-command.json、root-usage-ex3-final-command.json、root-usage-write-failure-ex3-final-command.json、root-storage-outcome-combinations-ex3-final-command.json：唯一最大累计值、未知 null、不可变事实恢复 |
+| L8 | 独立新模型价格，不改变旧全局默认；回归和完整后端类型检查 | 已修 | pricing-catalog.seed.ts 独立北京模型单价；root-ex3-final-regression.json 26 文件 702 PASS；root-ex3-final-typecheck.json 完整类型检查 exit_code 0 |
 
 ## 范围与基线
 
@@ -275,3 +275,151 @@ L1–L8 当前“已修”仅表示本次冻结实现与实测覆盖，仍待本
 常规整改仍3 / 3，两次受限例外各自追加复审1 / 1均已用完，尚无第三次授权。按第二次授权的明确停止条件及独立审查协议，停止自主整改，不进入任务6；仅机械落盘本终审结果，不修改产品或正式设计/计划。
 
 下一步具体建议：如用户另行批准第三次受限例外，仅修改既有 usage-cost-recorder.ts 与 narration-lifecycle.test.ts，在 Map 路径将读旧行、合并累计值/状态/回执、写回放在无 await 的同一同步段，避免后续异步返回再覆盖；保持 Prisma 事务和既有定价/事实/来源/lease语义。补空账本同key并发唯一性、已有行高低/未知乱序、final及已知费用不回退、独立key不串账和串行对照，并复验当前反例及完整累计集合/探针后再双路收敛与新候选终审。累计任务范围仍30路径，尚未实施该建议；不重置既有计数、不默认授权无限重试。
+
+
+## 第三次受限例外：授权与执行边界
+
+用户在讨论第二次终审失败及集中并发审计建议后回复“我已经改为High推理档位了。请继续”，授权按建议继续本次受限例外。先针对任务 5 的 Map、Prisma 与供应商事实恢复进行集中只读并发边界审计，再修复已确认的 Map 账本读改写竞态。固定 TASK_BASE_SHA 不变，前三轮常规复审与前两次例外不重置；本次允许追加整改复审 1 次，收敛后形成第三个候选并按 R5 终审一次。若发现超出本次费用记录器修复范围的 Critical/Important，或本次复审/终审仍有 Critical/Important，则明确报告并停止自主追加整改。
+
+产品改动限定 backend/src/modules/generation-cost/usage-cost-recorder.ts 与 tests/backend/narration/narration-lifecycle.test.ts；本记录由主代理维护。集中审计本身只读，不扩大产品范围，不进入任务 6，不新增付费调用，不改默认数据库、模型目录或正式 prompt。
+
+不变量：对同一快照和 provider request key 的并发回执，内存账本必须只有一行，累计用量取已知最大值，最终回执和已成功状态不被晚到低值/未知/部分回执回退；不同 key 相互独立。先用自动化反向组合证明原缺陷，再修复同步读改写边界，保持 Prisma 事务分支语义。
+
+### 第三次例外的修复前验证
+
+新增费用并发测试 14 项，覆盖空账本/已有 100 字部分回执各自的高值、低值、未知回执 6 种调用顺序，以及不同请求/快照隔离、无价格回执对照。`root-ex3-map-red.json` 保存实际命令与输出：narration-lifecycle 单文件 24 项，11 FAIL / 13 PASS，exit 1。失败断言为同 key 生成 3 行/2 行或最大值 308 回退到 100/120，非加载失败、类型错误或环境异常。原有 10 项均通过；失败输出保留。
+
+主代理对供应商事实恢复边界的只读检查：本地事实按内容 hash 分目录原子发布并回读校验，完整 bundle 发布后再次验证且冲突拒绝；账本成功后才写 applied 标记，暂错允许既有 sweep 重放，因而账本唯一与单调合并是恢复安全性的必要条件。`applyProviderFact` 的异步 exists/append 可在 Map 下重复附加同 id 标记，但不额外外呼、不覆盖业务状态，不能用标记去重代替修复账本读改写。本项为当前观察，未将其计作新的 Critical/Important。Prisma 与 Map 生命周期的审计结论尚待独立报告。
+
+
+### 集中审计结论：先暴露边界问题，不以全绿回归代替验收
+
+两个全新上下文只读审计均使用固定 BASE 至 b1d584da91480b4daf2015953de39142fe894a63 的代码；不是第三次 diff/contract 收敛复审，也不是 R5 终审。Map 审计新增 Critical 2 / Important 0 / Minor 0；Prisma 审计新增 Critical 0 / Important 0 / Minor 0。已知账本问题不重复计数。
+
+| 编号 | 不变量及实测发现 | 状态 | 证据 |
+|---|---|---|---|
+| EX3-C1 | 取消持久化后，先前的 generating 读取不得覆盖 cancelled；transitionCandidate 在读取 previous 后 await assertLease，再写旧对象，能把 cancelled 覆盖成 unknown 或 failed | 未修 | narration.repository.ts:320–328；root-ex3-map-lifecycle-audit-command.json / report.json 两组交错失败，串行取消对照通过 |
+| EX3-C2 | 旧 owner/claimCount 不得在新 claim 接管后写 ready 或字幕；saveReadyBundle 在 await assertLease 后没有同步再次检查当前 claim | 未修 | narration.repository.ts:153–160；同 owner 和不同 owner 接管两组失败，当前 claim 正常 ready 对照通过 |
+
+主代理独立复现使用实际 createDbClient Map 与生产 NarrationRepository/createGenerationRunRepository；NarrationRecord、NarrationSubtitleRevision 经正式 schema parse。共 6 组：4 FAIL / 2 PASS，命令 exit 1，失败为业务不变量断言，非环境错误。旧租约过期使用 claimRun 的现有 now 参数模拟；bundle 为方法级合法对象，没有声称真实音频文件/完整 API 复现。零外呼、零数据库写入。
+
+Prisma 审计核对实际 SQLite/WAL 与 adapter SERIALIZABLE 事务行为，未把“事务内有 await”直接报成漏洞；run 创建、provider intent、ready、cancel、confirm、费用合并的事务保护及 owner+claimCount 原子条件均有静态依据。尚未验证同一 PrismaClient 事务外写与交互事务的精确交错，不能把静态结论外推为完整并发证明。Map confirm/source 对象替换边界也仍未实测。
+
+上述新证据使 L4/L5 由已修改为部分修；其表中旧探针只覆盖原已验范围，不再代表所有 narration 写入都受完整保护。
+
+### 已授权账本补丁与验证
+
+usage-cost-recorder.ts 仅把 Map set 移入读取和 max 合并所在的同步段，Map 分支直接返回 action 的 Promise，不再在外层 await 后重放旧 value；Prisma 仍在事务中读取/合并/upsert，提交后更新镜像。其他 LLM/媒体记账入口未改。
+
+- root-ex3-map-red.json：修改产品前，24 项中的 11 FAIL / 13 PASS。
+- root-ex3-map-green.json：同一测试输入，24 PASS，exit 0。
+- root-ex3-full-typecheck.json：完整 npm run typecheck:backend 含 Prisma generate，exit_code 0。
+- root-ex3-regression.json：固定原 26 文件集合，实际 662 PASS，exit 0；24 项并发/生命周期文件属于该集合，不重复相加。首次采集因 Node REPL 30 秒超时丢失输出，未计 PASS；只读进程检查确认 NO_VITEST_PROCESS 后重跑，以本文件完整输出为准。
+- root-ex3-map-ledger-race-command.json / report.json：上一终审的 4 组原反例/对照全部通过，单行 308 字符、43120 微元、succeeded/final；未覆盖旧失败证据。
+- root-ex3-prisma-usage-command.json：两个真实隔离 client 的旧 Map 交错及非法数值/无价格对照通过，零外呼；未接触默认数据库。
+
+本轮未形成第三个候选；正式复审仍为常规 3/3、例外一 1/1、例外二 1/1、例外三 0/1，终审调用仍为 2。不进行已有已证实 Critical 情况下的无效终审，不进入任务 6。当前账本产品补丁和正式测试保留未提交，以便与用户确认后的闭环一起形成可审查提交；不能声明任务 5 完成。
+
+### 建议确认的最小范围补充（尚未实施）
+
+在本次第三例外中补入 narration.repository.ts 与 narration-failure-recovery.test.ts（两者都已经属于任务 5 原累计 30 路径），只处理 EX3-C1/C2：
+
+1. Map 分支在所有 await 结束后，同步读取当前候选并检查当前 run 的状态、owner、claimCount、租约有效期，再在同一同步段写候选/字幕；不能只把 assertLease 加一次 await，也不能依赖先前返回的可变对象。Prisma 仍保留同事务完整校验。
+2. 先加入取消与 unknown/failed 的两种调度、同 owner/不同 owner 接管后旧 ready 拒绝，以及当前 claim 正常 ready/取消先完成的对照；同时核对 candidate、run、lease、字幕和事件，覆盖错误来源。
+3. 复验 Map 来源/确认的剩余已点名窗口及同 client 的 Prisma 事务交错；若出现其他证实 C/I，再明确界定范围，不把猜测计成 finding。
+4. 最小验证与累计回归通过后才消耗本次已授权的 1 次累计 diff+contract 复审；形成候选后按 R5 终审。此次只是请求补充两个状态写入点的实施范围，不把计数重置为新任务，也未自主启动第四次例外。
+
+
+## 第三次例外范围补充：用户已批准
+
+用户回复“批准，请继续”，同意将已点名的两个 Map 生命周期写入点补入本次第三例外范围。按上一节最小计划执行 narration.repository.ts、narration-failure-recovery.test.ts 的修复和反向组合测试；既有账本补丁与测试继续保留。无需另开第四次例外，常规与前两例外计数不变，第三例外累计复审仍为 0/1、终审调用仍为 2。
+
+验证补充：并发测试必须判定可线性化结果。若修复移除 Map 内部让出点，旧操作可能在新 claim 发生前合法完成；不能把未来接管作为撤销已完成写入的依据。独立探针需保留原失败事实，同时用受控前置读取窗口保证新 claim 已取得、旧写尚未发生，再判断拒绝；取消测试需以取消是否实际成功作为不可覆盖的前提。
+
+
+### EX3-C1/C2 已授权实现与独立复验
+
+实施仅修改 narration.repository.ts 与 narration-failure-recovery.test.ts。将完整 lease 条件提取为同步 validateLease；Map 的候选读取、lease 验证和 candidate/字幕写入处于连续同步段；Prisma assertLease 继续在原事务中读取，并复用同一完整条件。未改 owner/count/expiry 语义。
+
+- implementation-ex3-red.json：14 项新测试，实际 4 FAIL / 10 PASS；分别复现 unknown/failed 与取消竞争、同/不同 owner 接管后旧 ready 仍写成功。
+- implementation-ex3-green.json：同一 14 项通过，65 项未选中；非整个文件总数。
+- implementation-ex3-failure-recovery.json：整个文件 79 PASS。
+- root-ex3-map-lifecycle-final-command.json / report.json：主代理独立 10 组通过，包含取消两个顺序、接管先于 ready 的受控项目读取窗口、原反例调度按实际先后线性化与正常对照。原 root-ex3-map-lifecycle-audit-* 的 4 FAIL / 2 PASS 证据保留，不以修复后合法的先完成状态伪称继续越权。
+- root-ex3-lifecycle-typecheck.json：完整后端类型检查含 Prisma generate，exit_code 0。
+
+### 数据库事务窗口的定点验证
+
+root-ex3-prisma-transaction-window-bounded-command.json / report.json 两组通过：同一 Prisma client 的 claim 在 lease-read 屏障期间未完成，先前事务结束后才取得 claim2；另一 client 在窗口内取得 claim2 后，旧事务 candidate.update 抛实际 PrismaClientKnownRequestError、code=SQLITE_BUSY_SNAPSHOT，候选保持 generating，新 run 保持 running/owner/count2。探针断言 hook 真正到达、真实错误类型与代码，未以任意抛错充当保护。该结果支持不改 Prisma 的本次写入路径。最初无界版本人为等待同 client 的被阻塞 claim，Node 因 unsettled top-level await 退出 13，无业务结论，不计通过，原输出保留。所有 DB 均为证据目录中的独立迁移库，零外呼。
+
+### EX3-C3：此前未验证的 Map confirm 来源窗口已复现
+
+按已批准计划第 3 步复验点名的 Map 来源/确认窗口。root-ex3-map-confirm-source-command.json / report.json 使用生产离线 adapter 生成的完整 ready bundle、实际 DB 读出的来源/冻结快照复制为隔离 Map，并直接调用生产 confirm。初始来源检查后，正文对象替换、正文原地变化、active script 变化、显式确认删除四组均错误返回 confirmed 并激活旧口播；未变来源对照通过。实际 4 FAIL / 1 PASS，exit 1，失败是来源不变量断言，不是 schema/加载错误。
+
+EX3-C3 记为 Critical，状态未修；L6 改为部分修。问题位于 confirm 的 source/hash 校验与最终 Map 写入之间，不能把 EX3-C1/C2 已修表述为 Map 全部并发边界通过。主代理已通过异步问题向用户请求将 confirm 末端来源复查补入本次第三例外（仍只在同 repository/对应测试/记录），当前尚未收到答复，不实施依赖该答复的修改。第三次累计复审仍未消耗，未形成第三候选。
+
+
+### 范围答复前的验证收尾
+
+root-ex3-lifecycle-regression.json 保存主代理完整实际命令与输出：原固定 26 文件集合，676 PASS，exit 0；其中 failure-recovery 为 79 项、narration-lifecycle 为 24 项，两者已含在 676 中。与上次 662 相比只新增本次生命周期 14 项。EX3-C1/C2 的直接验证已闭环，但因 EX3-C3 已证实未修，不启动累计收敛审查或 R5，不宣称任务 5 完成。
+
+EX3-C3 最小设计：初始阶段冻结且规范化项目 TTS 投影和候选 settings 的 hash 输入，完成既有共享异步 hash；所有 await 后同步重新读取当前 project、script/confirmation/config/topic、candidate、run/snapshot，完整重跑确认检查；规范化后的当前 hash 输入必须与已验证输入相同。幂等/CAS、候选/项目/事件写入使用当前对象并保持无 await。只比较语音相关投影，允许名称、整体 revision、字幕与视觉变化；合法 override 对照冻结快照，不能拿项目默认替代。不得给整个 record/project 做等值封条，以免把合法并发确认误判为冲突。该设计尚待已发出的范围补充批准，未实施。
+
+
+## EX3-C3 confirm 范围补充已获批准
+
+用户回复“批准，请继续”，授权按上一节最小设计补入 confirm 最终来源复查。此授权属于第三次受限例外的范围补充，不是第四次例外；本次累计复审仍为 0/1，终审调用仍为 2。允许修改现有 narration.repository.ts、narration-failure-recovery.test.ts 与本记录，已有账本及 lease 补丁保留。实施遵循先有效 RED、再最小实现、再反向组合验证，确认当前来源与写入间无 await；Prisma 继续保留事务语义。
+
+
+### EX3-C3 已授权实现与最小验证
+
+confirm 对原配置和候选 settings 先按正式 schema 解析为独立输入，完成原有共享 hash；随后 Map 分支同步重读当前 source/candidate，当前项目 TTS 投影与 settings 输入须等于已验证的输入，再共用来源、request、run/snapshot、区间、幂等/CAS 和写入逻辑。复用 readMapNarrationSource，不新造 SHA 算法，不用整个 project/record 做封条，最终写当前 project 对象。Prisma 的读取仍在同一事务中。
+
+- implementation-ex3-confirm-red.json：新增 26 项中实际 16 FAIL / 10 PASS，79 项未选中；失败为失效确认、旧对象写入或同候选并发幂等断言。
+- implementation-ex3-confirm-green.json：相同 26 项通过、79 跳过。
+- implementation-ex3-confirm-full.json：整个 failure-recovery 文件 105 PASS（原 65 + EX3-C1/C2 14 + EX3-C3 26），不与累计回归重复相加。
+- root-ex3-map-confirm-matrix-first-command.json：主代理独立 14 组通过，真实离线生成的 ready bundle 与冻结来源复制到隔离 Map，覆盖原四类反例、confirmation hash、TTS 模型/音色、record/run 状态及 control/name/revision/project 等价新对象/candidate 等价新对象；拒绝组完整比较 project/record/events 无额外副作用。
+- root-ex3-final-typecheck.json：完整 npm run typecheck:backend 含 Prisma generate，exit_code 0。
+
+EX3-C3 行为已通过上述专项验证，待完整累计回归与本次正式收敛审查；不把专项通过声明为任务 5 全部完成。
+
+
+## 第三次例外：累计验证冻结与正式复审
+
+当前工作树全部产品修改已冻结，HEAD 仍为 b1d584da91480b4daf2015953de39142fe894a63；固定 BASE 不变，累计 30 路径。本轮仅有费用记录器、narration repository、两份生命周期测试和本记录 5 个任务文件未提交，用户文件排除在范围外。原始验收表的“已修”表示当前代码和实际验证已闭环，整体任务结论仍待独立收敛与 R5，不等于终审通过。
+
+- root-ex3-final-regression.json：实际 26 文件 702 PASS，完整 exe/args/cwd 见文件（cwd 由执行 wrapper 固定为项目根）；failure-recovery 105 项与 lifecycle 24 项已包含。
+- root-ex3-final-typecheck.json：完整后端类型检查，含 Prisma generate，exit_code 0。
+- root-ex3-final-probes-index.json：21 个独立运行时/Map/Prisma 探针全部 exit 0，另三档原件回放一条命令 exit 0，总计 22 条命令。包含原有 17 组、Map 账本/生命周期、Prisma 事务窗口、Map confirm 矩阵；每条真实 exe/args/cwd/stdout/stderr 见索引的 output 文件。
+- root-three-sample-replay-ex3-final-command.json：三档冻结原件经生产 adapter 完整回放，WAV/timingMap/hash 保持，零新付费调用。
+
+本次正式累计 diff/contract 复审计入第三例外 1/1；此前常规 3/3、例外一 1/1、例外二 1/1 不变，终审调用仍为 2。集中前置审计与用户范围补充不另算复审轮，不通过则按既定上限停止；双方无 Critical/Important 后才形成第三候选，调用全新上下文 R5。
+
+
+## 第三次例外累计复审结论：局部 Map 修复闭环，整体未收敛
+
+被审代码为固定 BASE d6542fa64ad1cf2d2a56822cfd684cf761f72ef3 至 HEAD b1d584da91480b4daf2015953de39142fe894a63，加 ex3-review-freeze.json 的未提交任务修改；完整 30 路径审前后 SHA256 与 status 一致，主代理复核 root-ex3-review-end-check.json 无任何差异。
+
+| 审查 | Critical | Important | Minor | 结论 |
+|---|---:|---:|---:|---|
+| 第三例外 diff_reviewer | 0 | 1 | 0 | 未收敛 |
+| 第三例外 contract_reviewer | 0 | 1 | 1 | 未收敛 |
+
+两名 reviewer 的 Important 为同一项，合并为 1 项；不重复计数。Map 费用唯一/最大值、EX3-C1 取消覆盖、EX3-C2 旧 claim 写 ready、EX3-C3 confirm 来源窗口与旧 project 别名均已闭环。整体 L4/L5 因以下恢复缺口保守标为部分修，L1/L2/L3/L6/L7/L8 已有本轮证据。
+
+### EX3-I1：真实 SQLITE_BUSY_SNAPSHOT 被归为永久失败（未修）
+
+位置 narration-dispatch-handler.ts:19–22、227。临时错误分类仅接受列举的 Prisma Pxxxx 码；当前 SQLite 适配器实际抛出 PrismaClientKnownRequestError(code=SQLITE_BUSY_SNAPSHOT) 时，完整本地产物仍会走失败终态，既有 lease 扫描不再接管该 run。终态 sweep 能补账，但不能恢复 ready。
+
+按 diff reviewer 点名窗口，主代理创建全迁移隔离 SQLite，生产 API/dispatcher 与离线原件生成完整 bundle；在 ready 事务读到候选、首次创建字幕之前，另一 client 仅修改项目名称并成功提交。root-ex3-real-ready-read-window-command.json / report.json 实际 exit 1：首次 subtitle create 抛真实 PrismaClientKnownRequestError、SQLITE_BUSY_SNAPSHOT，run/record 均 failed，record.errorCode=narration_ready_persistence_failed，recoverInitial=complete，claimCount=1且没有取消/接管/来源变化；费用仍为 308 字符、43120 微元、succeeded。离线 provider 调用 1，真实外部调用 0。该失败来自恢复不变量断言，不能用原 702 PASS 与 22 条命令 exit 0 抹去。
+
+首版 root-ex3-real-ready-conflict-command.json 把屏障放在 updateMany 前，此前字幕 create 已持有写锁，未观察到目标错误；其“must observe real Prisma known error”失败是探针位置不当，不计业务反例。有效证据仅采用改为首次写入前窗口的上述 read-window 文件。
+
+### EX3-M1：兼容错误码文档命名漂移（留档）
+
+正式设计 §7:255 列出 narration_voice_incompatible；实际沿用 narration_execution_incompatible，route 返回 422，任务 2A 的已验收真实试听证据也使用统一码。未发现非法组合被放行。此项为 Minor，不在本轮修改设计/接口，应在后续正式合同收口时明确统一码与专用码的关系。
+
+### 提交与停止边界
+
+已授权的 Map 原子写入修复作为局部可验证成果提交：只包含费用记录器、narration repository、两份生命周期测试和本记录，解决同一类 Map 异步读取后旧写覆盖问题；没有修改本次新发现所在的 dispatch handler。该提交不是通过候选，不表示任务 5 完成。未形成第三候选、不启动 R5，终审调用仍为 2，第三例外复审 1/1 已耗尽。
+
+若用户选择继续，建议第四次受限例外仅修改 narration-dispatch-handler.ts 的有来源/类型约束的临时错误分类、narration-failure-recovery.test.ts 的真实双 client 恢复测试及本记录：真实无关写冲突后完整 bundle 保持可恢复，后续重启/lease 接管只落本地 ready 不重发；取消/旧 claim 对照仍不能恢复或覆盖当前状态，永久错误不能误延期。需要真实 SQLite 反例与相反组合验证，再按固定 BASE 累计审查。协议要求超过建议 3 次例外时用户明确说明继续理由；当前没有第四次授权，不自主追加修复。

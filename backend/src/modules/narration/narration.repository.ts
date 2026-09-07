@@ -1,5 +1,5 @@
 import { hasPassingNarrationScriptValidation } from "./narration-readiness.js";
-import { DEFAULT_NARRATION_CREATIVE_SETTINGS, ResolvedGenerationConfigurationV1Schema } from "../../../../shared/src/index.js";
+import { DEFAULT_NARRATION_CREATIVE_SETTINGS, QualifiedNarrationSettings, ResolvedGenerationConfigurationV1Schema } from "../../../../shared/src/index.js";
 import { settingsFromResolvedNarration } from "./narration-readiness.js";
 import { createHash } from "node:crypto";
 import { canonicalStringify, hashProjectNarrationTtsSettings, hashNarrationSettings, ConfirmNarrationRequest, NarrationDurationBand, GenerationConfigurationV1 } from "../../../../shared/src/index.js";
@@ -150,7 +150,8 @@ export class NarrationRepository {
         if (result.count !== 1) throw new Error("narration_state_conflict");
       });
     } else {
-      if (lease) await assertLease(this.db, record.generationRunId, lease);
+      // Map 校验与候选/字幕写入之间不能让出执行权。
+      if (lease) validateLease(this.db.generationRuns.get(record.generationRunId), lease);
       validateReady(this.db.narrationRecords.get(record.id) ?? null, record);
       for (const revision of this.db.narrationSubtitleRevisions.values()) {
         if (revision.narrationRecordId === record.id) validateSubtitle(record, NarrationSubtitleRevision.parse(revision));
@@ -320,7 +321,11 @@ export class NarrationRepository {
           const previous = client ? row ? decode(row) : null : this.db.narrationRecords.get(id);
           if (!previous || previous.projectId !== projectId || previous.status !== "generating")
               return null;
-          await assertLease(this.db, previous.generationRunId, lease, client);
+          if (client)
+              await assertLease(this.db, previous.generationRunId, lease, client);
+          else
+              // previous 与当前租约在同一同步段读取并写入，取消不能被旧候选覆盖。
+              validateLease(this.db.generationRuns.get(previous.generationRunId), lease);
           const next = NarrationRecord.parse({ ...previous, status, errorCode, updatedAt: new Date().toISOString() });
           if (client)
               await client.narrationRecord.update({ where: { id }, data: encode(next) });
@@ -364,19 +369,31 @@ export class NarrationRepository {
   }
   async confirm(ownerId: string, actorId: string, projectId: string, inputRecord: NarrationRecord, request: ConfirmNarrationRequest) {
       const action = async (client?: NarrationReadClient) => {
-          const source = await readNarrationSource(this.db, projectId, ownerId, client);
+          let source = await readNarrationSource(this.db, projectId, ownerId, client);
           const row = client ? await client.narrationRecord.findFirst({ where: { id: inputRecord.id, projectId } }) : null;
-          const record = client ? row ? decode(row) : null : this.db.narrationRecords.get(inputRecord.id);
-          if (!record || record.projectId !== projectId)
-              throw new Error("narration_not_found");
-          if (record.status !== "ready" && record.status !== "confirmed")
-              throw new Error("narration_not_confirmed");
-          if (canonicalStringify(record.output) !== canonicalStringify(inputRecord.output) || record.settingsSha256 !== inputRecord.settingsSha256)
-              throw new Error("narration_source_conflict");
+          let record = client ? row ? decode(row) : null : this.db.narrationRecords.get(inputRecord.id);
+          validateConfirmRecord(record, inputRecord, projectId);
+          // parse 会复制规范化输入；异步 hash 不持有可变 Map 对象的别名。
           const configuration = GenerationConfigurationV1.parse(source.configuration?.configurationJson);
-          if (!source.script || !hasPassingNarrationScriptValidation(source.script.validationResultJson) || !source.confirmation || source.project.activeScriptRecordId !== record.scriptRecordId || source.script.id !== record.scriptRecordId || source.confirmation.sourceTextSha256 !== textHash(source.script.scriptText) || record.sourceTextSha256 !== textHash(source.script.scriptText) || record.sourceProjectTtsSettingsSha256 !== await hashProjectNarrationTtsSettings(configuration))
+          const settings = QualifiedNarrationSettings.parse(record.settings);
+          const projectTtsInput = projectNarrationTtsInput(configuration);
+          const settingsInput = canonicalStringify(settings);
+          const projectTtsHash = await hashProjectNarrationTtsSettings(configuration);
+          const settingsHash = await hashNarrationSettings(settings);
+          if (!client) {
+              // 所有 await 已结束：从当前 Map 重读，复查、幂等/CAS 与写入保持同步。
+              source = readMapNarrationSource(this.db, projectId, ownerId);
+              record = this.db.narrationRecords.get(inputRecord.id);
+              validateConfirmRecord(record, inputRecord, projectId);
+              const currentConfiguration = GenerationConfigurationV1.parse(source.configuration?.configurationJson);
+              if (projectNarrationTtsInput(currentConfiguration) !== projectTtsInput)
+                  throw new Error("narration_stale");
+              if (canonicalStringify(record.settings) !== settingsInput)
+                  throw new Error("narration_source_conflict");
+          }
+          if (!source.script || !hasPassingNarrationScriptValidation(source.script.validationResultJson) || !source.confirmation || source.project.activeScriptRecordId !== record.scriptRecordId || source.script.id !== record.scriptRecordId || source.confirmation.sourceTextSha256 !== textHash(source.script.scriptText) || record.sourceTextSha256 !== textHash(source.script.scriptText) || record.sourceProjectTtsSettingsSha256 !== projectTtsHash)
               throw new Error("narration_stale");
-          if (record.sourceTextSha256 !== request.source_text_sha256 || record.settingsSha256 !== request.settings_sha256 || record.settingsSha256 !== await hashNarrationSettings(record.settings))
+          if (record.sourceTextSha256 !== request.source_text_sha256 || record.settingsSha256 !== request.settings_sha256 || record.settingsSha256 !== settingsHash)
               throw new Error("narration_source_conflict");
           const run = client ? await client.generationRun.findUnique({ where: { id: record.generationRunId } }) : this.db.generationRuns.get(record.generationRunId);
           const snapshot = client ? await client.runConfigurationSnapshot.findUnique({ where: { id: record.configurationSnapshotId } }) : this.db.runConfigurationSnapshots.get(record.configurationSnapshotId);
@@ -447,17 +464,43 @@ export function durationBandFromSource(value: unknown): NarrationDurationBand {
   const band = value as { min_sec?: number; max_sec?: number ;} | null;
   return NarrationDurationBand.parse({ minMs: typeof band?.min_sec === "number" ? band.min_sec * 1000 : null, maxMs: typeof band?.max_sec === "number" ? band.max_sec * 1000 : null });
 }
-export async function readNarrationSource(db: DbClient, projectId: string, ownerId: string, client?: NarrationReadClient) {
-  const project = client ? await client.project.findFirst({ where: { id: projectId, ownerId, archivedAt: null } }) : db.projects.get(projectId);
+function readMapNarrationSource(db: DbClient, projectId: string, ownerId: string) {
+  const project = db.projects.get(projectId);
   if (!project || project.ownerId !== ownerId) throw new Error("project_scope_denied");
-  const script = project.activeScriptRecordId ? client ? await client.scriptRecord.findUnique({ where: { id: project.activeScriptRecordId } }) : db.scriptRecords.get(project.activeScriptRecordId) : null;
-  const configuration = client ? await client.projectGenerationConfiguration.findUnique({ where: { projectId } }) : [...db.projectGenerationConfigurations.values()].find(c => c.projectId === projectId);
-  const confirmation = script ? client ? await client.scriptConfirmation.findUnique({ where: { scriptRecordId: script.id } }) : db.scriptConfirmations.get(script.id) : null;
-  const topic = project.activeTopicPackageId ? client ? await client.topicPackage.findUnique({ where: { id: project.activeTopicPackageId } }) : db.topicPackages.get(project.activeTopicPackageId) : null;
+  const script = project.activeScriptRecordId ? db.scriptRecords.get(project.activeScriptRecordId) : null;
+  const configuration = [...db.projectGenerationConfigurations.values()].find(c => c.projectId === projectId);
+  const confirmation = script ? db.scriptConfirmations.get(script.id) : null;
+  const topic = project.activeTopicPackageId ? db.topicPackages.get(project.activeTopicPackageId) : null;
   return { project, script, configuration, confirmation, topic };
+}
+export async function readNarrationSource(db: DbClient, projectId: string, ownerId: string, client?: NarrationReadClient) {
+  if (!client) return readMapNarrationSource(db, projectId, ownerId);
+  const project = await client.project.findFirst({ where: { id: projectId, ownerId, archivedAt: null } });
+  if (!project || project.ownerId !== ownerId) throw new Error("project_scope_denied");
+  const script = project.activeScriptRecordId ? await client.scriptRecord.findUnique({ where: { id: project.activeScriptRecordId } }) : null;
+  const configuration = await client.projectGenerationConfiguration.findUnique({ where: { projectId } });
+  const confirmation = script ? await client.scriptConfirmation.findUnique({ where: { scriptRecordId: script.id } }) : null;
+  const topic = project.activeTopicPackageId ? await client.topicPackage.findUnique({ where: { id: project.activeTopicPackageId } }) : null;
+  return { project, script, configuration, confirmation, topic };
+}
+// 与 shared 的项目语音 hash 使用相同投影；只用于同步比较已验证的 hash 输入。
+function projectNarrationTtsInput(configuration: GenerationConfigurationV1): string {
+  return canonicalStringify({
+    modelSelection: configuration.capabilities["tts.synthesize"],
+    voiceProfileId: configuration.creative.voice_profile_id,
+    narration: configuration.creative.narration ?? DEFAULT_NARRATION_CREATIVE_SETTINGS,
+  });
+}
+function validateConfirmRecord(record: NarrationRecord | null | undefined, inputRecord: NarrationRecord, projectId: string): asserts record is NarrationRecord {
+  if (!record || record.projectId !== projectId) throw new Error("narration_not_found");
+  if (record.status !== "ready" && record.status !== "confirmed") throw new Error("narration_not_confirmed");
+  if (canonicalStringify(record.output) !== canonicalStringify(inputRecord.output) || record.settingsSha256 !== inputRecord.settingsSha256) throw new Error("narration_source_conflict");
 }
 async function assertLease(db: DbClient, runId: string, lease: NarrationLease, client?: NarrationReadClient) {
   const run = client ? await client.generationRun.findUnique({ where: { id: runId } }) : db.generationRuns.get(runId);
+  return validateLease(run, lease);
+}
+function validateLease<T extends { status: string; dispatchLeaseOwner: string | null; dispatchClaimCount: number; dispatchLeaseExpiresAt: Date | null }>(run: T | null | undefined, lease: NarrationLease): T {
   if (!run || run.status !== "running" || run.dispatchLeaseOwner !== lease.owner || run.dispatchClaimCount !== lease.claimCount || !run.dispatchLeaseExpiresAt || run.dispatchLeaseExpiresAt.getTime() <= Date.now()) throw new Error("narration_lease_lost");
   return run;
 }
