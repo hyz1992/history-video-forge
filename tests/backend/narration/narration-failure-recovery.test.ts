@@ -777,3 +777,120 @@ describe('EX3 Map confirm 最终来源复查', () => {
   expect([...f.app.db.narrationSubtitleRevisions.values()]).toEqual(before.subtitles);
  });
 });
+
+
+describe('EX7 Map写入权限与当前媒体来源', () => {
+ function readyBundle(record: NarrationRecord) {
+  const hash = 'a'.repeat(64), now = new Date().toISOString();
+  const ref = (file: string) => ({ uri: 'narration-runs/' + record.generationRunId + '/' + file, sha256: hash });
+  const subtitle = NarrationSubtitleRevision.parse({
+   id: 'subtitle-' + record.id, projectId: record.projectId, narrationRecordId: record.id, audioHash: hash, timingHash: hash,
+   subtitleSettingsSnapshotJson: { presetId: null, presetVersion: null, resolvedStyle: DEFAULT_SUBTITLE_STYLE, overrides: {}, lineBreak: { strategy: 'punctuation_and_length', maxCharactersPerLine: 20, version: 'v1' }, resolverVersion: 'v1' },
+   subtitleSettingsHash: hash, builderVersion: 'v1', srt: ref('captions.srt'), vtt: ref('captions.vtt'), createdAt: now,
+  });
+  const ready = NarrationRecord.parse({ ...record, status: 'ready', spokenTextSha256: hash, providerTaskId: 'task', providerRequestId: 'request', output: {
+   audio: { ...ref('audio.wav'), sampleRate: 24000, channels: 1, bitDepth: 16, sampleCount: 24000 }, durationMs: 1000,
+   nativeEvents: ref('native.json'), timingMap: ref('timing.json'), initialSubtitleRevisionId: subtitle.id,
+   validationReport: { status: 'pass', validatorVersion: 'v1', checkedAt: now, nativeTextCoverageComplete: true, nativeTimingValid: true, audioProbeValid: true, issues: [] },
+  } });
+  return { ready, subtitle };
+ }
+
+ const operations = ['create', 'ready', 'append', 'failed', 'unknown', 'cancel', 'confirm', 'intent'] as const;
+ async function writeFixture(op: typeof operations[number]) {
+  const f = await fixture(), s = await prepared(f), repo = new NarrationRepository(f.app.db), lease = {owner:'writer', claimCount:1};
+  expect(await f.app.generationRunRepository.claimRun(s.run.id, lease.owner, new Date(Date.now()+60000), new Date(), 0)).toBe(true);
+  const bundle = readyBundle(s.record);
+  if (op === 'create') f.app.db.narrationRecords.delete(s.record.id);
+  if (op === 'append' || op === 'confirm') await repo.saveReadyBundle('u', bundle.ready, bundle.subtitle, lease);
+  if (op === 'confirm') f.app.db.generationRuns.get(s.run.id)!.status = 'succeeded';
+  const subtitle = {...bundle.subtitle, id:'next-subtitle', subtitleSettingsHash:'b'.repeat(64)};
+  const action = () => {
+   if(op==='create') return repo.createCandidate('u', s.record);
+   if(op==='ready') return repo.saveReadyBundle('u', bundle.ready, bundle.subtitle, lease);
+   if(op==='append') return repo.appendSubtitleRevision('u', subtitle);
+   if(op==='failed'||op==='unknown') return repo.transitionCandidate('u', f.project.id, s.record.id, op, 'test', lease);
+   if(op==='cancel') return repo.cancel('u', f.project.id, s.record.id);
+   if(op==='confirm') return repo.confirm('u', 'u', f.project.id, bundle.ready, {source_text_sha256:s.record.sourceTextSha256, settings_sha256:s.record.settingsSha256, expected_active_narration_record_id:null,target_duration_band_snapshot:{minMs:1000,maxMs:5000},accept_duration_outside_band:false});
+   const payload=s.run.dispatchPayloadJson as any;
+   return repo.claimProviderIntent('u',f.project.id,s.run.id,lease,payload.provider_request_key,narrationTextHash(canonicalStringify({sourceText:payload.source_text,settings:s.record.settings})));
+  };
+  return {...f,s,repo,lease,bundle,action};
+ }
+ type WriteFixture = Awaited<ReturnType<typeof writeFixture>>;
+ function completeState(f: WriteFixture) {
+  return structuredClone({projects:[...f.app.db.projects], records:[...f.app.db.narrationRecords], runs:[...f.app.db.generationRuns], snapshots:[...f.app.db.runConfigurationSnapshots], subtitles:[...f.app.db.narrationSubtitleRevisions], events:[...f.app.db.generationRunEvents], confirmations:[...f.app.db.scriptConfirmations], usage:[...f.app.db.usageCostRecords]});
+ }
+ async function inReadWindow(f: WriteFixture, op: typeof operations[number], mutate: () => void) {
+  let hits=0; let after:ReturnType<typeof completeState>;
+  const change=()=>{ hits++;mutate();after=completeState(f); };
+  let spy:{mockRestore():void};
+  if(op==='create'||op==='ready') {
+   const original=f.repo.projectForOwner.bind(f.repo);
+   spy=vi.spyOn(f.repo,'projectForOwner').mockImplementationOnce(async(...args)=>{const current=await original(...args);change();return current;});
+  } else if(op==='append') {
+   const original=f.repo.findByIdForOwner.bind(f.repo);
+   spy=vi.spyOn(f.repo,'findByIdForOwner').mockImplementationOnce(async(...args)=>{const current=await original(...args);change();return current;});
+  } else {
+   const get=f.app.db.scriptConfirmations.get.bind(f.app.db.scriptConfirmations);let scheduled=false;
+   spy=vi.spyOn(f.app.db.scriptConfirmations,'get').mockImplementation(id=>{const current=get(id);if(!scheduled){scheduled=true;queueMicrotask(change);}return current;});
+  }
+  const [result]=await Promise.allSettled([f.action()]);spy.mockRestore();expect(hits).toBe(1);
+  return {result,after:after!};
+ }
+ for(const op of operations) {
+  it.each(['owner_mutated','owner_replaced','archived','deleted'] as const)(op+'：%s后不得写入任何记录/状态/事件',async change=>{
+   const f=await writeFixture(op);
+   const {result,after}=await inReadWindow(f,op,()=>{
+    if(change==='owner_mutated') f.project.ownerId='other';
+    if(change==='owner_replaced') f.app.db.projects.set(f.project.id,{...f.project,ownerId:'other'});
+    if(change==='archived') Object.assign(f.project,{archivedAt:new Date()});
+    if(change==='deleted') f.app.db.projects.delete(f.project.id);
+   });
+   expect.soft(result.status).toBe('rejected');
+   if(result.status==='rejected') expect(['project_scope_denied','narration_stale']).toContain(result.reason.message);
+   expect(completeState(f)).toEqual(after);
+  });
+  it.each(['name','control'])(op+'：%s对照保持原有写入行为',async change=>{
+   const f=await writeFixture(op);
+   const {result}=await inReadWindow(f,op,()=>{if(change==='name')f.project.name='合法名称';});
+   expect(result.status,result.status==='rejected'?String(result.reason):'').toBe('fulfilled');
+   const record=f.app.db.narrationRecords.get(f.s.record.id)!;
+   if(op==='create') expect(record.status).toBe('generating');
+   if(op==='ready') expect(record.status).toBe('ready');
+   if(op==='append') expect(f.app.db.narrationSubtitleRevisions.size).toBe(2);
+   if(op==='failed'||op==='unknown') expect(record.status).toBe(op);
+   if(op==='cancel') {expect(record.status).toBe('cancelled');expect(f.app.db.generationRuns.get(f.s.run.id)!.status).toBe('failed');}
+   if(op==='confirm') {expect(record.status).toBe('confirmed');expect(f.app.db.projects.get(f.project.id)!.activeNarrationRecordId).toBe(record.id);}
+   if(op==='intent') expect(f.app.db.generationRunEvents.get(f.s.run.id)!.filter(e=>e.eventType==='narration_provider_intent')).toHaveLength(1);
+  });
+ }
+ it.each(['deleted','project','audio','timing','output_missing'] as const)('追加字幕最终读取当前口播：%s不产生孤立/错来源字幕',async change=>{
+  const f=await writeFixture('append');
+  const {result,after}=await inReadWindow(f,'append',()=>{
+   const row=f.app.db.narrationRecords.get(f.s.record.id)!;
+   if(change==='deleted')f.app.db.narrationRecords.delete(row.id);
+   if(change==='project')f.app.db.narrationRecords.set(row.id,{...row,projectId:'foreign'});
+   if(change==='audio')row.output!.audio.sha256='c'.repeat(64);
+   if(change==='timing')row.output!.timingMap.sha256='c'.repeat(64);
+   if(change==='output_missing')row.output=null;
+  });
+  expect(result.status).toBe('rejected');
+  expect(completeState(f)).toEqual(after);
+ });
+ it.each(['script_project','confirmation_project','confirmation_script'] as const)('确认口播前%s不一致不能激活',async change=>{
+  const f=await writeFixture('confirm');
+  const {result,after}=await inReadWindow(f,'confirm',()=>{
+   if(change==='script_project')f.app.db.scriptRecords.get('s')!.projectId='foreign';
+   if(change==='confirmation_project')f.app.db.scriptConfirmations.get('s')!.projectId='foreign';
+   if(change==='confirmation_script')f.app.db.scriptConfirmations.get('s')!.scriptRecordId='foreign';
+  });
+  expect(result.status).toBe('rejected');expect(completeState(f)).toEqual(after);
+ });
+ it('直接仓库同来源并发确认保持首次凭据且只写一次',async()=>{
+  const f=await fixture(),repo=new NarrationRepository(f.app.db);
+  const set=vi.spyOn(f.app.db.scriptConfirmations,'set');
+  const [first,second]=await Promise.all([repo.confirmScript('u','u',f.project.id,'s',f.hash),repo.confirmScript('u','u',f.project.id,'s',f.hash)]);
+  expect(first).toEqual(second);expect(set).toHaveBeenCalledTimes(1);expect([...f.app.db.scriptConfirmations.values()]).toEqual([first]);
+ });
+});

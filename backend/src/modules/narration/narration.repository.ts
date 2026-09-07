@@ -48,7 +48,9 @@ export class NarrationRepository {
   }
   async confirmScript(ownerId: string, actorId: string, projectId: string, scriptId: string, sourceHash: string) {
       const action = async (client?: NarrationReadClient) => {
-          const source = await readNarrationSource(this.db, projectId, ownerId, client);
+          let source = await readNarrationSource(this.db, projectId, ownerId, client);
+          // Map 最后一次 await 已结束：来源复查、幂等裁决与写入在同一同步段。
+          if (!client) source = readMapNarrationSource(this.db, projectId, ownerId);
           if (source.project.narrationTimingMode !== "narration_first_v1")
               throw new Error("narration_mode_unavailable");
           if (!source.script || source.script.id !== scriptId || source.project.activeScriptRecordId !== scriptId || source.script.projectId !== projectId)
@@ -56,6 +58,8 @@ export class NarrationRepository {
           if (!hasPassingNarrationScriptValidation(source.script.validationResultJson))
               throw new Error("script_validation_required");
           if (textHash(source.script.scriptText) !== sourceHash)
+              throw new Error("narration_source_conflict");
+          if (source.confirmation && (source.confirmation.projectId !== projectId || source.confirmation.scriptRecordId !== scriptId))
               throw new Error("narration_source_conflict");
           if (source.confirmation?.sourceTextSha256 === sourceHash)
               return source.confirmation;
@@ -69,7 +73,7 @@ export class NarrationRepository {
   }
   async projectForOwner(projectId: string, ownerId: string) {
     const client = this.client;
-    const project = client ? await client.project.findFirst({ where: { id: projectId, ownerId, archivedAt: null } }) : this.db.projects.get(projectId);
+    const project = client ? await client.project.findFirst({ where: { id: projectId, ownerId, archivedAt: null } }) : readMapNarrationProject(this.db, projectId, ownerId);
     if (!project || project.ownerId !== ownerId) throw new Error("project_scope_denied");
     return project;
   }
@@ -123,6 +127,7 @@ export class NarrationRepository {
         await tx.narrationRecord.create({data:encode(record)});
       });
     } else {
+      readMapNarrationProject(this.db, record.projectId, ownerId);
       validateSource(record, this.db.scriptRecords.get(record.scriptRecordId), this.db.generationRuns.get(record.generationRunId), this.db.runConfigurationSnapshots.get(record.configurationSnapshotId));
       if (this.db.narrationRecords.has(record.id) || [...this.db.narrationRecords.values()].some(r => r.generationRunId === record.generationRunId)) throw new Error("narration_unique_run");
       this.db.narrationRecords.set(record.id, structuredClone(record));
@@ -151,6 +156,7 @@ export class NarrationRepository {
       });
     } else {
       // Map 校验与候选/字幕写入之间不能让出执行权。
+      readMapNarrationProject(this.db, record.projectId, ownerId);
       if (lease) validateLease(this.db.generationRuns.get(record.generationRunId), lease);
       validateReady(this.db.narrationRecords.get(record.id) ?? null, record);
       for (const revision of this.db.narrationSubtitleRevisions.values()) {
@@ -173,7 +179,14 @@ export class NarrationRepository {
         if (!await tx.project.findFirst({where:{id:subtitle.projectId,ownerId,archivedAt:null}})) throw new Error("project_scope_denied");
         await tx.narrationSubtitleRevision.create({data:encodeSubtitle(subtitle)});
       });
-    } else { this.assertNewSubtitle(subtitle); this.db.narrationSubtitleRevisions.set(subtitle.id, structuredClone(subtitle)); }
+    } else {
+      readMapNarrationProject(this.db, subtitle.projectId, ownerId);
+      const current = this.db.narrationRecords.get(subtitle.narrationRecordId);
+      if (!current || current.projectId !== subtitle.projectId || !current.output) throw new Error("narration_ready_bundle_required");
+      validateSubtitle(current, subtitle);
+      this.assertNewSubtitle(subtitle);
+      this.db.narrationSubtitleRevisions.set(subtitle.id, structuredClone(subtitle));
+    }
     return structuredClone(subtitle);
   }
   async hasProviderIntent(runId: string) {
@@ -317,6 +330,7 @@ export class NarrationRepository {
       const action = async (client?: NarrationReadClient) => {
           const source = await readNarrationSource(this.db, projectId, ownerId, client);
           void source;
+          if (!client) readMapNarrationProject(this.db, projectId, ownerId);
           const row = client ? await client.narrationRecord.findFirst({ where: { id, projectId } }) : null;
           const previous = client ? row ? decode(row) : null : this.db.narrationRecords.get(id);
           if (!previous || previous.projectId !== projectId || previous.status !== "generating")
@@ -338,6 +352,7 @@ export class NarrationRepository {
   async cancel(ownerId: string, projectId: string, id: string) {
       const action = async (client?: NarrationReadClient) => {
           await readNarrationSource(this.db, projectId, ownerId, client);
+          if (!client) readMapNarrationProject(this.db, projectId, ownerId);
           const row = client ? await client.narrationRecord.findFirst({ where: { id, projectId } }) : null;
           const previous = client ? row ? decode(row) : null : this.db.narrationRecords.get(id);
           if (!previous || previous.projectId !== projectId)
@@ -383,6 +398,8 @@ export class NarrationRepository {
           if (!client) {
               // 所有 await 已结束：从当前 Map 重读，复查、幂等/CAS 与写入保持同步。
               source = readMapNarrationSource(this.db, projectId, ownerId);
+              if (source.script?.projectId !== projectId || source.confirmation?.projectId !== projectId || source.confirmation.scriptRecordId !== inputRecord.scriptRecordId)
+                  throw new Error("narration_stale");
               record = this.db.narrationRecords.get(inputRecord.id);
               validateConfirmRecord(record, inputRecord, projectId);
               const currentConfiguration = GenerationConfigurationV1.parse(source.configuration?.configurationJson);
@@ -464,9 +481,14 @@ export function durationBandFromSource(value: unknown): NarrationDurationBand {
   const band = value as { min_sec?: number; max_sec?: number ;} | null;
   return NarrationDurationBand.parse({ minMs: typeof band?.min_sec === "number" ? band.min_sec * 1000 : null, maxMs: typeof band?.max_sec === "number" ? band.max_sec * 1000 : null });
 }
-function readMapNarrationSource(db: DbClient, projectId: string, ownerId: string) {
+function readMapNarrationProject(db: DbClient, projectId: string, ownerId: string) {
   const project = db.projects.get(projectId);
-  if (!project || project.ownerId !== ownerId) throw new Error("project_scope_denied");
+  if (!project || project.id !== projectId || project.ownerId !== ownerId ||
+      ("archivedAt" in project && project.archivedAt != null)) throw new Error("project_scope_denied");
+  return project;
+}
+function readMapNarrationSource(db: DbClient, projectId: string, ownerId: string) {
+  const project = readMapNarrationProject(db, projectId, ownerId);
   const script = project.activeScriptRecordId ? db.scriptRecords.get(project.activeScriptRecordId) : null;
   const configuration = [...db.projectGenerationConfigurations.values()].find(c => c.projectId === projectId);
   const confirmation = script ? db.scriptConfirmations.get(script.id) : null;

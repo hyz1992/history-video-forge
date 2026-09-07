@@ -363,3 +363,46 @@ describe("EX6 Map提交最终来源窗口", () => {
         expect(f.app.db.narrationRecords.size).toBe(1);
     });
 });
+
+
+describe("EX7 Map文案确认最终来源", () => {
+    const changes = submitMutations.filter(m => !/配置|revision|TTS|确认/.test(m.name));
+    it.each(changes)("$name：确认前当前来源变化不落旧凭据", async mutation => {
+        const f = await fixture();
+        const get = f.app.db.scriptConfirmations.get.bind(f.app.db.scriptConfirmations);
+        let reads = 0, hits = 0;
+        const spy = vi.spyOn(f.app.db.scriptConfirmations, "get").mockImplementation(id => {
+            const result = get(id);
+            if (reads++ === 0) queueMicrotask(() => { hits++; mutation.change(f); });
+            return result;
+        });
+        const response = await f.app.inject({ method: "POST", url: f.url + "/script/s/confirm", auth, payload: { source_text_sha256: f.hash } });
+        spy.mockRestore();
+        expect(hits).toBe(1);
+        expect(reads).toBeGreaterThan(0);
+        expect.soft(response.statusCode, JSON.stringify(response.json())).toBe(mutation.status);
+        expect(f.app.db.scriptConfirmations.size).toBe(0);
+        expect(f.app.db.generationRuns.size).toBe(0);
+    });
+    it.each(["project", "script"])("同hash确认凭据的%s归属不一致必须拒绝", async field => {
+        const f = await fixture();
+        await confirmScript(f);
+        const confirmation = f.app.db.scriptConfirmations.get("s")!;
+        if (field === "project") confirmation.projectId = "foreign";
+        else confirmation.scriptRecordId = "foreign";
+        const before = structuredClone(confirmation);
+        const result = await f.app.inject({ method: "POST", url: f.url + "/script/s/confirm", auth, payload: { source_text_sha256: f.hash } });
+        expect(result.statusCode).toBe(409);
+        expect(f.app.db.scriptConfirmations.get("s")).toEqual(before);
+    });
+    it("正常改名与同来源重复确认保留首次凭据", async () => {
+        const f = await fixture();
+        const get = f.app.db.scriptConfirmations.get.bind(f.app.db.scriptConfirmations);
+        let once = false;
+        const spy = vi.spyOn(f.app.db.scriptConfirmations, "get").mockImplementation(id => { const result = get(id); if (!once) { once = true; queueMicrotask(() => { f.app.db.projects.set(f.project.id, { ...f.project, name: "新名称" }); }); } return result; });
+        await confirmScript(f); spy.mockRestore();
+        const before = structuredClone(f.app.db.scriptConfirmations.get("s"));
+        await confirmScript(f);
+        expect(f.app.db.scriptConfirmations.get("s")).toEqual(before);
+    });
+});

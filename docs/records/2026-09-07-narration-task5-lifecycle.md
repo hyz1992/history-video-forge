@@ -7,10 +7,10 @@
 | TASK_BASE_SHA | d6542fa64ad1cf2d2a56822cfd684cf761f72ef3 |
 | 审查级别 | T2 |
 | 最近已终审候选 SHA | 8003a80e49f13e529924655a66d92299cba3a7b7 |
-| 阶段 | 第六次例外提交窗口已修；累计复审未收敛，Map 文案确认待整改 |
+| 阶段 | 四文件收口第一次累计复审已收敛，候选待R5终审 |
 | 整改复审轮数 | 3 / 3 |
 | 终审调用次数 | 2 |
-| 受限例外 | 前六次均已用完（各 1 / 1）；后续整改未授权 |
+| 受限例外 | 前六次各1/1；本次四文件有界收口已授权，累计复审1/2 |
 
 ## 原始验收清单
 
@@ -18,14 +18,14 @@
 
 | 编号 | 原始要求 | 状态 | 证据 |
 |---|---|---|---|
-| L1 | 文案已确认、来源 hash/revision 与完整 owner 权限前置校验 | 部分修 | root-ex6-map-submit-window-command.json及49项新增测试证明提交窗口已修；root-ex6-script-confirm-window-command.json实际exit1，Map文案确认仍保存旧来源凭据，见EX6-I1 |
-| L2 | 有限 overrides 进入冻结快照；正文/设置指纹幂等，旧 operation 不变 | 已修 | root-ex6-regression.json；root-api-ex6-command.json：冻结 override、请求指纹幂等、旧 operation 回归 |
-| L3 | 纯 readiness；真实模型/音色/协议与资格一致，非法组合零外呼 | 已修 | root-ex6-regression.json：narration-lifecycle 24 项、narration-api 完整68项（含原19项）；非法组合零外呼 |
-| L4 | 持久化后 202、既有 dispatcher/lease；缺快照拒绝，未知结果不自动重发 | 已修 | root-ex6-recovery-prefix-command.json 原反例跨三实例恢复；root-ex6-regression.json 39项完整产物/未知intent、临时/永久、取消/接管矩阵及既有恢复回归通过 |
-| L5 | 完整 bundle 后才 ready，取消持久化优先，迟到结果受状态和 lease fencing | 已修 | root-failure-ex6-command.json、root-failure-boundary-ex6-command.json、root-map-lifecycle-ex6-command.json；root-ex6-regression.json 真实SQLite与前置故障后的取消/同异owner/永久错误对照通过 |
-| L6 | confirm 复查来源与接受区间；同 active 幂等、区间更新保留视觉、不同候选 CAS | 已修 | root-confirm-ex6-command.json、root-map-confirm-matrix-ex6-command.json：Prisma 确认 CAS/区间幂等及 Map 当前来源 14 组矩阵；EX3-C3 正式 26 项已通过 |
-| L7 | 外呼 intent 先落事件；无资产任务媒体账本、文案归属、累计最大值、未知不记零 | 已修 | root-map-ledger-ex6-command.json、root-usage-ex6-command.json、root-usage-write-failure-ex6-command.json、root-storage-outcome-combinations-ex6-command.json：唯一最大累计值、未知 null、不可变事实恢复 |
-| L8 | 独立新模型价格，不改变旧全局默认；回归和完整后端类型检查 | 已修 | pricing-catalog.seed.ts 独立北京模型单价；root-ex6-regression.json 26 文件 799 PASS；root-ex6-typecheck.json 完整类型检查 exit_code 0 |
+| L1 | 文案已确认、来源 hash/revision 与完整 owner 权限前置校验 | 已修 | root-ex7-script-confirm-window-command.json：生产确认API三来源冲突零凭据；root-ex7-map-submit-window-command.json：提交冲突零新增；新增71项及原来源矩阵通过 |
+| L2 | 有限 overrides 进入冻结快照；正文/设置指纹幂等，旧 operation 不变 | 已修 | root-ex7-regression.json；root-api-ex7-command.json：冻结 override、请求指纹幂等、旧 operation 回归 |
+| L3 | 纯 readiness；真实模型/音色/协议与资格一致，非法组合零外呼 | 已修 | root-ex7-regression.json：narration-lifecycle 24 项、narration-api 完整82项（原68+新增14）；非法组合零外呼 |
+| L4 | 持久化后 202、既有 dispatcher/lease；缺快照拒绝，未知结果不自动重发 | 已修 | root-ex7-recovery-prefix-command.json 原反例跨三实例恢复；root-ex7-regression.json 39项完整产物/未知intent、临时/永久、取消/接管矩阵及既有恢复回归通过 |
+| L5 | 完整 bundle 后才 ready，取消持久化优先，迟到结果受状态和 lease fencing | 已修 | root-failure-ex7-command.json、root-failure-boundary-ex7-command.json、root-map-lifecycle-ex7-command.json；root-ex7-regression.json 真实SQLite与前置故障后的取消/同异owner/永久错误对照通过 |
+| L6 | confirm 复查来源与接受区间；同 active 幂等、区间更新保留视觉、不同候选 CAS | 已修 | root-confirm-ex7-command.json、root-map-confirm-matrix-ex7-command.json：Prisma 确认 CAS/区间幂等及 Map 当前来源 14 组矩阵；EX3-C3 正式 26 项已通过 |
+| L7 | 外呼 intent 先落事件；无资产任务媒体账本、文案归属、累计最大值、未知不记零 | 已修 | root-map-ledger-ex7-command.json、root-usage-ex7-command.json、root-usage-write-failure-ex7-command.json、root-storage-outcome-combinations-ex7-command.json：唯一最大累计值、未知 null、不可变事实恢复 |
+| L8 | 独立新模型价格，不改变旧全局默认；回归和完整后端类型检查 | 已修 | pricing-catalog.seed.ts 独立北京模型单价；root-ex7-regression.json 26 文件 870 PASS；root-ex7-typecheck.json 完整类型检查 exit_code 0 |
 
 ## 范围与基线
 
@@ -623,3 +623,49 @@ root-ex6-script-confirm-concurrent-command.json / report.json是审查建议的�
 为减少逐点发现再逐次申请，建议下一次改为有限的Map写入入口统一收口：在narration.repository.ts核对confirmScript、createCandidate、saveReadyBundle、appendSubtitleRevision、transitionCandidate、cancel、confirm及intent写入的最终权限/来源检查，已经同步或有完整保护的入口保留；将需要当前Map状态的检查与写入置于同一同步段，Prisma继续使用原事务。除EX6-I1已实测外，其他入口目前只是需要核对的同类边界，不预先宣称有缺陷。建议文件范围为该repository、narration-api.test.ts、narration-failure-recovery.test.ts及本记录四个文件；先有效反例与正常对照，再小步修复、固定累计验证和独立审查。
 
 若用户同意为此范围预先授权最多两轮累计整改复审，可显式覆盖协议“例外须逐次单独授权”的默认方式，在已同意的四文件内连续处置审查发现，不再按单个点申请；两轮后仍有Critical/Important则停止，收敛后按R5终审，任何范围外动作仍需说明。该治理建议与新增整改均尚未授权，未实施，未修改协议文件。
+
+
+## 四文件有界收口授权（EX7）
+
+用户回复“同意，按你的建议继续”，明确同意四文件范围、最多两轮累计整改复审，并覆盖协议默认逐次单独申请的方式。理由是统一处理Map写入入口的同类最终权限/来源边界，减少逐点反复授权。仅修改narration.repository.ts、narration-api.test.ts、narration-failure-recovery.test.ts和本记录；Prisma事务行为保留，不进入Task6。起始HEAD 5716c144aaafe31ebbfca5cc7d1c18fa21e5f23b，固定BASE不变；T2，常规3/3、前六次各1/1、终审2次不重置。本次复审额度0/2；收敛后R5，不收敛最多两轮后停止。
+
+设计与实施计划：
+1. 统一同步Map项目权限读取，检查当前id/owner/归档；来源读取复用该函数。confirmScript异步来源返回后同步重读、完整校验当前脚本/确认归属/hash/validation，再幂等或写入。
+2. createCandidate/saveReadyBundle/appendSubtitleRevision在Map最终写入段再次检查当前owner；追加字幕重读当前口播输出并验证媒体来源，不能沿用await前的克隆。transitionCandidate/cancel在异步读取之后复查当前权限再沿用现有同步状态/租约逻辑。confirm已有最终来源复查，保留并核对归属；claimProviderIntent已有末端seal与claim检查，不增加新重试。
+3. 各方法只检查自身合同：历史候选/已收到媒体的保存不等于激活，不强行要求当前active文案仍相同；取消/终态不能被源文本变化意外阻断，费用事实仍保全。
+4. 先写有效反例：确认来源/权限变化及幂等；各写入入口owner原地/替换、归档、删除与名称/正常对照；追加字幕输出替换/删除/归属与完整状态零变更。有效RED后最小修改，专项GREEN、原真实API探针、固定26文件累计回归和完整类型检查，冻结累计30路径做独立diff/contract；范围内finding自主处理，最多两轮。
+
+
+### EX7 实施与专项验证
+
+Map各写入入口统一使用readMapNarrationProject同步核验当前项目id/owner/归档。confirmScript异步读取后重读完整来源，再核验并幂等/写入；同hash确认也核对项目/脚本归属。createCandidate、saveReadyBundle及追加字幕在最终Map写入前重新核验权限；追加字幕重新读取当前口播输出并检查音频/时间图hash，拒绝已删除或错归属媒体。transitionCandidate/cancel异步读取后复查权限，原状态、租约和事件顺序不变。confirm沿用原最终同步来源读取，并补Map脚本/确认元组归属；intent的原seal/claim/零重复写入保持。Prisma事务主体未重构，新增确认归属检查与数据库本身已有归属约束一致。
+
+- root-ex7-red.json：新增68项在实现前实际38 FAIL/30 PASS/221 skipped，均为目标来源/权限/零副作用断言，未出现夹具TypeError或导入失败。
+- root-ex7-green.json：相同68 PASS。追加3项口播确认项目/脚本归属对照后，临时移除该局部检查验证root-ex7-confirm-tuple-red.json为3 FAIL/68 PASS/221 skipped；将检查仅放回Map最终来源段后root-ex7-green-final.json为71 PASS/221 skipped。
+- 最终新增71项由API14项和仓库57项组成：8类写操作×6种权限/合法对照（48）、追加字幕当前输出异常（5）、确认来源元组（3）、直接仓库同来源并发幂等（1）。既有HTTP阶段锁行为保持；直接仓库的并发测试不冒充API并发反例。
+- 仓库ready/字幕状态测试使用正式schema夹具；原生产API与冻结原件回放由独立探针复核，不把schema夹具当实际媒体生成证据。
+- root-ex7-typecheck.json：完整后端类型检查含Prisma generate，实际exit_code0，完整命令输出保存。
+
+自审：复查到Map写入之间无await；永久拒绝无记录/字幕/事件/run/费用副作用，名称改变仍允许；保存历史产物、取消和补账不新增当前active文案要求；没有新循环或provider重试。当前专项通过，完整回归及累计复审待完成，不先声明Task5完成。
+
+
+root-ex7-two-files.json：完整API82项、恢复210项，共292 PASS；包含本次71项，不叠加。root-ex7-script-confirm-window-command.json / report.json：上一轮生产API来源替换反例现owner/active/text分别404/409/409且确认0、run0/provider0；名称/无变化200且确认1。探针只调整读取次数断言为实际至少一次，以容纳新增最终重读；每次变更仍只在首次真实读取后触发一次，成功正常路径实际读取2次，不因复查次数增加误报夹具错误。旧EX6失败原件保留。root-ex7-map-submit-window-command.json与root-ex7-recovery-prefix-command.json均exit0：提交冲突零新增；三实例恢复仍claim3 ready/succeeded、恢复provider0、费用及字幕各1行。
+
+
+### EX7 第一次累计验证冻结
+
+root-ex7-regression.json固定26文件870 PASS（799+71），API82/恢复210/专项71均是子集；root-ex7-typecheck.json完整后端含Prisma generate exit0。root-ex7-probes-index.json原固定22条命令全exit0，加提交、三实例冷恢复、文案确认来源窗口各1条，共25条独立绿命令。没有新付费调用、默认数据库操作或默认开关变更。
+
+进入本次已授权最多两轮中的第一次累计diff/contract复审（1/2），固定BASE d6542fa64ad1cf2d2a56822cfd684cf761f72ef3至HEAD 5716c144aaafe31ebbfca5cc7d1c18fa21e5f23b累计30路径，加当前四文件未提交修改。ex7-review-freeze.json保存30路径SHA256、HEAD/status和实际计数；用户文件hash核对见root-ex7-protected-check.json。常规3/3、前六例外各1/1、终审2次不重置；当前还没有第三候选。
+
+
+### EX7 第一次累计复审收敛
+
+| 审查 | Critical | Important | Minor | 结论 |
+|---|---:|---:|---:|---|
+| diff_reviewer | 0 | 0 | 1 | 已收敛 |
+| contract_reviewer | 0 | 0 | 1 | 已收敛 |
+
+两路均无新增Critical/Important，原EX6-I1以及本次各Map写入口不变量闭环；L1–L8在Task5限定范围均已修。Minor仅既有兼容错误码命名漂移，默认留档不改产品。双方只读，首尾30/30 SHA256、HEAD与完整status匹配；主代理root-ex7-review-end-check.json独立核对一致。实际870回归、完整typecheck0和25条命令均已核读。
+
+本次四文件收口使用1/2轮即收敛，未消耗第二轮。现在以约定四文件中文提交形成第三候选，随后按R5两阶段终审；候选SHA与终审实际次数将在终审结果机械落盘时写明，当前已完成终审调用仍为2。R5第一阶段只提供原要求、正式设计/计划、BASE/候选HEAD与产品代码累计diff，不提供本记录的整改叙事或测试结论；形成独立finding后再给现有原始验证证据。
