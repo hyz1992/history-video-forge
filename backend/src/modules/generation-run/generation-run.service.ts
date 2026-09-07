@@ -1,3 +1,7 @@
+import { NarrationCreativeSettings } from "../../../../shared/src/index.js";
+import { getVoiceProfileById } from "../assets/voice/voice-profile.repository.js";
+import { assertNarrationExecutionCompatibility } from "../narration/narration-execution-compatibility.js";
+import { settingsFromResolvedNarration } from "../narration/narration-readiness.js";
 import type {
   DbClient,
   GenerationRunRecord,
@@ -47,6 +51,9 @@ export interface SubmitGenerationInput {
   enabledProviderTypes?: string[];
   /** 恢复执行所需的最小非敏感 payload（不含密钥；凭据只在执行时从服务端解析）。 */
   dispatchPayload: Record<string, unknown>;
+  /** 仅口播 operation 接受，调用者先完成来源和资格校验。 */
+  narration?: NarrationRunFingerprintInput;
+  narrationExpectedConfigurationRevision?: number;
 }
 
 export type SubmitGenerationResult =
@@ -67,12 +74,24 @@ export interface SubmitGenerationDeps {
   now?: () => Date;
 }
 
+export interface NarrationRunFingerprintInput {
+  source_script_record_id: string;
+  source_text_sha256: string;
+  settings_override: { tone?: "neutral"; rate?: 1; };
+  source_project_tts_settings_sha256: string;
+  projection_version: string;
+}
+
 /** 运行幂等 payload 指纹（canonical：键排序 + selection/过滤归一）。 */
 export function computeRunPayloadFingerprint(input: {
   operation: string;
   selection?: GenerationQuoteSelection;
   enabled_provider_types?: string[];
+  narration?: NarrationRunFingerprintInput;
 }): string {
+  if (input.operation === "script.narration.generate") {
+    return deterministicHash(canonicalStringify({ schema_version: "narration_run_payload_v1", operation: input.operation, narration: input.narration ?? null }));
+  }
   const normalizedSelection = input.selection
     ? {
         mode: input.selection.mode ?? null,
@@ -100,11 +119,15 @@ export async function createOrRestoreGenerationRun(
 ): Promise<SubmitGenerationResult> {
   const now = deps.now?.() ?? new Date();
 
+  if (input.operation === "script.narration.generate") {
+    if (!input.narration || !NarrationCreativeSettings.partial().strict().safeParse(input.narration.settings_override).success) return { ok: false, error: { code: "generation_run_resolution_failed", message: "narration_request_invalid" } };
+  }
   // 1. payload fingerprint + 既有 run 幂等裁决
   const payloadFingerprint = computeRunPayloadFingerprint({
     operation: input.operation,
     selection: input.selection,
     enabled_provider_types: input.enabledProviderTypes,
+    narration: input.narration,
   });
   const existing = await deps.repository.getRunByKey(project.id, input.operation, input.idempotencyKey);
   if (existing) {
@@ -129,7 +152,10 @@ export async function createOrRestoreGenerationRun(
   const resolution = await resolveQuoteConfiguration(
     db,
     project,
-    { operation: input.operation, selection: input.selection },
+    {
+      operation: input.operation, selection: input.selection,
+      ...(input.operation === "script.narration.generate" && input.narration ? { runOverrides: { creative: { narration: input.narration.settings_override } } } : {}),
+    },
     deps.prismaClient,
   );
   if (!resolution.ok) {
@@ -139,6 +165,15 @@ export async function createOrRestoreGenerationRun(
     };
   }
   const { resolved, source } = resolution.value;
+  if (input.operation === "script.narration.generate" && resolved.source_revisions.project_configuration_revision !== input.narrationExpectedConfigurationRevision) return { ok: false, error: { code: "generation_run_resolution_failed", message: "narration_configuration_conflict" } };
+  if (input.operation === "script.narration.generate") {
+    try {
+      const selected = resolved.resolved_capabilities["tts.synthesize"];
+      const voice = await getVoiceProfileById(db, resolved.resolved_creative.voice.voice_profile_id ?? "", { ownerId: project.ownerId });
+      const settings = settingsFromResolvedNarration(resolved, voice?.provider_voice_id);
+      assertNarrationExecutionCompatibility({ catalog: source.catalog, projectMode: project.narrationTimingMode, operation: "script.narration.generate", model: source.catalog.find(m => m.id === selected.provider_model_id), voice, settings, modelId: selected.model_id, providerKey: selected.provider_key, deploymentScope: settings.region });
+    } catch { return { ok: false, error: { code: "generation_run_resolution_failed", message: "narration_execution_incompatible" } }; }
+  }
 
   // S2-2B：客户端 voice_profile_id 与快照 resolved_creative 不一致时拒绝——
   // 失败时不创建 snapshot/run、无任何 provider 调用；重试只需修正负载。
@@ -159,10 +194,10 @@ export async function createOrRestoreGenerationRun(
   // 3. 把绑定身份写入 dispatch payload——执行端按此身份执行，
   //    而不是实例内存中的活动指针（9A I-A 语义延续）。
   const dispatchPayload = { ...input.dispatchPayload };
-  if (source.assetPlan?.id) {
+  if (input.operation !== "script.narration.generate" && source.assetPlan?.id) {
     dispatchPayload["bound_asset_plan_record_id"] = source.assetPlan.id;
   }
-  if (source.storyboard?.id) {
+  if (input.operation !== "script.narration.generate" && source.storyboard?.id) {
     dispatchPayload["bound_storyboard_record_id"] = source.storyboard.id;
   }
   const runId = db.generateId();
@@ -188,6 +223,7 @@ export async function createOrRestoreGenerationRun(
   try {
     transaction = await deps.repository.createRunTransaction({ snapshot, run, now });
   } catch (error) {
+    if (input.operation === "script.narration.generate" && error instanceof Error && (error.message === "narration_submission_source_conflict" || error.message === "project_scope_denied")) return { ok: false, error: { code: "generation_run_resolution_failed", message: error.message === "project_scope_denied" ? "project_scope_denied" : "narration_source_conflict" } };
     // 事务内任何未结构化异常（FK/约束/连接）都按持久化失败返回：
     // 事务已整体回滚，snapshot/run 均未落库。
     return {
@@ -269,7 +305,7 @@ function buildSnapshot(
     id: db.generateId(),
     projectId: project.id,
     userId: project.ownerId,
-    stage: input.operation,
+    stage: input.operation === "script.narration.generate" ? "script" : input.operation,
     operation: input.operation,
     runId,
     projectConfigurationRevision: resolved.source_revisions.project_configuration_revision,

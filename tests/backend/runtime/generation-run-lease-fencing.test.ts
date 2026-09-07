@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import Database from "better-sqlite3";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { buildApp } from "../../../backend/src/app.js";
 import { createDbClient } from "../../../backend/src/db/client.js";
@@ -296,4 +296,39 @@ describe("updateRunStatus lease-owner fencing (Prisma mode)", () => {
     });
     expect(overwritten?.status).toBe("failed");
   });
+ it.each(['succeeded','failed','needs_reconciliation'] as const)('Prisma 同 owner 迟到 %s 在 updateMany 条件内拒绝',async status=>{
+  const {client,db,project}=await createPrismaFencingContext(),{run,repository}=await submitRun(db,project,'same-owner-'+status,client);await repository.claimRun(run.id,'same',new Date(Date.now()+30000),new Date());
+  await client.generationRun.update({where:{id:run.id},data:{dispatchLeaseExpiresAt:new Date(Date.now()-1)}});await repository.claimRun(run.id,'same',new Date(Date.now()+60000),new Date());const expected=await client.generationRun.findUnique({where:{id:run.id}});
+  const updateOriginal=client.generationRun.updateMany.bind(client.generationRun);const update=vi.spyOn(client.generationRun,'updateMany').mockImplementation(args=>updateOriginal(args));expect(await repository.updateRunStatus(run.id,status,{releaseLease:true,now:new Date(),expectedLeaseOwner:'same',expectedClaimCount:1})).toBeNull();expect(update.mock.calls[0][0].where).toMatchObject({dispatchLeaseOwner:'same',dispatchClaimCount:1});expect(await client.generationRun.findUnique({where:{id:run.id}})).toEqual(expected);
+  expect(await repository.renewLease(run.id,'same',new Date(Date.now()+90000),new Date(),1)).toBe(false);expect(update.mock.calls.at(-1)![0].where).toMatchObject({dispatchLeaseOwner:'same',dispatchClaimCount:1});expect(await client.generationRun.findUnique({where:{id:run.id}})).toEqual(expected);
+  expect(await repository.renewLease(run.id,'same',new Date(Date.now()+120000),new Date(),2)).toBe(true);expect(await repository.updateRunStatus(run.id,status,{releaseLease:true,now:new Date(),expectedLeaseOwner:'same',expectedClaimCount:2})).toMatchObject({status,dispatchClaimCount:2,dispatchLeaseOwner:null});update.mockRestore();
+ });
+ it('Prisma finalize 更新窗口内同 owner 接管仍由原子条件拒绝',async()=>{
+  const {client,db,project}=await createPrismaFencingContext(),{run,repository}=await submitRun(db,project,'same-owner-window',client);await repository.claimRun(run.id,'same',new Date(Date.now()+30000),new Date());const original=client.generationRun.updateMany.bind(client.generationRun);let injected=false;const spy=vi.spyOn(client.generationRun,'updateMany').mockImplementation(async args=>{if(!injected){injected=true;await client.generationRun.update({where:{id:run.id},data:{dispatchClaimCount:{increment:1},dispatchLeaseExpiresAt:new Date(Date.now()+60000)}})}return original(args)});
+  expect(await repository.updateRunStatus(run.id,'failed',{releaseLease:true,now:new Date(),expectedLeaseOwner:'same',expectedClaimCount:1})).toBeNull();expect(await client.generationRun.findUnique({where:{id:run.id}})).toMatchObject({status:'running',dispatchLeaseOwner:'same',dispatchClaimCount:2});spy.mockRestore();
+ });
+
+});
+
+
+describe('口播 claim 身份冻结（Map）',()=>{
+ it.each(['succeeded','failed','needs_reconciliation'] as const)('迟到 %s 不修改同/异 owner 新 claim',async status=>{
+  for(const owner of ['worker','other']){
+   const app=buildApp({skipSnapshotLoad:true});await seedQuotableCatalog(app);const project=await prepareQuoteProject(app.db);const {run,repository}=await submitRun(app.db,project,status+owner);run.operation='script.narration.generate';
+   let release!:()=>void,entered!:()=>void;const gate=new Promise<void>(r=>release=r),started=new Promise<void>(r=>entered=r);let handlerCount=0,captured:any;
+   const dispatcher=createGenerationRunDispatcher({db:app.db,repository,workerId:'worker',leaseDurationMs:30000,handlers:{'script.narration.generate':async claimed=>{captured=claimed;handlerCount++;entered();await gate;return status==='succeeded'?{status}:{status,reason_code:'test_remote',message:'test'};}}});
+   const pending=dispatcher.dispatch(run.id);await started;const stored=app.db.generationRuns.get(run.id)!;stored.dispatchLeaseExpiresAt=new Date(Date.now()-1);expect(await repository.claimRun(run.id,owner,new Date(Date.now()+60000),new Date())).toBe(true);const expected=structuredClone(stored);
+   release();expect(await pending).toMatchObject({dispatched:true,fencedOut:true});expect(app.db.generationRuns.get(run.id)).toEqual(expected);expect(captured.dispatchClaimCount).toBe(1);expect(handlerCount).toBe(1);
+   expect(await repository.renewLease(run.id,'worker',new Date(Date.now()+90000),new Date(),1)).toBe(false);expect(app.db.generationRuns.get(run.id)).toEqual(expected);
+   expect(await repository.renewLease(run.id,owner,new Date(Date.now()+120000),new Date(),2)).toBe(true);expect(await repository.updateRunStatus(run.id,'succeeded',{releaseLease:true,now:new Date(),expectedLeaseOwner:owner,expectedClaimCount:2})).toMatchObject({status:'succeeded',dispatchClaimCount:2,dispatchLeaseOwner:null,dispatchLeaseExpiresAt:null});
+  }
+ });
+ it('续租 timer 使用冻结 claim，不延长同 owner 接管租约',async()=>{
+  const app=buildApp({skipSnapshotLoad:true});await seedQuotableCatalog(app);const project=await prepareQuoteProject(app.db);const {run,repository}=await submitRun(app.db,project,'renew-timer');run.operation='script.narration.generate';let release!:()=>void,entered!:()=>void;const gate=new Promise<void>(r=>release=r),started=new Promise<void>(r=>entered=r);
+  vi.useFakeTimers();try{const dispatcher=createGenerationRunDispatcher({db:app.db,repository,workerId:'worker',leaseDurationMs:100,handlers:{'script.narration.generate':async()=>{entered();await gate;return {status:'succeeded'}}}});const pending=dispatcher.dispatch(run.id);await started;run.dispatchLeaseExpiresAt=new Date(Date.now()-1);await repository.claimRun(run.id,'worker',new Date(Date.now()+10000),new Date());const expected=structuredClone(run);await vi.advanceTimersByTimeAsync(60);expect(run).toEqual(expected);release();await pending;}finally{release();vi.useRealTimers();}
+ });
+ it('claim 后再读之前接管，不得借新 token 执行旧 handler',async()=>{
+  const app=buildApp({skipSnapshotLoad:true});await seedQuotableCatalog(app);const project=await prepareQuoteProject(app.db);const {run,repository}=await submitRun(app.db,project,'claim-read-window');run.operation='script.narration.generate';const claim=repository.claimRun;repository.claimRun=async(...args)=>{const ok=await claim(...args);if(ok){run.dispatchLeaseExpiresAt=new Date(Date.now()-1);await claim(run.id,'worker',new Date(Date.now()+60000),new Date());}return ok};const handler=vi.fn(async()=>({status:'succeeded' as const}));const dispatcher=createGenerationRunDispatcher({db:app.db,repository,workerId:'worker',leaseDurationMs:30000,handlers:{'script.narration.generate':handler}});
+  expect(await dispatcher.dispatch(run.id)).toMatchObject({dispatched:false,reason:'fenced_out'});expect(handler).not.toHaveBeenCalled();expect(run).toMatchObject({status:'running',dispatchLeaseOwner:'worker',dispatchClaimCount:2});
+ });
 });

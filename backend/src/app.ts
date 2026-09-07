@@ -1,3 +1,5 @@
+import { registerNarrationRoutes } from "./modules/narration/narration.routes.js";
+import { createNarrationDispatchHandler, reconcileNarrationProviderFacts, type NarrationProvider } from "./modules/generation-run/narration-dispatch-handler.js";
 import { env } from "./config/env";
 import { createDbClient, type DbClient } from "./db/client";
 import { loadLegacyFixtureState, saveLegacyFixtureState } from "./db/legacy-persistence-adapter.js";
@@ -155,6 +157,7 @@ function matchRoute(pattern: string, url: string): Record<string, string> | null
 }
 
 export interface BuildAppOptions {
+  narrationProvider?: NarrationProvider;
   narrationFirstEnabled?: boolean;
   renderAdapter?: RenderAdapter;
   storageBaseDir?: string;
@@ -169,6 +172,7 @@ export interface BuildAppOptions {
 }
 
 export function buildApp(options: BuildAppOptions = {}): AppInstance {
+  const prismaClient = options.prismaClient ?? options.firstAggregateWriter?.narrationPrismaClient;
   const routes: RouteRecord[] = [];
   const db = createDbClient();
   db.firstAggregateWriter = options.firstAggregateWriter;
@@ -188,10 +192,10 @@ export function buildApp(options: BuildAppOptions = {}): AppInstance {
     itemCount: 0,
     error: null,
   };
-  db.narrationPersistence.prismaClient = options.prismaClient;
+  db.narrationPersistence.prismaClient = prismaClient;
   configureVoiceProfilePersistence(db, {
     rootDir: runtimeStorageRoot,
-    prismaClient: options.prismaClient,
+    prismaClient: prismaClient,
   });
 
   // Restore persisted state from disk; Vitest only opts in when an isolated root is provided.
@@ -237,7 +241,7 @@ export function buildApp(options: BuildAppOptions = {}): AppInstance {
   }
 
   // S2-2A 任务 8：GenerationRun 事务 repository + 可恢复 dispatcher（单例接线）。
-  const generationRunRepository = createGenerationRunRepository(db, options.prismaClient);
+  const generationRunRepository = createGenerationRunRepository(db, prismaClient);
   const app: AppInstance = {
     narrationFirstEnabled: options.narrationFirstEnabled ?? env.narrationFirstEnabled,
     env,
@@ -249,7 +253,7 @@ export function buildApp(options: BuildAppOptions = {}): AppInstance {
     persist,
     stageLocks,
     renderAdapter: options.renderAdapter,
-    prismaClient: options.prismaClient,
+    prismaClient: prismaClient,
     topicCandidateStore,
     storageBaseDir: runtimeStorageRoot,
     generationQuoteReadinessInput: options.generationQuoteReadinessInput,
@@ -259,8 +263,10 @@ export function buildApp(options: BuildAppOptions = {}): AppInstance {
       repository: generationRunRepository,
       workerId: `main-dispatcher-${process.pid}`,
       leaseDurationMs: 30_000,
-      prismaClient: options.prismaClient,
+      prismaClient: prismaClient,
+      reconcileLocalFacts: () => reconcileNarrationProviderFacts({db,repository:generationRunRepository,storageBaseDir:runtimeStorageRoot}),
       handlers: {
+        "script.narration.generate": createNarrationDispatchHandler({storageBaseDir:runtimeStorageRoot,provider:options.narrationProvider}),
         "assets.generate": createAssetsDispatchHandler(),
         // S2-2A 任务 9B：五个 LLM 生成 operation 的 dispatcher handler
         "topic.generate": createTopicDispatchHandler({ topicCandidateStore }),
@@ -371,6 +377,7 @@ export function buildApp(options: BuildAppOptions = {}): AppInstance {
   registerProjectRoutes(app);
   registerTopicRoutes(app);
   registerScriptRoutes(app);
+  registerNarrationRoutes(app);
   registerStoryboardRoutes(app);
   registerAssetPlanningRoutes(app);
   registerAssetsRoutes(app);

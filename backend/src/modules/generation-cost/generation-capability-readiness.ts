@@ -389,3 +389,11 @@ function validateMediaEntry(
     });
   }
 }
+
+/** 口播WS独立注册能力；旧HTTP readiness矩阵及auto候选语义保持原样。 */
+export function evaluateNarrationCapabilityReadiness(input: Parameters<typeof checkNarrationExecutionCompatibility>[0] & { wsAdapterRegistered: boolean; credentialConfigured: boolean ;}) {
+  if (!input.wsAdapterRegistered) return { ready: false, reason: "narration_adapter_unregistered" };
+  if (!input.credentialConfigured) return { ready: false, reason: "narration_credentials_missing" };
+  const decision = checkNarrationExecutionCompatibility(input);
+  return decision.compatible ? { ready: true, reason: null } : { ready: false, reason: decision.reason };
+}

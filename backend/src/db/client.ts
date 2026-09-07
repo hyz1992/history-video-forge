@@ -17,6 +17,10 @@ import type {
 import type { TopicRecommendationFilter } from "../../../shared/src/topic/topic-recommendation-filter.schema.js";
 import type { AppPrismaClient } from "./prisma-client.types.js";
 
+export interface ScriptConfirmationRecord {
+  scriptRecordId: string; projectId: string; sourceTextSha256: string; confirmedBy: string; confirmedAt: Date;
+}
+
 export interface ProjectRecord {
   id: string;
   name: string;
@@ -435,6 +439,7 @@ export interface AuditLogRecord {
 }
 
 export interface DbClient {
+  scriptConfirmations: Map<string, ScriptConfirmationRecord>;
   narrationRecords: Map<string, NarrationRecord>;
   narrationSubtitleRevisions: Map<string, NarrationSubtitleRevision>;
   narrationPersistence: { prismaClient?: AppPrismaClient };
@@ -589,6 +594,7 @@ export interface DbClient {
 
 export function createDbClient(): DbClient {
   return {
+    scriptConfirmations: new Map(),
     narrationRecords: new Map(),
     narrationSubtitleRevisions: new Map(),
     narrationPersistence: {},

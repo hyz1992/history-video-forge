@@ -1,3 +1,6 @@
+import { hashProjectNarrationTtsSettings } from "../../../../shared/src/index.js";
+import { readNarrationSource } from "../narration/narration.repository.js";
+import { hasPassingNarrationScriptValidation, narrationTextHash } from "../narration/narration-readiness.js";
 import type {
   DbClient,
   GenerationRunEventRecord,
@@ -43,14 +46,16 @@ export interface GenerationRunRepository {
   createRunTransaction(input: CreateRunTransactionInput): Promise<CreateRunTransactionResult>;
   /**
    * 原子 claim：只有 status∈(pending_dispatch, running) 且 lease 已过期/未设置时成功，
-   * 写 leaseOwner/leaseUntil 并递增 claimCount、置 running。返回 false = 未取得 lease。
+   * 写 leaseOwner/leaseUntil 并递增 claimCount、置 running。可选expectedClaimCount在同一原子条件固定此次claim身份。
+   * 返回 false = 未取得 lease。
    */
-  claimRun(runId: string, workerId: string, leaseUntil: Date, now: Date): Promise<boolean>;
+  claimRun(runId: string, workerId: string, leaseUntil: Date, now: Date, expectedClaimCount?: number): Promise<boolean>;
   /**
    * 续期 lease：只有 leaseOwner 仍是本 worker 时延长 leaseUntil（handler 执行期间
-   * 防存活 worker 被其他 worker 接管重复派发）。返回 false = lease 已易主/丢失。
+   * 防存活 worker 被其他 worker 接管重复派发）。提供expectedClaimCount时同时检查running及claim编号。
+   * 返回 false = lease 已易主/丢失。
    */
-  renewLease(runId: string, workerId: string, leaseUntil: Date, now: Date): Promise<boolean>;
+  renewLease(runId: string, workerId: string, leaseUntil: Date, now: Date, expectedClaimCount?: number): Promise<boolean>;
   /**
    * 更新 run 状态；releaseLease=true 时清空 lease（终态）。
    * 不变量一：needs_reconciliation 是对账终态，默认禁止被覆盖（迟到的 finalize
@@ -67,6 +72,8 @@ export interface GenerationRunRepository {
       now: Date;
       allowOverwriteNeedsReconciliation?: boolean;
       expectedLeaseOwner?: string | null;
+      /** 口播采用不可变claim身份；省略时保持旧operation的owner-only合同。 */
+      expectedClaimCount?: number;
     },
   ): Promise<GenerationRunRecord | null>;
   appendRunEvent(record: GenerationRunEventRecord): Promise<void>;
@@ -152,17 +159,19 @@ function createMapRepository(db: DbClient): GenerationRunRepository {
         if (existing) {
           return { ok: false, error: { code: "generation_run_conflict", existing } };
         }
+        if (input.run.operation === "script.narration.generate") await validateNarrationSubmission(db, input);
         // 校验全部通过后才变更（失败回滚模拟：任何前置校验失败都不会留下半成品）
         db.runConfigurationSnapshots.set(input.snapshot.id, input.snapshot);
         db.generationRuns.set(input.run.id, input.run);
         return { ok: true, run: input.run };
       });
     },
-    async claimRun(runId, workerId, leaseUntil, now) {
+    async claimRun(runId, workerId, leaseUntil, now, expectedClaimCount) {
       // 同步检查-设置：单线程内原子，等价于数据库条件更新（同一恢复条件）。
       const run = db.generationRuns.get(runId);
       if (!run) return false;
       if (!isRecoverableRun(run, now)) return false;
+      if (expectedClaimCount !== undefined && run.dispatchClaimCount !== expectedClaimCount) return false;
       run.status = "running";
       run.dispatchLeaseOwner = workerId;
       run.dispatchLeaseExpiresAt = leaseUntil;
@@ -170,10 +179,11 @@ function createMapRepository(db: DbClient): GenerationRunRepository {
       run.updatedAt = now;
       return true;
     },
-    async renewLease(runId, workerId, leaseUntil, now) {
+    async renewLease(runId, workerId, leaseUntil, now, expectedClaimCount) {
       const run = db.generationRuns.get(runId);
       if (!run) return false;
       if (run.dispatchLeaseOwner !== workerId) return false;
+      if (expectedClaimCount !== undefined && (run.dispatchClaimCount !== expectedClaimCount || run.status !== "running")) return false;
       run.dispatchLeaseExpiresAt = leaseUntil;
       run.updatedAt = now;
       return true;
@@ -185,6 +195,7 @@ function createMapRepository(db: DbClient): GenerationRunRepository {
       if (options.expectedLeaseOwner !== undefined && run.dispatchLeaseOwner !== options.expectedLeaseOwner) {
         return null;
       }
+      if (options.expectedClaimCount !== undefined && (run.dispatchClaimCount !== options.expectedClaimCount || run.status !== "running")) return null;
       if (run.status === "needs_reconciliation" && !options.allowOverwriteNeedsReconciliation) {
         return run;
       }
@@ -382,6 +393,7 @@ function createPrismaRepository(db: DbClient, client: AppPrismaClient): Generati
           });
           if (existing) throw new RunConflictAbort(toRunRecord(existing));
 
+          if (input.run.operation === "script.narration.generate") await validateNarrationSubmission(db, input, tx);
           // 1. 不可变 snapshot。
           await tx.runConfigurationSnapshot.create({
             data: {
@@ -458,10 +470,10 @@ function createPrismaRepository(db: DbClient, client: AppPrismaClient): Generati
       db.runConfigurationSnapshots.set(input.snapshot.id, input.snapshot);
       return { ok: true as const, run: input.run };
     },
-    async claimRun(runId, workerId, leaseUntil, now) {
+    async claimRun(runId, workerId, leaseUntil, now, expectedClaimCount) {
       // 与 listRecoverableRuns 同一恢复条件（claim 是最终原子裁决）
       const result = await client.generationRun.updateMany({
-        where: { id: runId, ...recoverableRunWhere(now) },
+        where: { id: runId, ...recoverableRunWhere(now), ...(expectedClaimCount === undefined ? {} : {dispatchClaimCount:expectedClaimCount}) },
         data: {
           status: "running",
           dispatchLeaseOwner: workerId,
@@ -475,10 +487,10 @@ function createPrismaRepository(db: DbClient, client: AppPrismaClient): Generati
       if (row) syncRunToMemory(db, toRunRecord(row));
       return true;
     },
-    async renewLease(runId, workerId, leaseUntil, now) {
+    async renewLease(runId, workerId, leaseUntil, now, expectedClaimCount) {
       // 条件更新：只有 lease 仍归本 worker 时才延长（防易主后误续）
       const result = await client.generationRun.updateMany({
-        where: { id: runId, dispatchLeaseOwner: workerId },
+        where: { id: runId, dispatchLeaseOwner: workerId, ...(expectedClaimCount === undefined ? {} : {dispatchClaimCount:expectedClaimCount,status:"running"}) },
         data: { dispatchLeaseExpiresAt: leaseUntil, updatedAt: now },
       });
       if (result.count !== 1) return false;
@@ -501,11 +513,16 @@ function createPrismaRepository(db: DbClient, client: AppPrismaClient): Generati
       if (options.expectedLeaseOwner !== undefined) {
         where["dispatchLeaseOwner"] = options.expectedLeaseOwner;
       }
+      if (options.expectedClaimCount !== undefined) {
+        where["dispatchClaimCount"] = options.expectedClaimCount;
+        where["status"] = "running";
+      }
       const result = await client.generationRun.updateMany({ where, data });
       const row = await client.generationRun.findUnique({ where: { id: runId } });
       if (!row) return null;
       const run = toRunRecord(row);
       syncRunToMemory(db, run);
+      if (result.count === 0 && options.expectedClaimCount !== undefined) return null;
       // 条件更新未命中 + lease 已易主 = fencing 拒绝（迟到 finalize 丢弃）。
       // 未命中但 owner 仍匹配 = needs_reconciliation 终态保护，返回当前 run。
       if (
@@ -600,4 +617,13 @@ export function createGenerationRunRepository(
 ): GenerationRunRepository {
   if (prismaClient) return createPrismaRepository(db, prismaClient);
   return createMapRepository(db);
+}
+
+async function validateNarrationSubmission(db: DbClient, input: CreateRunTransactionInput, client?: Parameters<typeof readNarrationSource>[3]) {
+    const payload = input.run.dispatchPayloadJson as Record<string, unknown>;
+    if (typeof payload.owner_id !== "string" || input.snapshot.userId !== payload.owner_id)
+        throw new Error("narration_submission_source_conflict");
+    const source = await readNarrationSource(db, input.run.projectId, payload.owner_id, client);
+    if (source.project.narrationTimingMode !== "narration_first_v1" || !source.script || source.script.id !== payload.source_script_record_id || source.script.projectId !== input.run.projectId || !hasPassingNarrationScriptValidation(source.script.validationResultJson) || source.confirmation?.sourceTextSha256 !== payload.source_text_sha256 || narrationTextHash(source.script.scriptText) !== payload.source_text_sha256 || source.configuration?.revision !== input.snapshot.projectConfigurationRevision || await hashProjectNarrationTtsSettings(source.configuration.configurationJson) !== payload.source_project_tts_settings_sha256)
+        throw new Error("narration_submission_source_conflict");
 }

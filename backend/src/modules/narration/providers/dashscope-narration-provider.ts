@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { normalizeNarrationTiming, NativeNarrationSentence } from '../narration-timing-normalizer.js';
-import { NarrationProviderError, parseNarrationSpeechRequest, type NarrationSpeechClient, type NarrationCallOptions } from './dashscope-speech-ws-client.js';
+import { NarrationProviderError, parseNarrationSpeechRequest, type NarrationSpeechClient, type NarrationCallOptions, type NarrationUsageReceipt, type NarrationRemoteOutcome } from './dashscope-speech-ws-client.js';
 const CaptureMetadata = z.object({
   providerTaskId: z.string().min(1).refine(s => s.trim() === s),
   providerRequestId: z.string().min(1).refine(s => s.trim() === s).nullable(),
@@ -13,6 +13,33 @@ const CaptureMetadata = z.object({
       byteOffset: z.number().int().safe().nonnegative(), byteLength: z.number().int().safe().positive() }).strict(),
   ])).min(1),
 });
+/** 回执与本地产物验证分开；只接受同task的安全累计值和明确结束事件。 */
+function captureRemoteOutcome(capture: unknown): NarrationRemoteOutcome {
+  const c = capture as {providerTaskId?: string;rawEvents?: Array<{kind?: string;data?: {header?: {task_id?: string;event?: string}}}>};
+  if (!c || !Array.isArray(c.rawEvents) || !c.providerTaskId) return 'unknown';
+  let started = false, finished = false;
+  for (const e of c.rawEvents) {
+    if (finished) return 'unknown';
+    if (e?.kind !== 'json') continue;
+    if (e.data?.header?.task_id !== c.providerTaskId) return 'unknown';
+    if (e.data.header.event === 'task-started') started = true;
+    if (e.data.header.event === 'task-finished') finished = started;
+  }
+  return finished ? 'completed' : 'unknown';
+}
+function captureReceipt(capture: unknown): NarrationUsageReceipt | null {
+  const parsed = z.object({ providerTaskId: z.string().trim().min(1), providerRequestId: z.string().trim().min(1).nullable(), usageCharacters: z.number().int().safe().nonnegative().nullable(), rawEvents: z.array(z.unknown()) }).safeParse(capture);
+  if (!parsed.success || parsed.data.usageCharacters === null) return null;
+  const c = parsed.data;
+  let finished = false;
+  for (const raw of c.rawEvents) {
+    const e = raw as { kind?: string; data?: {header?: {task_id?: string;event?: string}} };
+    if (e?.kind !== 'json') continue;
+    if (e.data?.header?.task_id !== c.providerTaskId) return null;
+    if (e.data.header.event === 'task-finished') finished = true;
+  }
+  return { characters: c.usageCharacters!, kind: finished ? 'final' : 'partial', providerTaskId: c.providerTaskId, providerRequestId: c.providerRequestId };
+}
 function verifyCaptureEvents(capture: z.infer<typeof CaptureMetadata>, pcmLength: number): void {
   const invalid = (): never => { throw new NarrationProviderError('narration_capture_invalid'); };
   let bytes = 0, started = false, finished = false, nextSentence = 0, openSentence: number | null = null, elapsed = -1;
@@ -62,6 +89,9 @@ export class DashScopeNarrationProvider {
       if (error instanceof NarrationProviderError) throw error;
       throw new NarrationProviderError('narration_provider_failed');
     }
+    const receipt = captureReceipt(captured), remoteOutcome = captureRemoteOutcome(captured);
+    let localErrorCode = 'narration_capture_invalid';
+    try {
     if (options.signal?.aborted) throw new NarrationProviderError('narration_cancelled');
     const parsed = CaptureMetadata.safeParse(captured);
     if (!parsed.success || !Buffer.isBuffer(captured?.pcm) || !captured.pcm.length || captured.pcm.length % 2 || captured.pcm.length > 64 * 1024 * 1024)
@@ -70,8 +100,12 @@ export class DashScopeNarrationProvider {
     const pcm = Buffer.from(captured.pcm), wav = pcmToWav(pcm), sampleCount = pcm.length / 2;
     const durationMs = Math.round(sampleCount * 1000 / 24000);
     const audioHash = createHash('sha256').update(wav).digest('hex');
+    localErrorCode = 'narration_timing_invalid';
     const timingMap = normalizeNarrationTiming({ sourceText: input.sourceText, durationMs, audioHash, sentences: parsed.data.sentences });
     return { ...parsed.data, pcm, wav, sampleCount, sampleRate: 24000 as const, channels: 1 as const, bitDepth: 16 as const,
       durationMs, audioHash, timingMap, settings: input.settings };
+    } catch (error) {
+      throw new NarrationProviderError(error instanceof NarrationProviderError ? error.code : localErrorCode, receipt, remoteOutcome);
+    }
   }
 }

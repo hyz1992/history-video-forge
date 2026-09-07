@@ -379,3 +379,49 @@ export async function recordLlmUsage(
 
   return { record, actualCostState };
 }
+
+/** 口播无需AssetProviderJob；最终累计字符单调max，跨实例在同一事务读写唯一记账行。 */
+/** 口播无需AssetProviderJob；最终累计字符单调max，跨实例在同一事务读写唯一记账行。 */
+export async function recordNarrationUsage(input: {
+    db: DbClient;
+    snapshot: RunConfigurationSnapshotRecord;
+    runId: string;
+    providerRequestKey: string;
+    providerModelId: string;
+    pricingVersion: string;
+    priceMicrosPer10k: string | null;
+    sourceCharacters: number;
+    usageCharacters: number | null;
+    receiptKind?: "partial" | "final";
+    status: "submitted" | "succeeded" | "failed" | "canceled";
+    durationMs?: number;
+}) {
+    const { db } = input, client = db.narrationPersistence.prismaClient ?? db.firstAggregateWriter?.narrationPrismaClient;
+    if (!client && (db.firstAggregateWriter || db.secondAggregateWriter || db.thirdAggregateWriter))
+        throw new Error("narration_persistence_client_missing");
+    if (input.snapshot.operation !== "script.narration.generate" || input.snapshot.runId !== input.runId || input.providerModelId !== "tts.synthesize.dashscope.cn-beijing.qwen-audio-3.0-tts-plus")
+        throw new Error("narration_usage_source_invalid");
+    if (input.receiptKind !== undefined && input.receiptKind !== "partial" && input.receiptKind !== "final" || !Number.isSafeInteger(input.sourceCharacters) || input.sourceCharacters < 0 || input.usageCharacters !== null && (!Number.isSafeInteger(input.usageCharacters) || input.usageCharacters < 0) || input.priceMicrosPer10k !== null && !/^\d+$/.test(input.priceMicrosPer10k))
+        throw new Error("narration_usage_invalid");
+    const key = { runConfigurationSnapshotId: input.snapshot.id, providerRequestKey: input.providerRequestKey, attemptIndex: 0 };
+    const action = async (tx?: Pick<import("../../db/prisma-client.types.js").AppPrismaClient, "usageCostRecord" | "runConfigurationSnapshot">) => {
+        if (tx) {
+            const snapshot = await tx.runConfigurationSnapshot.findUnique({ where: { id: input.snapshot.id } });
+            if (!snapshot || snapshot.runId !== input.runId || snapshot.projectId !== input.snapshot.projectId || snapshot.operation !== "script.narration.generate")
+                throw new Error("narration_usage_source_invalid");
+        }
+        const row = tx ? await tx.usageCostRecord.findUnique({ where: { runConfigurationSnapshotId_providerRequestKey_attemptIndex: key } }) : [...db.usageCostRecords.values()].find(r => r.runConfigurationSnapshotId === key.runConfigurationSnapshotId && r.providerRequestKey === key.providerRequestKey && r.attemptIndex === 0);
+        const maximum = input.usageCharacters === null ? row?.outputUnits ?? null : Math.max(row?.outputUnits ?? 0, input.usageCharacters);
+        const price = (count: number) => input.priceMicrosPer10k === null ? null : ((BigInt(count) * BigInt(input.priceMicrosPer10k) + 9999n) / 10000n).toString();
+        const actual = maximum === null ? row?.actualCostMicros ?? null : price(maximum);
+        const status = row?.status === "succeeded" ? "succeeded" : row?.status === "canceled" && input.status === "submitted" ? "canceled" : input.status;
+        const now = new Date();
+        const value: UsageCostRecordRecord = { id: row?.id ?? db.generateId(), ...key, assetProviderJobRecordId: null, interactionId: null, capability: "tts.synthesize", providerKey: "dashscope", modelId: "qwen-audio-3.0-tts-plus", status, unitType: "tts_character", inputUnits: null, outputUnits: maximum, estimatedCostMicros: price(input.sourceCharacters) ?? "0", actualCostMicros: actual, costBasis: maximum !== null && actual !== null ? "provider_usage" : "estimate", unitDetailJson: { stage: "script", actual_cost_state: actual === null ? "unknown" : "provider_usage_priced", provider_cumulative_characters: maximum, provider_receipt_kind: maximum === null ? "none" : row?.unitDetailJson && (row.unitDetailJson as Record<string, unknown>).provider_receipt_kind === "final" ? "final" : input.receiptKind ?? (input.status === "succeeded" && input.usageCharacters !== null ? "final" : "partial"), estimated_source_characters: input.sourceCharacters, estimate_count_basis: "source_utf16_length", provider_model_id: input.providerModelId, pricing_version: input.pricingVersion, price_micros_per_10k_characters: input.priceMicrosPer10k }, durationMs: input.durationMs ?? row?.durationMs ?? null, createdAt: row?.createdAt ?? now, updatedAt: now };
+        if (tx)
+            await tx.usageCostRecord.upsert({ where: { runConfigurationSnapshotId_providerRequestKey_attemptIndex: key }, create: { ...value, unitDetailJson: value.unitDetailJson as never }, update: { ...value, unitDetailJson: value.unitDetailJson as never } });
+        return value;
+    };
+    const value = client ? await client.$transaction(tx => action(tx)) : await action();
+    db.usageCostRecords.set(value.id, value);
+    return value;
+}

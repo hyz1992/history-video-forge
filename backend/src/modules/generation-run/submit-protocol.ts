@@ -134,3 +134,9 @@ export async function submitGenerationRun(
     },
   };
 }
+
+/** 只有口播异步返回202；事务和候选已持久化，后续由现有lease dispatcher执行。 */
+export function respondNarrationSubmission(context: RouteContext, result: Awaited<ReturnType<typeof import("../narration/narration-run.service.js").prepareNarrationRun>>): AppResponse {
+  if (result.created) setImmediate(() => { void context.app.generationRunDispatcher.dispatch(result.run.id).catch(() => {/* pending run由既有sweep恢复。 */ }) ;});
+  return { statusCode: 202, body: { generation_run_id: result.run.id, narration_record_id: result.record.id, run_status: result.run.status, idempotency_replayed: !result.created } };
+}

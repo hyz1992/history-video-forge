@@ -112,3 +112,48 @@ it('原始word属性顺序变化不改变同次原生证据',async()=>{
   socket.result('sentence-end',{index:0,words:[{end_time:250,text:'甲',begin_time:0,end_index:1,begin_index:0},{end_time:500,text:'乙',begin_time:250,end_index:2,begin_index:1}]},{original_text:'甲乙',normalized_text:'甲乙'});socket.json('task-finished');
   expect((await pending).timingMap.tokens).toHaveLength(2);
 });
+
+
+describe('失败仍保全供应商累计回执',()=>{
+ it.each(['cancel','close','timeout'])('真实WS %s：有回执保留partial，没有仍null',async fault=>{
+  vi.useFakeTimers();try{for(const known of [false,true]){
+   const {socket,provider}=setup();const controller=new AbortController();
+   const pending=provider.generate({sourceText:'甲乙',settings},{signal:controller.signal}).catch(e=>e);
+   socket.emit('open');socket.json('task-started');if(known)beginReceipt(socket);
+   if(fault==='cancel')controller.abort();else if(fault==='close')socket.emit('close');else await vi.advanceTimersByTimeAsync(1001);
+   const error=await pending;expect(error.code).toBe({cancel:'narration_cancelled',close:'narration_socket_closed',timeout:'narration_timeout'}[fault]);
+   expect(error.receipt?.characters??null).toBe(known?308:null);if(known)expect(error.receipt).toMatchObject({kind:'partial',providerTaskId:'task-1'});
+  }}finally{vi.useRealTimers();}
+ });
+ it.each(['normalize','abort','capture'])('完整capture后%s失败不丢final receipt',async fault=>{
+  const {socket,client}=setup();const promise=client.synthesize({sourceText:'甲乙',settings});begin(socket);socket.emit('message',Buffer.alloc(24000),true);end(socket);socket.json('task-finished',{usage:{characters:308}});const capture=await promise;
+  const controller=new AbortController();
+  if(fault==='normalize'){capture.sentences[0].words[1].end_time=900;const raw:any=capture.rawEvents.find(e=>e.kind==='json'&&(e.data as any).payload?.output?.type==='sentence-end');raw.data.payload.output.sentence.words[1].end_time=900;}
+  if(fault==='capture')capture.pcm=Buffer.alloc(1);
+  const provider=new DashScopeNarrationProvider({client:{async synthesize(){if(fault==='abort')controller.abort();return capture;}}});
+  const error=await provider.generate({sourceText:'甲乙',settings},{signal:controller.signal}).catch(e=>e);
+  expect(error.code).toBe({normalize:'narration_timing_invalid',abort:'narration_cancelled',capture:'narration_capture_invalid'}[fault]);
+  expect(error.receipt).toMatchObject({characters:308,kind:'final',providerTaskId:'task-1'});
+ });
+});
+function beginReceipt(socket:Socket){socket.json('result-generated',{output:{type:'sentence-begin',sentence:{index:0},original_text:'甲乙',normalized_text:'甲乙'},usage:{characters:308}});}
+
+
+it.each([{characters:NaN,kind:'partial',providerTaskId:'t',providerRequestId:null},{characters:1,kind:'invoice',providerTaskId:'t',providerRequestId:null},{characters:1,kind:'partial',providerTaskId:' ',providerRequestId:null}])('类型断言不能伪造可信receipt %j',async receipt=>{
+ const {NarrationProviderError}=await import('../../../backend/src/modules/narration/providers/dashscope-speech-ws-client.js');
+ expect(()=>new NarrationProviderError('narration_socket_closed',receipt as never)).toThrow('narration_receipt_invalid');
+});
+
+
+describe('不可信request UUID不得悬挂错误结算',()=>{
+ it.each(['close','task-failed','abort','timeout'])('%s 与有无usage/空白身份组合均可靠结算',async terminal=>{
+  vi.useFakeTimers();try{for(const id of [' padded ','',42])for(const known of [false,true]){
+   const {socket,client}=setup();const controller=new AbortController();let settled=false,error:any,escaped:any;
+   void client.synthesize({sourceText:'甲乙',settings},{signal:controller.signal}).then(()=>{settled=true},e=>{settled=true;error=e});
+   try{socket.emit('open');socket.emit('message',Buffer.from(JSON.stringify({header:{event:'task-started',task_id:'task-1',attributes:{request_uuid:id}},payload:known?{usage:{characters:308}}:{}})),false);
+    if(terminal==='close')socket.emit('close');if(terminal==='task-failed')socket.json('task-failed');if(terminal==='abort')controller.abort();
+   }catch(e){escaped=e;}
+   await vi.advanceTimersByTimeAsync(1001);expect(escaped).toBeUndefined();expect(settled).toBe(true);expect(error?.code).toBe('narration_protocol_invalid');expect(socket.terminated).toBe(true);
+  }}finally{vi.useRealTimers();}
+ });
+});

@@ -1,3 +1,9 @@
+import { narrationVisibleStatus } from "../narration/narration-readiness.js";
+import { hasPassingNarrationScriptValidation } from "../narration/narration-readiness.js";
+import { hashProjectNarrationTtsSettings } from "../../../../shared/src/index.js";
+import { resolveNarrationReadiness, narrationTextHash } from "../narration/narration-readiness.js";
+import { durationBandFromSource } from "../narration/narration.repository.js";
+import { resolveProjectStorageRoot } from "../../db/repositories/prisma-first-aggregate-hydrator.js";
 import { NarrationRepository } from "../narration/narration.repository.js";
 import { statSync } from "node:fs";
 import type { DbClient, ScriptRecord } from "../../db/client";
@@ -198,6 +204,15 @@ export async function getProjectSnapshot(
   const narration = narrationProject.activeNarrationRecordId ? await narrationRepository.findByIdForOwner(projectId, project.ownerId, narrationProject.activeNarrationRecordId) : null;
   const narrationSubtitle = narrationProject.activeNarrationSubtitleRevisionId ? await narrationRepository.findSubtitleForOwner(projectId, project.ownerId, narrationProject.activeNarrationSubtitleRevisionId) : null;
   const latestNarration = narrationProject.activeScriptRecordId ? await narrationRepository.findLatestForScriptForOwner(projectId, project.ownerId, narrationProject.activeScriptRecordId) : null;
+  const narrationSource = await narrationRepository.sourceContext(projectId, project.ownerId);
+  const narrationClient = db.narrationPersistence.prismaClient ?? db.firstAggregateWriter?.narrationPrismaClient;
+  const latestNarrationRun = latestNarration ? narrationClient ? await narrationClient.generationRun.findUnique({where:{id:latestNarration.generationRunId}}) : db.generationRuns.get(latestNarration.generationRunId) : null;
+  let ttsHash: string | null = null, targetBand: ReturnType<typeof durationBandFromSource> | null = null;
+  try { ttsHash = await hashProjectNarrationTtsSettings(narrationSource.configuration?.configurationJson); } catch { /* 损坏配置不具备ready资格。 */ }
+  try { targetBand = durationBandFromSource(narrationSource.topic?.durationBandJson); } catch { /* 目标区间损坏时拒绝ready。 */ }
+  const scriptHash = narrationSource.script ? narrationTextHash(narrationSource.script.scriptText) : null;
+  const scriptConfirmed = scriptHash !== null && narrationSource.confirmation?.sourceTextSha256 === scriptHash && hasPassingNarrationScriptValidation(narrationSource.script?.validationResultJson);
+  const narrationReadiness = resolveNarrationReadiness({ mode: narrationProject.narrationTimingMode ?? "legacy_estimated", scriptRecordId: narrationProject.activeScriptRecordId, scriptTextSha256: scriptHash, scriptConfirmed, projectTtsSettingsSha256: ttsHash, targetDurationBand: targetBand, activeNarration: narration });
 
   const topicRecord = project.activeTopicPackageId
     ? db.topicPackages.get(project.activeTopicPackageId) ?? null
@@ -306,9 +321,11 @@ export async function getProjectSnapshot(
 
   return {
     narration_timing_mode: narrationProject.narrationTimingMode ?? "legacy_estimated",
+    script_confirmation: scriptConfirmed ? narrationSource.confirmation : null,
+    narration_readiness: narrationReadiness,
     active_narration: summarizeNarration(narration),
     active_narration_subtitle_revision: narrationSubtitle ? { id: narrationSubtitle.id, narration_record_id: narrationSubtitle.narrationRecordId, subtitle_settings_hash: narrationSubtitle.subtitleSettingsHash, builder_version: narrationSubtitle.builderVersion } : null,
-    latest_narration_candidate: summarizeNarration(latestNarration),
+    latest_narration_candidate: latestNarration ? {...summarizeNarration(latestNarration), run_status:latestNarrationRun?.status ?? null,effective_status:narrationVisibleStatus(latestNarration.status,latestNarrationRun?.status ?? null)} : null,
     project_id: project.id,
     name: project.name,
     owner_id: project.ownerId,
@@ -520,4 +537,22 @@ function summarizeNarration(record: import("../../../../shared/src/index.js").Na
     duration_ms: record.output?.durationMs ?? null, timing_source: record.timingSource,
     audio_hash: record.output?.audio.sha256 ?? null, timing_hash: record.output?.timingMap.sha256 ?? null,
     created_at: record.createdAt, confirmed_at: record.confirmedAt } : null;
+}
+
+/** 口播确认响应使用项目局部DB只读视图，不hydrate/覆写跨请求共享Map。 */
+/** 口播确认响应使用项目局部DB只读视图，不hydrate/覆写跨请求共享Map。 */
+export async function getNarrationProjectSnapshot(db: DbClient, projectId: string, ownerId: string, storageBaseDir: string, topicCandidateStore?: Map<string, any>) {
+    const client = db.narrationPersistence.prismaClient ?? db.firstAggregateWriter?.narrationPrismaClient;
+    if (!client)
+        return getProjectSnapshot(db, projectId, topicCandidateStore);
+    const project = await client.project.findFirst({ where: { id: projectId, ownerId, archivedAt: null } });
+    if (!project)
+        throw new Error("project_scope_denied");
+    const [topics, scripts, storyboards, plans, manifests, composes, renders, publishes] = await Promise.all([
+        client.topicPackage.findMany({ where: { projectId } }), client.scriptRecord.findMany({ where: { projectId } }), client.storyboardRecord.findMany({ where: { projectId } }), client.assetPlanRecord.findMany({ where: { projectId } }), client.assetManifestRecord.findMany({ where: { projectId } }), client.composeRecord.findMany({ where: { projectId } }), client.renderJobRecord.findMany({ where: { projectId } }), client.publishPackageRecord.findMany({ where: { projectId } })
+    ]);
+    const shortId = "p_" + project.id.replace(/[^a-zA-Z0-9]/g, "").toLowerCase().slice(0, 8).padEnd(8, "0");
+    const projectView = { ...project, storageShortId: shortId, storageRootDir: resolveProjectStorageRoot({ storageRoot: storageBaseDir, createdAt: project.createdAt, displayName: project.storageDisplayName, shortId, storageKey: project.storageKey }) };
+    const view = { ...db, projects: new Map([[projectId, projectView]]), topicPackages: new Map(topics.map(r => [r.id, r])), scriptRecords: new Map(scripts.map(r => [r.id, r])), storyboardRecords: new Map(storyboards.map(r => [r.id, r])), assetPlanRecords: new Map(plans.map(r => [r.id, r])), assetManifestRecords: new Map(manifests.map(r => [r.id, r])), composeRecords: new Map(composes.map(r => [r.id, r])), renderJobRecords: new Map(renders.map(r => [r.id, r])), publishPackageRecords: new Map(publishes.map(r => [r.id, r])) } as unknown as DbClient;
+    return getProjectSnapshot(view, projectId, topicCandidateStore);
 }

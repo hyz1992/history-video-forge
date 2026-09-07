@@ -122,6 +122,9 @@ Prisma 模式下创建从 DB 权威用户偏好读取完整配置和 revision，
 
 沿用现有文案预览和确认动作，正文通过本地硬校验且已确认后显示口播准备区。未确认的文案不能正式合成。既有“确认并进入分镜”拆为文案确认与口播确认，不自动生成付费音频。
 
+2026-09-07 实施核对补充：现有“确认文案”按钮仅导航，没有后端确认凭据。新增 `ScriptConfirmation` 持久化记录，绑定唯一 scriptRecordId、projectId、sourceTextSha256、confirmedBy、confirmedAt；旧稿件不自动补确认。`POST /api/projects/:projectId/script/:scriptRecordId/confirm` 接收 `source_text_sha256`，在事务中校验当前 owner/admin、active script、正文 hash 与本地硬校验通过后保存；同来源重复确认幂等，正文改变使旧 hash 凭据无效。该接口仅承担口播前置模式的文案确认，不发起生成，也不把 semantic reviewer 的 pass 当确认。口播 submit/dispatch 使用数据库凭据核验；前端现有按钮在任务 11 接入。此补充落实本节“已确认后才合成”的要求，不增加流水线阶段。
+
+
 准备区包含：可用音色、该音色支持的语速/语气快捷设置、生成/重新生成、进度、失败原因、音频预览、真实总时长、目标区间、与估算的差值、字幕预览。生成成功不自动跳转；“确认此口播并进入分镜”一次完成确认和导航。
 
 时长超出 topic 目标区间时，展示差异并要求明确接受本次实际时长，或由用户修改文案/语速后重生。不得自动压缩音频或触发 writer 重写。接受仅是交付时长例外，不回改 Topic Package；记录目标快照与接受者。目标区间变化会使确认失效，但无需重生声音。
@@ -238,6 +241,14 @@ Project snapshot 添加 active narration 摘要、当前 script 的最新候选/
 输出保存在项目根下 `narration-runs/<runId>/`；现有 artifact resolver/file API 增加该目录及 owner 检查，不依赖 assets run 才能播放。先写临时文件，全部验证后原子提交 bundle manifest，随后 DB 标为 ready；半成品不可被 active 引用。沿用项目删除/备份恢复边界，不新增自动清理历史音频。
 
 外部请求前以 GenerationRunEvent 持久化 provider call intent（稳定 providerRequestKey、attempt、请求指纹），不伪造尚不存在的 AssetProviderJob/manifest。usage 接口允许按 run/snapshot/request key 记媒体使用量，assetProviderJobRecordId 为空。客户端幂等不等于供应商保证 exactly-once：网络断开或进程崩溃后若无法确定供应商结果，状态为 `unknown`，禁止自动重发全文。用户显式重新生成会创建新 run，并提示可能已有费用。已成功保存 bundle 可从 DB/磁盘恢复；lease fencing 防旧实例回写。usage 的累计 characters 取最终值/单调最大值，不能把每次 sentence-end 累计值相加；未知费用标未知，不记零。
+
+口播租约身份按每次 claim 的 owner + claimCount 固定为不可变值。同 owner 再次取得租约也属于新的 claim；口播运行终态更新与续租在同一条条件更新中核对完整身份，失配不得改变新 claim 状态或释放/延长其租约。不能以先查后写替代原子 fencing。Map 与 Prisma 实现须保持一致，通过可选且明确的 claim 条件保留旧 operation 的既有语义。
+
+2026-09-07 任务 5 可靠性补充：供应商事实与派生账本分离。实际收到的终态/累计回执先作为项目私有、不可变的原子事实文件保存，绑定 project/run/snapshot/providerRequestKey、source/settings hash 与供应商任务身份，记录严格校验的 partial/final/none、远端结果和稳定错误类别；不包含凭据或逐词大数组。文件按内容 hash 标识，同 run 合法晚到事实不得覆盖早先事实，未知推断不得阻塞后续实际回执。GenerationRunEvent 引用该事实/hash，usage ledger 是派生结果；已应用 hash 幂等，累计量只取最大值，完整性按回执事实而非取消状态判定。
+
+若事实文件本身保存失败而数据库仍可用，失败处理仍应尝试将已验证的已知用量直接保存到既有账本；不伪造事实文件或已应用事件，不宣称存在可恢复的本地事实，也不重新请求供应商。若文件和数据库两种保存均失败，明确报告无法保全的边界，不能把未保存的用量记为零或宣称持久化成功。
+
+账本或事件数据库写入暂错时保留本地事实，由既有 sweep 重放本地持久化；补账分支可读取已取消、失败或 unknown run 的未应用事实，但不能 claim 或改变这些 run/record 的业务状态，也不能调用供应商。生成中且完整 bundle 已验证的本地落库暂错继续沿既有 lease 恢复；无完整产物且远端未知仍禁止自动重发。事实读取复用项目路径防逃逸、严格 schema、内容 hash 及跨 run/source 校验；损坏事实拒绝处理，不伪造零用量。该记录属于运行内部恢复证据，不新增业务阶段、队列或自动清理，不把原子文件保存声称为断电级保障。
 
 新 operation 的请求指纹包含 source script ID/text hash、有限 TTS overrides、生成时语音配置投影/版本，避免“同 key 换正文/语速”被当成相同请求。overrides 经过 schema 校验后进入配置 resolver 和冻结 snapshot，再构造 provider 参数；不只是 dispatch payload 的附加字段。旧 operation 的幂等语义不顺带改写。
 

@@ -4,10 +4,20 @@ import { z } from 'zod';
 import { QualifiedNarrationSettings } from '../../../../../shared/src/index.js';
 import { NativeNarrationSentence } from '../narration-timing-normalizer.js';
 
-export class NarrationProviderError extends Error {
-  constructor(readonly code: string) { super(code); this.name = 'NarrationProviderError'; }
+export type NarrationRemoteOutcome = 'not_started' | 'unknown' | 'failed' | 'completed';
+export interface NarrationUsageReceipt {
+  characters: number; kind: 'partial' | 'final'; providerTaskId: string; providerRequestId: string | null;
 }
-const reject = (code: string): never => { throw new NarrationProviderError(code); };
+export class NarrationProviderError extends Error {
+  constructor(readonly code: string, readonly receipt: NarrationUsageReceipt | null = null, readonly remoteOutcome: NarrationRemoteOutcome = 'unknown') {
+    super(code); this.name = 'NarrationProviderError';
+    const identity = z.string().min(1).refine(s => s.trim() === s);
+    const parsed = z.object({characters:z.number().int().safe().nonnegative(),kind:z.enum(['partial','final']),providerTaskId:identity,providerRequestId:identity.nullable()}).strict().nullable().safeParse(receipt);
+    if (!parsed.success) throw new Error('narration_receipt_invalid');
+    this.receipt = parsed.data === null ? null : Object.freeze(parsed.data);
+  }
+}
+const reject = (code: string): never => { throw new NarrationProviderError(code, null, 'not_started'); };
 const Request = z.object({ sourceText: z.string(), settings: QualifiedNarrationSettings }).strict();
 export type NarrationSpeechRequest = z.infer<typeof Request>;
 export interface NarrationCallOptions { signal?: AbortSignal; }
@@ -59,7 +69,7 @@ export class DashScopeSpeechWsClient implements NarrationSpeechClient {
     let socket: SpeechSocket, taskId: string;
     try {
       taskId = (this.options.taskIdFactory ?? randomUUID)();
-      if (typeof taskId !== 'string' || !taskId.trim()) return reject('narration_request_invalid');
+      if (typeof taskId !== 'string' || !taskId.trim() || taskId.trim() !== taskId) return reject('narration_request_invalid');
       socket = (this.options.socketFactory ?? defaultSocketFactory)('wss://dashscope.aliyuncs.com/api-ws/v1/inference', {
         headers: { Authorization: 'Bearer ' + this.options.apiKey }, followRedirects: false, handshakeTimeout: 15000, maxPayload: 1024 * 1024,
       });
@@ -68,13 +78,19 @@ export class DashScopeSpeechWsClient implements NarrationSpeechClient {
       const start = Date.now(), buffers: Buffer[] = [], rawEvents: NarrationRawEvent[] = [], sentences: NativeNarrationSentence[] = [];
       let bytes = 0, opened = false, started = false, finishSent = false, settled = false;
       let openSentence: number | null = null, beginOriginal: string | undefined, beginNormalized: string | undefined;
+      let receiptFinal = false, remoteOutcome: NarrationRemoteOutcome = 'unknown';
       let requestId: string | null = null, maxUsage: number | null = null, lastSentenceUsage: number | null = null;
       const cleanup = (success: boolean) => {
         clearTimeout(timer); options.signal?.removeEventListener('abort', abort);
         try { if (success) socket.close(); else socket.terminate(); } catch { /* 终态已封闭，不传播socket实现细节。 */ }
       };
       const failure = (code: string) => {
-        if (settled) return; settled = true; cleanup(false); rejectPromise(new NarrationProviderError(code));
+        if (settled) return;
+        let error: Error;
+        try { error = new NarrationProviderError(code, maxUsage === null ? null : { characters: maxUsage, kind: receiptFinal ? 'final' : 'partial', providerTaskId: taskId, providerRequestId: requestId }, remoteOutcome); }
+        catch { error = new NarrationProviderError('narration_protocol_invalid'); }
+        settled = true;
+        try { cleanup(false); } finally { rejectPromise(error); }
       };
       const abort = () => failure('narration_cancelled');
       const timer = setTimeout(() => failure('narration_timeout'), timeoutMs);
@@ -111,7 +127,7 @@ export class DashScopeSpeechWsClient implements NarrationSpeechClient {
           rawEvents.push({ kind: 'json', elapsedMs: Date.now() - start, data: event });
           const id = event.header.attributes?.request_uuid;
           if (id !== undefined) {
-            if (typeof id !== 'string' || !id.trim() || requestId !== null && requestId !== id) return failure('narration_protocol_invalid');
+            if (typeof id !== 'string' || !id.trim() || id.trim() !== id || requestId !== null && requestId !== id) return failure('narration_protocol_invalid');
             requestId = id;
           }
           const usage = event.payload?.usage?.characters;
@@ -143,13 +159,15 @@ export class DashScopeSpeechWsClient implements NarrationSpeechClient {
               return;
             }
             case 'task-finished': {
+              if (started && finishSent) remoteOutcome = 'completed';
+              receiptFinal = started && finishSent && (usage !== undefined || lastSentenceUsage === maxUsage);
               if (!started || !finishSent || openSentence !== null || !sentences.length || !bytes || bytes % 2) return failure('narration_incomplete_capture');
               if (sentences.map(s => s.originalText).join('') !== input.sourceText || sentences.some(s => s.words.map(w => w.text).join('') !== s.normalizedText)) return failure('narration_timing_invalid');
               if (usage === undefined && maxUsage !== null && lastSentenceUsage !== maxUsage) return failure('narration_usage_invalid');
               settled = true; cleanup(true);
               resolve({ pcm: Buffer.concat(buffers), sentences, rawEvents, providerTaskId: taskId, providerRequestId: requestId, usageCharacters: maxUsage }); return;
             }
-            case 'task-failed': return failure('narration_task_failed');
+            case 'task-failed': remoteOutcome = 'failed'; return failure('narration_task_failed');
             default: return failure('narration_protocol_invalid');
           }
         } catch { failure('narration_protocol_invalid'); }

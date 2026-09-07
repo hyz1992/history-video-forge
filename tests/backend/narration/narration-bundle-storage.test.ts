@@ -122,3 +122,18 @@ describe('不可变口播bundle',()=>{
     await writeFile(path,JSON.stringify(manifest));expect((await f.store.recoverInitial({record:f.input.record})).status).toBe('incomplete');
   });
 });
+
+
+function fact(record:NarrationRecord,characters:number|null=308){return {schemaVersion:'narration_provider_fact_v1',projectId:record.projectId,generationRunId:record.generationRunId,configurationSnapshotId:record.configurationSnapshotId,providerRequestKey:'key',sourceTextSha256:record.sourceTextSha256,settingsSha256:record.settingsSha256,providerTaskId:'task',providerRequestId:null,characters,receiptKind:characters===null?'none':'final',remoteOutcome:'completed',errorCode:null,durationMs:1000,canceled:false,observedAt:now};}
+it('供应商事实原子发布且跨实例按hash重复读取，多份合法累计不覆盖',async()=>{
+ const f=await fixture();const a=await f.store.commitProviderFact({record:f.input.record,fact:fact(f.input.record,100)});const b=await f.store.commitProviderFact({record:f.input.record,fact:fact(f.input.record,308)});expect(a.sha256).not.toBe(b.sha256);expect(await f.store.commitProviderFact({record:f.input.record,fact:fact(f.input.record,308)})).toEqual(b);const cold=new NarrationBundleStorage({projectId:'p1',storageRootDir:f.path});expect((await cold.readProviderFacts({record:f.input.record})).map(x=>x.fact.characters).sort()).toEqual([100,308]);
+});
+it('供应商事实拒绝跨run/source及损坏内容，不接受路径或秘密字段',async()=>{
+ const f=await fixture();for(const patch of [{generationRunId:'other'},{sourceTextSha256:'a'.repeat(64)},{providerRequestKey:'../bad'},{secret:'key'}])await expect(f.store.commitProviderFact({record:f.input.record,fact:{...fact(f.input.record),...patch}})).rejects.toThrow();const saved=await f.store.commitProviderFact({record:f.input.record,fact:fact(f.input.record)});await writeFile(join(f.path,'narration-runs/run1/provider-facts',saved.sha256,'manifest.json'),'{}');await expect(f.store.readProviderFacts({record:f.input.record})).rejects.toThrow('narration_fact_invalid');
+});
+
+
+it('早期无身份unknown不阻塞最终ready事实，但不同provider任务不可混账',async()=>{
+ const f=await fixture(),unknown={...fact(f.input.record,null),remoteOutcome:'unknown',providerTaskId:null};await f.store.commitProviderFact({record:{...f.input.record,providerTaskId:null},fact:unknown});await f.store.commitProviderFact({record:f.input.record,fact:fact(f.input.record)});const ready=await f.store.commitInitial(f.input);expect(await f.store.readProviderFacts({record:ready.record})).toHaveLength(2);
+ await expect(f.store.commitProviderFact({record:{...f.input.record,providerTaskId:null},fact:{...fact(f.input.record),providerTaskId:'different-task'}})).rejects.toThrow('narration_fact_source_mismatch');
+});

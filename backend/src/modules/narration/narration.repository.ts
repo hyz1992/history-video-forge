@@ -1,3 +1,8 @@
+import { hasPassingNarrationScriptValidation } from "./narration-readiness.js";
+import { ResolvedGenerationConfigurationV1Schema } from "../../../../shared/src/index.js";
+import { settingsFromResolvedNarration } from "./narration-readiness.js";
+import { createHash } from "node:crypto";
+import { canonicalStringify, hashProjectNarrationTtsSettings, hashNarrationSettings, ConfirmNarrationRequest, NarrationDurationBand, GenerationConfigurationV1 } from "../../../../shared/src/index.js";
 import { Prisma } from "../../generated/prisma/client.js";
 import { NarrationRecord, NarrationSubtitleRevision } from "../../../../shared/src/index.js";
 import type { DbClient } from "../../db/client.js";
@@ -37,6 +42,30 @@ export class NarrationRepository {
     const client = this.db.narrationPersistence.prismaClient ?? this.db.firstAggregateWriter?.narrationPrismaClient;
     if (!client && (this.db.firstAggregateWriter || this.db.secondAggregateWriter || this.db.thirdAggregateWriter)) throw new Error("narration_persistence_client_missing");
     return client;
+  }
+  async sourceContext(projectId: string, ownerId: string) {
+      return readNarrationSource(this.db, projectId, ownerId, this.client);
+  }
+  async confirmScript(ownerId: string, actorId: string, projectId: string, scriptId: string, sourceHash: string) {
+      const action = async (client?: NarrationReadClient) => {
+          const source = await readNarrationSource(this.db, projectId, ownerId, client);
+          if (source.project.narrationTimingMode !== "narration_first_v1")
+              throw new Error("narration_mode_unavailable");
+          if (!source.script || source.script.id !== scriptId || source.project.activeScriptRecordId !== scriptId || source.script.projectId !== projectId)
+              throw new Error("narration_source_conflict");
+          if (!hasPassingNarrationScriptValidation(source.script.validationResultJson))
+              throw new Error("script_validation_required");
+          if (textHash(source.script.scriptText) !== sourceHash)
+              throw new Error("narration_source_conflict");
+          if (source.confirmation?.sourceTextSha256 === sourceHash)
+              return source.confirmation;
+          const value = { scriptRecordId: scriptId, projectId, sourceTextSha256: sourceHash, confirmedBy: actorId, confirmedAt: new Date() };
+          if (client)
+              return client.scriptConfirmation.upsert({ where: { scriptRecordId: scriptId }, create: value, update: value });
+          this.db.scriptConfirmations.set(scriptId, value);
+          return value;
+      };
+      return this.client ? this.client.$transaction(tx => action(tx)) : action();
   }
   async projectForOwner(projectId: string, ownerId: string) {
     const client = this.client;
@@ -101,7 +130,7 @@ export class NarrationRepository {
     return structuredClone(record);
   }
   /** 初始字幕与完整bundle同事务提交；不修改Project active指针。 */
-  async saveReadyBundle(ownerId: string, input: NarrationRecord, initialSubtitle: NarrationSubtitleRevision): Promise<NarrationRecord> {
+  async saveReadyBundle(ownerId: string, input: NarrationRecord, initialSubtitle: NarrationSubtitleRevision, lease?: NarrationLease): Promise<NarrationRecord> {
     const record = NarrationRecord.parse(input), subtitle = NarrationSubtitleRevision.parse(initialSubtitle);
     if (record.status !== "ready" || !record.output) throw new Error("narration_ready_bundle_required");
     validateSubtitle(record, subtitle);
@@ -111,6 +140,7 @@ export class NarrationRepository {
     if (client) {
       await client.$transaction(async tx => {
         if (!await tx.project.findFirst({where:{id:record.projectId,ownerId,archivedAt:null}})) throw new Error("project_scope_denied");
+        if (lease) await assertLease(this.db, record.generationRunId, lease, tx);
         const previous = await tx.narrationRecord.findUnique({where:{id:record.id}});
         validateReady(previous ? decode(previous) : null, record);
         const staged = await tx.narrationSubtitleRevision.findMany({ where: { narrationRecordId: record.id } });
@@ -120,6 +150,7 @@ export class NarrationRepository {
         if (result.count !== 1) throw new Error("narration_state_conflict");
       });
     } else {
+      if (lease) await assertLease(this.db, record.generationRunId, lease);
       validateReady(this.db.narrationRecords.get(record.id) ?? null, record);
       for (const revision of this.db.narrationSubtitleRevisions.values()) {
         if (revision.narrationRecordId === record.id) validateSubtitle(record, NarrationSubtitleRevision.parse(revision));
@@ -144,6 +175,136 @@ export class NarrationRepository {
     } else { this.assertNewSubtitle(subtitle); this.db.narrationSubtitleRevisions.set(subtitle.id, structuredClone(subtitle)); }
     return structuredClone(subtitle);
   }
+  async hasProviderIntent(runId: string) {
+      return this.client ? (await this.client.generationRunEvent.count({ where: { generationRunId: runId, eventType: "narration_provider_intent" } })) > 0 : (this.db.generationRunEvents.get(runId) ?? []).some(e => e.eventType === "narration_provider_intent");
+  }
+  async claimProviderIntent(ownerId: string, projectId: string, runId: string, lease: NarrationLease, requestKey: string, requestHash: string) {
+      const action = async (client?: NarrationReadClient) => {
+          await readNarrationSource(this.db, projectId, ownerId, client);
+          await assertLease(this.db, runId, lease, client);
+          const events = client ? await client.generationRunEvent.findMany({ where: { generationRunId: runId, eventType: "narration_provider_intent" } }) : (this.db.generationRunEvents.get(runId) ?? []).filter(e => e.eventType === "narration_provider_intent");
+          if (events.length)
+              return false;
+          const event = { id: this.db.generateId(), generationRunId: runId, segmentId: null, eventType: "narration_provider_intent", eventJson: { provider_request_key: requestKey, attempt_index: 0, request_fingerprint: requestHash, lease_owner: lease.owner, claim_count: lease.claimCount }, createdAt: new Date() };
+          if (client)
+              await client.generationRunEvent.create({ data: event });
+          else
+              this.db.generationRunEvents.set(runId, [...(this.db.generationRunEvents.get(runId) ?? []), event]);
+          return true;
+      };
+      return this.client ? this.client.$transaction(tx => action(tx)) : action();
+  }
+  async transitionCandidate(ownerId: string, projectId: string, id: string, status: "failed" | "unknown", errorCode: string, lease: NarrationLease) {
+      const action = async (client?: NarrationReadClient) => {
+          const source = await readNarrationSource(this.db, projectId, ownerId, client);
+          void source;
+          const row = client ? await client.narrationRecord.findFirst({ where: { id, projectId } }) : null;
+          const previous = client ? row ? decode(row) : null : this.db.narrationRecords.get(id);
+          if (!previous || previous.projectId !== projectId || previous.status !== "generating")
+              return null;
+          await assertLease(this.db, previous.generationRunId, lease, client);
+          const next = NarrationRecord.parse({ ...previous, status, errorCode, updatedAt: new Date().toISOString() });
+          if (client)
+              await client.narrationRecord.update({ where: { id }, data: encode(next) });
+          else
+              this.db.narrationRecords.set(id, next);
+          return next;
+      };
+      return this.client ? this.client.$transaction(tx => action(tx)) : action();
+  }
+  async cancel(ownerId: string, projectId: string, id: string) {
+      const action = async (client?: NarrationReadClient) => {
+          await readNarrationSource(this.db, projectId, ownerId, client);
+          const row = client ? await client.narrationRecord.findFirst({ where: { id, projectId } }) : null;
+          const previous = client ? row ? decode(row) : null : this.db.narrationRecords.get(id);
+          if (!previous || previous.projectId !== projectId)
+              throw new Error("narration_not_found");
+          if (previous.status === "cancelled")
+              return previous;
+          if (previous.status !== "generating")
+              throw new Error("narration_state_conflict");
+          const now = new Date();
+          const next = NarrationRecord.parse({ ...previous, status: "cancelled", updatedAt: now.toISOString() });
+          if (client) {
+              await client.narrationRecord.update({ where: { id }, data: encode(next) });
+              await client.generationRun.updateMany({ where: { id: previous.generationRunId, status: { in: ["pending_dispatch", "running"] } }, data: { status: "failed", dispatchLeaseOwner: null, dispatchLeaseExpiresAt: null, updatedAt: now } });
+          }
+          else {
+              this.db.narrationRecords.set(id, next);
+              const run = this.db.generationRuns.get(previous.generationRunId);
+              if (run && (run.status === "pending_dispatch" || run.status === "running"))
+                  Object.assign(run, { status: "failed", dispatchLeaseOwner: null, dispatchLeaseExpiresAt: null, updatedAt: now });
+          }
+          const event = { id: this.db.generateId(), generationRunId: previous.generationRunId, segmentId: null, eventType: "narration_cancelled", eventJson: { record_id: id }, createdAt: now };
+          if (client)
+              await client.generationRunEvent.create({ data: event });
+          else
+              this.db.generationRunEvents.set(previous.generationRunId, [...(this.db.generationRunEvents.get(previous.generationRunId) ?? []), event]);
+          return next;
+      };
+      return this.client ? this.client.$transaction(tx => action(tx)) : action();
+  }
+  async confirm(ownerId: string, actorId: string, projectId: string, inputRecord: NarrationRecord, request: ConfirmNarrationRequest) {
+      const action = async (client?: NarrationReadClient) => {
+          const source = await readNarrationSource(this.db, projectId, ownerId, client);
+          const row = client ? await client.narrationRecord.findFirst({ where: { id: inputRecord.id, projectId } }) : null;
+          const record = client ? row ? decode(row) : null : this.db.narrationRecords.get(inputRecord.id);
+          if (!record || record.projectId !== projectId)
+              throw new Error("narration_not_found");
+          if (record.status !== "ready" && record.status !== "confirmed")
+              throw new Error("narration_not_confirmed");
+          if (canonicalStringify(record.output) !== canonicalStringify(inputRecord.output) || record.settingsSha256 !== inputRecord.settingsSha256)
+              throw new Error("narration_source_conflict");
+          const configuration = GenerationConfigurationV1.parse(source.configuration?.configurationJson);
+          if (!source.script || !hasPassingNarrationScriptValidation(source.script.validationResultJson) || !source.confirmation || source.project.activeScriptRecordId !== record.scriptRecordId || source.script.id !== record.scriptRecordId || source.confirmation.sourceTextSha256 !== textHash(source.script.scriptText) || record.sourceTextSha256 !== textHash(source.script.scriptText) || record.sourceProjectTtsSettingsSha256 !== await hashProjectNarrationTtsSettings(configuration))
+              throw new Error("narration_stale");
+          if (record.sourceTextSha256 !== request.source_text_sha256 || record.settingsSha256 !== request.settings_sha256 || record.settingsSha256 !== await hashNarrationSettings(record.settings))
+              throw new Error("narration_source_conflict");
+          const run = client ? await client.generationRun.findUnique({ where: { id: record.generationRunId } }) : this.db.generationRuns.get(record.generationRunId);
+          const snapshot = client ? await client.runConfigurationSnapshot.findUnique({ where: { id: record.configurationSnapshotId } }) : this.db.runConfigurationSnapshots.get(record.configurationSnapshotId);
+          const payload = run?.dispatchPayloadJson as Record<string, unknown> | undefined;
+          if (!run || run.projectId !== projectId || run.status !== "succeeded" || run.runConfigurationSnapshotId !== snapshot?.id || snapshot.projectId !== projectId || payload?.settings_sha256 !== record.settingsSha256 || payload?.source_text_sha256 !== record.sourceTextSha256 || canonicalStringify(payload?.settings) !== canonicalStringify(record.settings))
+              throw new Error("narration_source_conflict");
+          const frozen = ResolvedGenerationConfigurationV1Schema.parse(snapshot.resolvedConfigurationJson);
+          if (canonicalStringify(settingsFromResolvedNarration(frozen, record.settings.voice)) !== canonicalStringify(record.settings) || payload?.source_project_tts_settings_sha256 !== record.sourceProjectTtsSettingsSha256)
+              throw new Error("narration_snapshot_conflict");
+          const band = durationBandFromSource(source.topic?.durationBandJson);
+          if (canonicalStringify(band) !== canonicalStringify(request.target_duration_band_snapshot))
+              throw new Error("narration_duration_band_conflict");
+          const duration = record.output!.durationMs;
+          if ((duration < band.minMs || duration > band.maxMs) && !request.accept_duration_outside_band)
+              throw new Error("narration_duration_not_accepted");
+          const active = source.project.activeNarrationRecordId ?? null;
+          if (active === record.id && record.status === "confirmed" && canonicalStringify(record.acceptedDurationBandSnapshot) === canonicalStringify(band))
+              return record;
+          if (active !== request.expected_active_narration_record_id)
+              throw new Error("narration_active_conflict");
+          const now = new Date();
+          const next = NarrationRecord.parse({ ...record, status: "confirmed", acceptedDurationBandSnapshot: band, confirmedAt: now.toISOString(), confirmedBy: actorId, updatedAt: now.toISOString() });
+          const update = {
+              activeNarrationRecordId: record.id, activeNarrationSubtitleRevisionId: active === record.id ? source.project.activeNarrationSubtitleRevisionId : record.output!.initialSubtitleRevisionId, updatedAt: now,
+              ...(active !== record.id ? { activeStoryboardRecordId: null, activeAssetPlanRecordId: null, activeAssetManifestRecordId: null, activeComposeRecordId: null, activeRenderJobRecordId: null, activePublishPackageRecordId: null, latestStoryboardRunTraceJson: Prisma.DbNull, latestAssetPlanRunTraceJson: Prisma.DbNull, latestAssetsRunTraceJson: Prisma.DbNull, latestComposeRunTraceJson: Prisma.DbNull, latestRenderRunTraceJson: Prisma.DbNull } : {})
+          };
+          if (client) {
+              const changed = await client.project.updateMany({ where: { id: projectId, ownerId, activeNarrationRecordId: active }, data: update });
+              if (changed.count !== 1)
+                  throw new Error("narration_active_conflict");
+              await client.narrationRecord.update({ where: { id: record.id }, data: encode(next) });
+          }
+          else {
+              this.db.narrationRecords.set(record.id, next);
+              const mapUpdate = Object.fromEntries(Object.entries(update).map(([key, value]) => [key, value === Prisma.DbNull ? null : value]));
+              Object.assign(source.project, mapUpdate);
+          }
+          const event = { id: this.db.generateId(), generationRunId: record.generationRunId, segmentId: null, eventType: "narration_confirmed", eventJson: { record_id: record.id, previous_active_id: active, accepted_duration_band: band, actor_id: actorId }, createdAt: now };
+          if (client)
+              await client.generationRunEvent.create({ data: event });
+          else
+              this.db.generationRunEvents.set(record.generationRunId, [...(this.db.generationRunEvents.get(record.generationRunId) ?? []), event]);
+          return next;
+      };
+      return this.client ? this.client.$transaction(tx => action(tx)) : action();
+  }
   private assertNewSubtitle(record: NarrationSubtitleRevision) {
     if (this.db.narrationSubtitleRevisions.has(record.id) || [...this.db.narrationSubtitleRevisions.values()].some(r => r.narrationRecordId === record.narrationRecordId && r.subtitleSettingsHash === record.subtitleSettingsHash && r.builderVersion === record.builderVersion)) throw new Error("narration_subtitle_unique_revision");
   }
@@ -159,4 +320,25 @@ function validateReady(previous: NarrationRecord | null, record: NarrationRecord
 }
 function validateSubtitle(record: NarrationRecord, subtitle: NarrationSubtitleRevision) {
   if (subtitle.projectId !== record.projectId || subtitle.narrationRecordId !== record.id || subtitle.audioHash !== record.output?.audio.sha256 || subtitle.timingHash !== record.output?.timingMap.sha256) throw new Error("narration_subtitle_source_mismatch");
+}
+
+export type NarrationLease = { owner: string; claimCount: number; };
+type NarrationReadClient = Pick<AppPrismaClient, "project" | "scriptRecord" | "scriptConfirmation" | "projectGenerationConfiguration" | "topicPackage" | "narrationRecord" | "generationRun" | "runConfigurationSnapshot" | "generationRunEvent">;
+const textHash = (text: string) => createHash("sha256").update(text).digest("hex");
+export function durationBandFromSource(value: unknown): NarrationDurationBand {
+  const band = value as { min_sec?: number; max_sec?: number ;} | null;
+  return NarrationDurationBand.parse({ minMs: typeof band?.min_sec === "number" ? band.min_sec * 1000 : null, maxMs: typeof band?.max_sec === "number" ? band.max_sec * 1000 : null });
+}
+export async function readNarrationSource(db: DbClient, projectId: string, ownerId: string, client?: NarrationReadClient) {
+  const project = client ? await client.project.findFirst({ where: { id: projectId, ownerId, archivedAt: null } }) : db.projects.get(projectId);
+  if (!project || project.ownerId !== ownerId) throw new Error("project_scope_denied");
+  const script = project.activeScriptRecordId ? client ? await client.scriptRecord.findUnique({ where: { id: project.activeScriptRecordId } }) : db.scriptRecords.get(project.activeScriptRecordId) : null;
+  const configuration = client ? await client.projectGenerationConfiguration.findUnique({ where: { projectId } }) : [...db.projectGenerationConfigurations.values()].find(c => c.projectId === projectId);
+  const confirmation = script ? client ? await client.scriptConfirmation.findUnique({ where: { scriptRecordId: script.id } }) : db.scriptConfirmations.get(script.id) : null;
+  const topic = project.activeTopicPackageId ? client ? await client.topicPackage.findUnique({ where: { id: project.activeTopicPackageId } }) : db.topicPackages.get(project.activeTopicPackageId) : null;
+  return { project, script, configuration, confirmation, topic };
+}
+async function assertLease(db: DbClient, runId: string, lease: NarrationLease, client?: NarrationReadClient) {
+  const run = client ? await client.generationRun.findUnique({ where: { id: runId } }) : db.generationRuns.get(runId);
+  if (!run || run.status !== "running" || run.dispatchLeaseOwner !== lease.owner || run.dispatchClaimCount !== lease.claimCount || !run.dispatchLeaseExpiresAt || run.dispatchLeaseExpiresAt.getTime() <= Date.now()) throw new Error("narration_lease_lost");
 }

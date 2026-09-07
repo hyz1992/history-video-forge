@@ -165,6 +165,8 @@ expect(TimingToken.safeParse({
 
 ### 任务 5：生成运行、确认、取消、费用与冷恢复
 
+2026-09-07 必要补充：原有文案确认仅前端导航。按设计 §4.1 增加 ScriptConfirmation 专用持久化凭据及显式文案确认接口；先测未确认拒绝、旧库升级不自动确认、hash 变更与跨项目拒绝，再实现事务写入。范围增加 Prisma schema、单个增量迁移，以及需要的 DB 类型/Map 测试容器；不借 reviewer pass 或 active 指针冒充确认。前端按钮留任务 11 接线。
+
 新增：`backend/src/modules/narration/narration-run.service.ts`、`backend/src/modules/narration/narration.routes.ts`、`backend/src/modules/narration/narration-readiness.ts`、`backend/src/modules/generation-run/narration-dispatch-handler.ts`、`tests/backend/narration/narration-lifecycle.test.ts`、`tests/backend/api/narration-api.test.ts`。
 
 修改：`backend/src/app.ts`、`backend/src/modules/generation-run/submit-protocol.ts`、`backend/src/modules/generation-run/generation-run.service.ts`、`backend/src/modules/generation-cost/generation-cost.service.ts`、`backend/src/modules/generation-cost/pricing-catalog.seed.ts`、`backend/src/modules/generation-cost/generation-capability-readiness.ts`、`backend/src/modules/generation-cost/usage-cost-recorder.ts`、`backend/src/modules/assets/voice/voice-presets.ts`。
@@ -176,7 +178,9 @@ expect(TimingToken.safeParse({
 - [ ] 在 run override 解析及 provider dispatch 前接任务 2A 兼容检查，实际模型/音色/协议必须与资格一致；直接 API 不能绕过 UI 候选过滤，拒绝时外呼为 0。
 - [ ] 对现有同步 submit 增加仅 narration 使用的“持久化后返回 202”路径，交由既有 dispatcher/lease 运行；其它 operation 保持现有响应。快照缺失 fail-closed。复用已存在恢复机制，未知供应商结果映射 run `needs_reconciliation`、record `unknown`，不另造后台队列体系。
 - [ ] 实现 confirm 事务复查、取消、record 查询及超时；同 active 重复确认必须无副作用，仅重新接受目标区间不清空视觉；不同候选并发确认 CAS 拒绝迟到请求。取消持久化在前，provider cancel 尽力执行，后续事件受状态/lease fencing 约束。
+- [ ] 口播 claim 身份固定为不可变 owner + claimCount；终态更新和续租均使用原子完整身份条件，同 owner 重 claim 后旧执行器不得写新 run 或释放/延长新租约。补 Map 引用变化、同 owner 迟到成功/失败/待对账、新 claim 正常完成和不同 owner 对照，显式检查 run/lease；必要范围增加既有 runtime/generation-run-lease-fencing.test.ts，旧 operation 语义保持。
 - [ ] 在 GenerationRunEvent 保存 provider call intent/request key，扩展 usage-cost-recorder 的无 AssetProviderJob 媒体记账入口；新 operation usage 归文案步骤，assetProviderJobRecordId 为空，不伪造资产任务。价格使用独立模型目录项，禁止复制 qwen3 单价；未知实际费用保持 null/unknown。
+- [ ] 落实设计 §7 的供应商事实恢复：原子不可变本地事实先于 DB 派生事件/账本，严格绑定运行来源；事件或账本暂错后由既有 sweep 仅重放本地持久化，覆盖取消/失败/unknown run，补账不改变其业务状态或再次外呼。测试事件写入失败、账本失败、连续暂错后跨实例、取消后迟到事实、损坏及跨 run 文件拒绝；必要范围增加 narration-bundle-storage.ts 及对应测试。
 - [ ] 回跑上述测试、`tests/backend/runtime/generation-run-idempotency.test.ts`、`generation-run-cold-recovery.test.ts`、`generation-run-lease-fencing.test.ts`（后三者同目录）、后端 typecheck；PASS 后提交 `接通口播准备接口与可恢复生成运行`。
 
 ### 任务 6：上游失效与模型配置变更的统一保护

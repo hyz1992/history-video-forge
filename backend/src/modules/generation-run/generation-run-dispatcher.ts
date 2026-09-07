@@ -26,6 +26,7 @@ import type { AppPrismaClient } from "../../db/prisma-client.types.js";
  */
 
 export type DispatchOutcome =
+  | { status: "deferred"; reason_code: "narration_ready_persistence_retry"; message: string; response?: never }
   | { status: "succeeded"; response?: { statusCode: number; body: unknown } }
   | {
       status: "failed";
@@ -53,10 +54,10 @@ export interface GenerationRunDispatchHandler {
 }
 
 export type DispatchResult =
-  | { dispatched: true; outcome: DispatchOutcome }
+  | { dispatched: true; outcome: DispatchOutcome; fencedOut?: true }
   | {
       dispatched: false;
-      reason: "run_not_found" | "not_claimable" | "lease_held" | "project_context_unavailable";
+      reason: "run_not_found" | "not_claimable" | "lease_held" | "project_context_unavailable" | "fenced_out";
     };
 
 export interface GenerationRunDispatcher {
@@ -74,6 +75,7 @@ export function createGenerationRunDispatcher(options: {
   now?: () => Date;
   prismaClient?: AppPrismaClient;
   handlers: Record<string, GenerationRunDispatchHandler>;
+  reconcileLocalFacts?: () => Promise<unknown>;
 }): GenerationRunDispatcher {
   const nowFn = options.now ?? (() => new Date());
 
@@ -81,18 +83,24 @@ export function createGenerationRunDispatcher(options: {
     const run = await options.repository.getRunById(runId);
     if (!run) return { dispatched: false, reason: "run_not_found" };
 
+    const narrationClaimCount = run.operation === "script.narration.generate" ? run.dispatchClaimCount : undefined;
+
     // 执行上下文检查在 claim 之前：跨进程 sweep（DB 权威）可能发现本进程镜像
     // 中没有 project 上下文的 run（hydrate 仅启动执行）。此时必须跳过派发——
     // 绝不能置终态 failed（那会永久误杀一个 quote 已消费的可恢复 run）；
     // lease 到期后由持有该 project 上下文的实例接管。
-    const project = options.db.projects.get(run.projectId);
+    let project = options.db.projects.get(run.projectId);
+    if (run.operation === "script.narration.generate" && options.prismaClient) {
+      const row = await options.prismaClient.project.findFirst({where:{id:run.projectId,archivedAt:null}});
+      project = row ? {...row,storageShortId:"",storageRootDir:"",storageRenameLocked:false} as unknown as ProjectRecord : undefined;
+    }
     if (!project) {
       return { dispatched: false, reason: "project_context_unavailable" };
     }
 
     const now = nowFn();
     const leaseUntil = new Date(now.getTime() + options.leaseDurationMs);
-    const claimed = await options.repository.claimRun(runId, options.workerId, leaseUntil, now);
+    const claimed = await options.repository.claimRun(runId, options.workerId, leaseUntil, now, narrationClaimCount);
     if (!claimed) {
       const current = await options.repository.getRunById(runId);
       if (current && current.status === "running" && current.dispatchLeaseExpiresAt !== null) {
@@ -101,7 +109,11 @@ export function createGenerationRunDispatcher(options: {
       return { dispatched: false, reason: "not_claimable" };
     }
 
-    const claimedRun = (await options.repository.getRunById(runId))!;
+    const loadedClaim = (await options.repository.getRunById(runId))!;
+    // claim CAS固定令牌，不从后续查询或共享Map引用借用接管者身份。
+    const claimIdentity = narrationClaimCount === undefined ? undefined : Object.freeze({owner:options.workerId,count:narrationClaimCount+1});
+    if (claimIdentity && (!loadedClaim || loadedClaim.status !== "running" || loadedClaim.dispatchLeaseOwner !== claimIdentity.owner || loadedClaim.dispatchClaimCount !== claimIdentity.count)) return {dispatched:false,reason:"fenced_out"};
+    const claimedRun = claimIdentity ? {...loadedClaim,dispatchLeaseOwner:claimIdentity.owner,dispatchClaimCount:claimIdentity.count} : loadedClaim;
     const handler = options.handlers[claimedRun.operation];
 
     let outcome: DispatchOutcome;
@@ -122,6 +134,7 @@ export function createGenerationRunDispatcher(options: {
           options.workerId,
           new Date(renewalNow.getTime() + options.leaseDurationMs),
           renewalNow,
+          claimIdentity?.count,
         );
       }, Math.max(1, Math.floor(options.leaseDurationMs / 2)));
       try {
@@ -142,21 +155,32 @@ export function createGenerationRunDispatcher(options: {
       }
     }
 
-    await finalizeDispatch(runId, outcome, claimedRun);
-    return { dispatched: true, outcome };
+    if (outcome.status === "deferred" && claimedRun.operation !== "script.narration.generate") {
+      outcome = { status: "failed", reason_code: "dispatch_outcome_invalid", message: "deferred仅允许口播本地产物恢复" };
+    }
+    const finalized = await finalizeDispatch(runId, outcome, claimedRun, claimIdentity);
+    return finalized || !claimIdentity ? { dispatched: true, outcome } : { dispatched: true, outcome, fencedOut:true };
   }
 
   async function finalizeDispatch(
     runId: string,
     outcome: DispatchOutcome,
     claimedRun: GenerationRunRecord,
-  ): Promise<void> {
+    claimIdentity?: Readonly<{owner:string;count:number}>,
+  ): Promise<boolean> {
     const now = nowFn();
     const eventBase = {
       generationRunId: runId,
       segmentId: null,
       createdAt: now,
     };
+    if (outcome.status === "deferred") {
+      const current = await options.repository.getRunById(runId);
+      if (!current || current.status !== "running" || current.dispatchLeaseOwner !== (claimIdentity?.owner ?? claimedRun.dispatchLeaseOwner) || current.dispatchClaimCount !== (claimIdentity?.count ?? claimedRun.dispatchClaimCount)) return false;
+      await options.repository.appendRunEvent({ id: options.db.generateId(), ...eventBase, eventType: "narration_local_recovery_deferred", eventJson: { worker_id: options.workerId, dispatch_claim_count: claimedRun.dispatchClaimCount, reason_code: outcome.reason_code } });
+      // 保留running与既有lease；停止续租后由低频sweep在lease过期时接管，不立即重试。
+      return true;
+    }
     if (outcome.status === "succeeded") {
       const event: GenerationRunEventRecord = {
         id: options.db.generateId(),
@@ -168,10 +192,11 @@ export function createGenerationRunDispatcher(options: {
       const updated = await options.repository.updateRunStatus(runId, "succeeded", {
         releaseLease: true,
         now,
-        expectedLeaseOwner: options.workerId,
+        expectedLeaseOwner: claimIdentity?.owner ?? options.workerId,
+        expectedClaimCount: claimIdentity?.count,
       });
       await appendFencedOutEventIfRejected(runId, updated, "succeeded");
-      return;
+      return updated !== null;
     }
     if (outcome.status === "needs_reconciliation") {
       const event: GenerationRunEventRecord = {
@@ -189,10 +214,11 @@ export function createGenerationRunDispatcher(options: {
       const updated = await options.repository.updateRunStatus(runId, "needs_reconciliation", {
         releaseLease: true,
         now,
-        expectedLeaseOwner: options.workerId,
+        expectedLeaseOwner: claimIdentity?.owner ?? options.workerId,
+        expectedClaimCount: claimIdentity?.count,
       });
       await appendFencedOutEventIfRejected(runId, updated, "needs_reconciliation");
-      return;
+      return updated !== null;
     }
     const event: GenerationRunEventRecord = {
       id: options.db.generateId(),
@@ -208,9 +234,11 @@ export function createGenerationRunDispatcher(options: {
     const updated = await options.repository.updateRunStatus(runId, "failed", {
       releaseLease: true,
       now,
-      expectedLeaseOwner: options.workerId,
+      expectedLeaseOwner: claimIdentity?.owner ?? options.workerId,
+      expectedClaimCount: claimIdentity?.count,
     });
     await appendFencedOutEventIfRejected(runId, updated, "failed");
+    return updated !== null;
   }
 
   /**
@@ -242,6 +270,7 @@ export function createGenerationRunDispatcher(options: {
   }
 
   async function scanAndDispatch(): Promise<{ claimed: number }> {
+    await options.reconcileLocalFacts?.();
     const runs = await options.repository.listRecoverableRuns(nowFn());
     let claimed = 0;
     for (const run of runs) {

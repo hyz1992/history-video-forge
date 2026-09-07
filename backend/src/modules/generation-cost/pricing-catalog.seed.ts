@@ -402,10 +402,10 @@ export function buildPricingCatalogSeed(input: {
     capability: "tts.synthesize", providerKey: "dashscope", modelId: "qwen-audio-3.0-tts-plus",
     displayName: "千问口播（龙翼暮凌，原生时间轴）", qualityTier: "qualified", speedTier: null,
     parameterCapabilitiesJson: { deployment_scope: "cn-beijing", execution_protocol: "dashscope_ws", narration_only: true },
-    pricingVersion: "dashscope-qwen-audio-plus-cn-beijing-2026-09-06",
-    pricingJson: { unit_type: "tts_character", currency: "CNY", unpriced: true,
-      effective_at: "2026-09-06T00:00:00+08:00",
-      source_note: "口播模型价格尚未核实，按未定价处理" },
+    pricingVersion: "dashscope-qwen-audio-plus-cn-beijing-2026-09-07",
+    pricingJson: { unit_type: "tts_character", currency: "CNY", price_micros_per_10k_characters: "1400000",
+      effective_at: "2026-09-07T00:00:00+08:00",
+      source_note: "北京公开价1.4元/万字符，2026-09-07核验：https://help.aliyun.com/zh/model-studio/qwen-audio-3-0-tts-plus；不代表账户折扣账单" },
     isDefault: false,
   }));
   entries.push(...buildLlmSeedEntries(input.llm));

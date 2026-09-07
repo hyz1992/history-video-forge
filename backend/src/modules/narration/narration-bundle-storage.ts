@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdir, readFile, rename, lstat } from 'node:fs/promises';
+import { mkdir, readFile, rename, lstat, readdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { z } from 'zod';
 import { NarrationRecord, NarrationSubtitleRevision, NarrationSubtitleTimelineV1, NarrationTimingMapV1,
@@ -22,6 +22,13 @@ const RevisionBundle=z.object({revision:NarrationSubtitleRevision,timeline:Narra
 type Bundle=z.infer<typeof Bundle>;
 type RevisionBundle=z.infer<typeof RevisionBundle>;
 type Recovery={status:'complete';bundle:Bundle}|{status:'missing'|'incomplete';reason:string};
+const FactIdentity=z.string().min(1).max(256).refine(s=>s.trim()===s);
+export const NarrationProviderFact=z.object({schemaVersion:z.literal('narration_provider_fact_v1'),projectId:id,generationRunId:id,configurationSnapshotId:id,
+  providerRequestKey:z.string().min(1).max(512).regex(/^[A-Za-z0-9_.:-]+$/),sourceTextSha256:z.string().regex(/^[a-f0-9]{64}$/),settingsSha256:z.string().regex(/^[a-f0-9]{64}$/),
+  providerTaskId:FactIdentity.nullable(),providerRequestId:FactIdentity.nullable(),characters:z.number().int().safe().nonnegative().nullable(),receiptKind:z.enum(['none','partial','final']),
+  remoteOutcome:z.enum(['not_started','unknown','failed','completed']),errorCode:z.string().regex(/^narration_[a-z_]+$/).max(100).nullable(),durationMs:z.number().int().safe().positive().nullable(),canceled:z.boolean(),observedAt:date
+}).strict().refine(f=>f.characters===null?f.receiptKind==='none':f.receiptKind!=='none'&&f.providerTaskId!==null);
+export type NarrationProviderFact=z.infer<typeof NarrationProviderFact>;
 const immutableKeys=['schemaVersion','id','projectId','scriptRecordId','generationRunId','createdAt','sourceTextSha256','settingsSha256','sourceProjectTtsSettingsSha256','textMappingVersion','configurationSnapshotId','settings','timingSource'] as const;
 const same=(a:unknown,b:unknown)=>canonicalStringify(a)===canonicalStringify(b);
 function sourceMatch(expected:NarrationRecord,actual:NarrationRecord){
@@ -109,6 +116,42 @@ export class NarrationBundleStorage {
       // 并发获胜者目录是非空完整bundle；重新完整读取后才能幂等返回。
       try{await lstat(final);return false;}catch{throw error;}
     }
+  }
+  private providerFact(record:NarrationRecord,value:unknown):NarrationProviderFact {
+    const parsed=NarrationProviderFact.safeParse(value);
+    if(!parsed.success)throw new Error('narration_fact_invalid');
+    const fact=parsed.data;
+    if(fact.projectId!==record.projectId||fact.generationRunId!==record.generationRunId||fact.configurationSnapshotId!==record.configurationSnapshotId||fact.sourceTextSha256!==record.sourceTextSha256||fact.settingsSha256!==record.settingsSha256||record.providerTaskId!==null&&fact.providerTaskId!==null&&record.providerTaskId!==fact.providerTaskId||record.providerRequestId!==null&&fact.providerRequestId!==null&&record.providerRequestId!==fact.providerRequestId)throw new Error('narration_fact_source_mismatch');
+    return fact;
+  }
+  async commitProviderFact(value:unknown){
+    const input=z.object({record:NarrationRecord,fact:z.unknown()}).strict().parse(value),record=this.record(input.record),fact=this.providerFact(record,input.fact);
+    const existing=await this.readProviderFacts({record});
+    this.assertFactIdentities([...existing.map(x=>x.fact),fact]);
+    const hash=sha(canonicalStringify(fact));
+    await this.publish(record,this.run(record)+'/provider-facts/'+hash,{},fact);
+    const found=(await this.readProviderFacts({record})).find(f=>f.sha256===hash);
+    if(!found)throw new Error('narration_fact_invalid');
+    return found;
+  }
+  async readProviderFacts(value:unknown):Promise<Array<{sha256:string;fact:NarrationProviderFact}>>{
+    const {record:input}=z.object({record:NarrationRecord}).strict().parse(value),record=this.record(input);
+    const directory=this.run(record)+'/provider-facts',root=await assertNarrationPathInside(this.options.storageRootDir,directory);
+    let names:string[];try{names=await readdir(root);}catch(error){if((error as NodeJS.ErrnoException).code==='ENOENT')return [];throw error;}
+    const facts:Array<{sha256:string;fact:NarrationProviderFact}>=[];
+    for(const name of names.sort()){
+      if(!/^[a-f0-9]{64}$/.test(name))throw new Error('narration_fact_invalid');
+      const path=await assertNarrationPathInside(this.options.storageRootDir,directory+'/'+name+'/manifest.json');
+      if((await lstat(path)).size>16384)throw new Error('narration_fact_invalid');
+      let fact:NarrationProviderFact;try{fact=this.providerFact(record,JSON.parse(await readFile(path,'utf8')));}catch{throw new Error('narration_fact_invalid');}
+      if(sha(canonicalStringify(fact))!==name)throw new Error('narration_fact_invalid');
+      facts.push({sha256:name,fact});
+    }
+    this.assertFactIdentities(facts.map(x=>x.fact));
+    return facts;
+  }
+  private assertFactIdentities(facts:NarrationProviderFact[]) {
+    for(const key of ['providerRequestKey','providerTaskId','providerRequestId'] as const)if(new Set(facts.map(f=>f[key]).filter(v=>v!==null)).size>1)throw new Error('narration_fact_source_mismatch');
   }
   private async validateOriginals(record:NarrationRecord,audio:Buffer,timingMap:NarrationTimingMapV1,events:z.infer<typeof Events>){
     const probe=probeWav(audio);

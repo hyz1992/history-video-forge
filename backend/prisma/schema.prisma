@@ -61,6 +61,7 @@ model Project {
   narrationTimingMode         String @default("legacy_estimated")
   activeNarrationRecord NarrationRecord? @relation("ActiveNarration", fields: [activeNarrationRecordId], references: [id], onDelete: Restrict)
   activeNarrationSubtitleRevision NarrationSubtitleRevision? @relation("ActiveNarrationSubtitle", fields: [activeNarrationSubtitleRevisionId], references: [id], onDelete: Restrict)
+  scriptConfirmations ScriptConfirmation[]
   narrationRecords NarrationRecord[]
   narrationSubtitleRevisions NarrationSubtitleRevision[]
   activeScriptRecordId         String?
@@ -296,6 +297,7 @@ model ScriptRecord {
   project                  Project                @relation("ProjectScriptRecords", fields: [projectId], references: [id], onDelete: Restrict)
   topicPackage             TopicPackage           @relation(fields: [topicPackageId], references: [id], onDelete: Restrict)
   activeForProjects        Project[]              @relation("ActiveScriptRecord")
+  confirmation            ScriptConfirmation?
   narrationRecords         NarrationRecord[]
   storyboardRecords        StoryboardRecord[]
   assetPlanRecords         AssetPlanRecord[]
@@ -850,4 +852,15 @@ model NarrationSubtitleRevision {
   activeForProjects Project[] @relation("ActiveNarrationSubtitle")
   @@unique([narrationRecordId, subtitleSettingsHash, builderVersion])
   @@index([projectId, createdAt])
+}
+
+model ScriptConfirmation {
+  scriptRecordId String @id
+  projectId String
+  sourceTextSha256 String
+  confirmedBy String
+  confirmedAt DateTime
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  script ScriptRecord @relation(fields: [scriptRecordId], references: [id], onDelete: Cascade)
+  @@index([projectId])
 }
