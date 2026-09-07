@@ -6,10 +6,10 @@
 |---|---|
 | TASK_BASE_SHA | d6542fa64ad1cf2d2a56822cfd684cf761f72ef3 |
 | 审查级别 | T2 |
-| 最近已终审候选 SHA | 8003a80e49f13e529924655a66d92299cba3a7b7 |
-| 阶段 | 四文件收口第一次累计复审已收敛，候选待R5终审 |
+| 最近已终审候选 SHA | 3bac4eaa4fe857ffd21d61615cf7136f5c85a6ea |
+| 阶段 | Task5限定范围通过R5两阶段终审；终审结果机械落盘 |
 | 整改复审轮数 | 3 / 3 |
-| 终审调用次数 | 2 |
+| 终审调用次数 | 3 |
 | 受限例外 | 前六次各1/1；本次四文件有界收口已授权，累计复审1/2 |
 
 ## 原始验收清单
@@ -669,3 +669,40 @@ root-ex7-regression.json固定26文件870 PASS（799+71），API82/恢复210/专
 两路均无新增Critical/Important，原EX6-I1以及本次各Map写入口不变量闭环；L1–L8在Task5限定范围均已修。Minor仅既有兼容错误码命名漂移，默认留档不改产品。双方只读，首尾30/30 SHA256、HEAD与完整status匹配；主代理root-ex7-review-end-check.json独立核对一致。实际870回归、完整typecheck0和25条命令均已核读。
 
 本次四文件收口使用1/2轮即收敛，未消耗第二轮。现在以约定四文件中文提交形成第三候选，随后按R5两阶段终审；候选SHA与终审实际次数将在终审结果机械落盘时写明，当前已完成终审调用仍为2。R5第一阶段只提供原要求、正式设计/计划、BASE/候选HEAD与产品代码累计diff，不提供本记录的整改叙事或测试结论；形成独立finding后再给现有原始验证证据。
+
+
+## 第三候选 R5 两阶段终审通过（2026-09-08）
+
+被终审候选 SHA：3bac4eaa4fe857ffd21d61615cf7136f5c85a6ea。固定 TASK_BASE_SHA：d6542fa64ad1cf2d2a56822cfd684cf761f72ef3。本节仅机械记录终审结果；终审后不修改产品、测试、设计、计划或协议。此前章节是历史过程，不覆盖本节及顶部当前状态。
+
+| 审查环节 | Critical | Important | Minor | 结果 |
+|---|---:|---:|---:|---|
+| EX7 第一次累计 diff_reviewer | 0 | 0 | 1 | 收敛；仅既有命名差异留档 |
+| EX7 第一次累计 contract_reviewer | 0 | 0 | 1 | 收敛；仅既有命名差异留档 |
+| 第三候选 final_reviewer（R5 两阶段） | 0 | 0 | 0 | Task5限定范围通过 |
+
+终审阶段一仅提供原始要求、正式设计/实施计划、固定BASE/候选SHA及累计代码；叙事记录仅核hash，不读正文/diff。独立形成代码结论后，同一reviewer在阶段二核对完整运行证据。两个阶段合计一次终审，任务累计终审调用3次，未重置常规3/3或前六次例外各1/1。本次四文件授权累计复审使用1/2，第二轮未使用。原专项审查的兼容错误码命名差异继续留档，不修改已终审候选；final_reviewer独立判定本次无finding，分别保留实际计数。
+
+### 原始验收项的最终核对
+
+| 编号 | 状态 | 终审及主代理核验依据 |
+|---|---|---|
+| L1 | 已修 | API确认/来源竞争、Map最后写入窗口；旧3份文案迁移后自动确认0，来源或权限冲突零错误凭据/运行写入。 |
+| L2 | 已修 | API/lifecycle及旧generation-run幂等回归；有限override冻结、新指纹和旧operation行为。 |
+| L3 | 已修 | 纯readiness、compatibility/model-policy及API负例；资格仍为neutral/rate=1，非法组合零外呼。 |
+| L4 | 已修 | 持久化202、intent/recovery及三实例恢复；缺快照拒绝，未知不重发，恢复provider调用0。 |
+| L5 | 已修 | 完整bundle才ready；取消先落库、原子CAS、同/异owner重claim与后继执行；真实SQLite冲突及永久错误对照。 |
+| L6 | 已修 | confirm及Map来源矩阵、Prisma竞争200/409；同active幂等、区间重新接受保留视觉。 |
+| L7 | 已修 | intent先于外呼、不可变fact、连续event/ledger暂错冷恢复和终态仅补账；唯一累计max、未知actual=null。 |
+| L8 | 已修 | 独立价格及旧默认回归；26文件870项、完整后端typecheck、25条独立命令。 |
+
+上述L1–L8对应终审从原始要求独立提取的11项，均只在Task5范围标为已修。R3状态序列包含upgraded（新增确认迁移）、recovered（失败前缀跨实例恢复）、partially_failed（真实后段CHECK回滚）、switched（北京/新加坡/北京），另有duplicated/reordered对照。首次字幕创建的实际P2003单独证明永久外键错误不会被误延期，不冒充后段写入回滚；真实SQLITE_BUSY_SNAPSHOT与类型/errno注入P1001/P2034/ENOSPC也分别核验。
+
+### 最终证据与范围边界
+
+- root-ex7-regression.json：固定26文件实际870 PASS，完整命令exit0；API82、恢复210和本次新增71均已包含，不重复累加。root-ex7-typecheck.json：完整npm run typecheck:backend含Prisma generate，exit_code0。
+- root-ex7-probes-index.json的22条命令，以及root-ex7-script-confirm-window-command.json、root-ex7-map-submit-window-command.json、root-ex7-recovery-prefix-command.json共25条，实际均exit0。三档资格原件的完整WAV/时间图/hash离线回放保持，外部调用0。
+- root-final3-stage2-check.json和root-final3-result.json：主代理重核候选HEAD、完整status及30/30 SHA256一致；终审reviewer独立首尾核对亦一致，未改文件。终审记录落盘前另核候选引用、final计数与原始测试数字，产品29路径hash继续匹配。
+- 本结论不是Task6统一失效、Task11界面或Task12整链路验收；未新增付费调用，未证明断电持久化，不扩大模型/音色/语气/语速资格。公开价格估算不等于账户实际账单。用户终审闸门保留，本次仅完成已授权的Task5修复、验证及审查。
+
+实际改动为已提交的四文件Map权限/来源统一收口；本次收尾提交仅包含本记录。自审结论：Task5限定范围达到T2/R5通过条件，未进入Task6。下一步建议为按正式计划继续Task6统一失效规则；后续阶段需各自实施与验证，不能沿用本结论宣称完成。
