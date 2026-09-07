@@ -1,4 +1,4 @@
-import { hashProjectNarrationTtsSettings } from "../../../../shared/src/index.js";
+import { canonicalStringify, DEFAULT_NARRATION_CREATIVE_SETTINGS, GenerationConfigurationV1, hashProjectNarrationTtsSettings } from "../../../../shared/src/index.js";
 import { readNarrationSource } from "../narration/narration.repository.js";
 import { hasPassingNarrationScriptValidation, narrationTextHash } from "../narration/narration-readiness.js";
 import type {
@@ -159,7 +159,11 @@ function createMapRepository(db: DbClient): GenerationRunRepository {
         if (existing) {
           return { ok: false, error: { code: "generation_run_conflict", existing } };
         }
-        if (input.run.operation === "script.narration.generate") await validateNarrationSubmission(db, input);
+        if (input.run.operation === "script.narration.generate") {
+          const recheckCurrentSource = await validateNarrationSubmission(db, input);
+          // 复查放在最后一个 await 的调用方：复查到两次 Map 写入之间不再让出执行权。
+          recheckCurrentSource?.();
+        }
         // 校验全部通过后才变更（失败回滚模拟：任何前置校验失败都不会留下半成品）
         db.runConfigurationSnapshots.set(input.snapshot.id, input.snapshot);
         db.generationRuns.set(input.run.id, input.run);
@@ -624,6 +628,41 @@ async function validateNarrationSubmission(db: DbClient, input: CreateRunTransac
     if (typeof payload.owner_id !== "string" || input.snapshot.userId !== payload.owner_id)
         throw new Error("narration_submission_source_conflict");
     const source = await readNarrationSource(db, input.run.projectId, payload.owner_id, client);
+    const mapTtsInput = !client && source.configuration ? narrationSubmissionTtsInput(source.configuration.configurationJson) : null;
     if (source.project.narrationTimingMode !== "narration_first_v1" || !source.script || source.script.id !== payload.source_script_record_id || source.script.projectId !== input.run.projectId || !hasPassingNarrationScriptValidation(source.script.validationResultJson) || source.confirmation?.sourceTextSha256 !== payload.source_text_sha256 || narrationTextHash(source.script.scriptText) !== payload.source_text_sha256 || source.configuration?.revision !== input.snapshot.projectConfigurationRevision || await hashProjectNarrationTtsSettings(source.configuration.configurationJson) !== payload.source_project_tts_settings_sha256)
+        throw new Error("narration_submission_source_conflict");
+    if (!client) return () => validateCurrentMapNarrationSubmission(db, input, mapTtsInput);
+}
+
+
+// 与 shared 的项目语音 hash 投影一致；只同步比较其规范化输入，不另造 hash。
+function narrationSubmissionTtsInput(value: unknown): string {
+    const parsed = GenerationConfigurationV1.safeParse(value);
+    if (!parsed.success) throw new Error("narration_submission_source_conflict");
+    const configuration = parsed.data;
+    return canonicalStringify({
+        modelSelection: configuration.capabilities["tts.synthesize"],
+        voiceProfileId: configuration.creative.voice_profile_id,
+        narration: configuration.creative.narration ?? DEFAULT_NARRATION_CREATIVE_SETTINGS,
+    });
+}
+
+function validateCurrentMapNarrationSubmission(db: DbClient, input: CreateRunTransactionInput, validatedTtsInput: string | null): void {
+    const payload = input.run.dispatchPayloadJson as Record<string, unknown>;
+    const project = db.projects.get(input.run.projectId);
+    if (!project || project.id !== input.run.projectId || project.ownerId !== payload.owner_id ||
+        ("archivedAt" in project && project.archivedAt != null)) throw new Error("project_scope_denied");
+    // 重新取当前对象，不能沿用异步读取前的 Map 引用；只核验提交合同字段。
+    const script = project.activeScriptRecordId ? db.scriptRecords.get(project.activeScriptRecordId) : null;
+    const confirmation = script ? db.scriptConfirmations.get(script.id) : null;
+    const configuration = [...db.projectGenerationConfigurations.values()].find(c => c.projectId === project.id);
+    if (project.narrationTimingMode !== "narration_first_v1" ||
+        !script || script.id !== payload.source_script_record_id || script.projectId !== project.id ||
+        !hasPassingNarrationScriptValidation(script.validationResultJson) ||
+        !confirmation || confirmation.projectId !== project.id || confirmation.scriptRecordId !== script.id ||
+        confirmation.sourceTextSha256 !== payload.source_text_sha256 ||
+        narrationTextHash(script.scriptText) !== payload.source_text_sha256 ||
+        !configuration || configuration.revision !== input.snapshot.projectConfigurationRevision ||
+        narrationSubmissionTtsInput(configuration.configurationJson) !== validatedTtsInput)
         throw new Error("narration_submission_source_conflict");
 }

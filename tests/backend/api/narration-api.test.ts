@@ -259,3 +259,107 @@ describe("提交事务来源变化与无凭据恢复", () => {
         expect([...f.app.db.usageCostRecords.values()][0].actualCostMicros).toBeNull();
     });
 });
+
+
+type SubmitFixture = Awaited<ReturnType<typeof fixture>>;
+type SubmitMutation = { name: string; status: number; change: (f: SubmitFixture) => void };
+const submitMutations: SubmitMutation[] = [
+    { name: "owner原地变化", status: 404, change: f => { f.project.ownerId = "other"; } },
+    { name: "owner对象替换", status: 404, change: f => { f.app.db.projects.set(f.project.id, { ...f.project, ownerId: "other" }); } },
+    { name: "归档", status: 404, change: f => { Object.assign(f.project, { archivedAt: new Date() }); } },
+    { name: "项目删除", status: 404, change: f => { f.app.db.projects.delete(f.project.id); } },
+    { name: "模式变化", status: 409, change: f => { f.project.narrationTimingMode = "legacy_estimated"; } },
+    { name: "正文原地变化", status: 409, change: f => { f.app.db.scriptRecords.get("s")!.scriptText = "新正文"; } },
+    { name: "正文对象替换", status: 409, change: f => { f.app.db.scriptRecords.set("s", { ...f.app.db.scriptRecords.get("s")!, scriptText: "新正文" }); } },
+    { name: "active脚本变化", status: 409, change: f => { f.project.activeScriptRecordId = null; } },
+    { name: "脚本归属变化", status: 409, change: f => { f.app.db.scriptRecords.get("s")!.projectId = "other"; } },
+    { name: "确认删除", status: 409, change: f => { f.app.db.scriptConfirmations.delete("s"); } },
+    { name: "确认hash变化", status: 409, change: f => { f.app.db.scriptConfirmations.get("s")!.sourceTextSha256 = "a".repeat(64); } },
+    { name: "确认归属变化", status: 409, change: f => { f.app.db.scriptConfirmations.get("s")!.projectId = "other"; } },
+    { name: "本地校验失败", status: 409, change: f => { f.app.db.scriptRecords.get("s")!.validationResultJson = { stage: "script_local_validation", decision: "hard_fail", errors: [], warnings: [], metrics: {} }; } },
+    { name: "伪pass仍有errors", status: 409, change: f => { f.app.db.scriptRecords.get("s")!.validationResultJson = { stage: "script_local_validation", decision: "pass", errors: ["invalid"], warnings: [], metrics: {} }; } },
+    { name: "revision原地变化", status: 409, change: f => { f.app.db.projectGenerationConfigurations.get(f.project.id)!.revision++; } },
+    { name: "配置对象替换", status: 409, change: f => { const old = f.app.db.projectGenerationConfigurations.get(f.project.id)!; f.app.db.projectGenerationConfigurations.set(f.project.id, { ...old, revision: 2 }); } },
+    { name: "配置删除", status: 409, change: f => { f.app.db.projectGenerationConfigurations.clear(); } },
+    { name: "TTS模型变化", status: 409, change: f => { f.app.db.projectGenerationConfigurations.get(f.project.id)!.configurationJson.capabilities["tts.synthesize"] = { mode: "auto" }; } },
+    { name: "TTS音色变化", status: 409, change: f => { f.app.db.projectGenerationConfigurations.get(f.project.id)!.configurationJson.creative.voice_profile_id = "other"; } },
+];
+// 只在真实 createRunTransaction 中打开窗口；读取和 digest 均先执行原方法。
+async function atSubmitWindow(f: SubmitFixture, window: "source_read" | "digest", change: () => void, action: () => Promise<unknown>) {
+    let inside = false, hits = 0, completedReads = 0, completedDigests = 0;
+    const originalCreate = f.app.generationRunRepository.createRunTransaction;
+    const originalGet = f.app.db.scriptConfirmations.get.bind(f.app.db.scriptConfirmations);
+    const originalDigest = globalThis.crypto.subtle.digest.bind(globalThis.crypto.subtle);
+    const fire = () => { if (hits++ !== 0) throw Error("duplicate_window"); change(); };
+    f.app.generationRunRepository.createRunTransaction = async input => { inside = true; try { return await originalCreate(input); } finally { inside = false; } };
+    const getSpy = vi.spyOn(f.app.db.scriptConfirmations, "get").mockImplementation(key => {
+        const value = originalGet(key);
+        if (inside && hits === 0 && window === "source_read") { completedReads++; queueMicrotask(fire); }
+        return value;
+    });
+    const digestSpy = vi.spyOn(globalThis.crypto.subtle, "digest").mockImplementation(async (algorithm, data) => {
+        const result = await originalDigest(algorithm, data);
+        const decoded = JSON.parse(new TextDecoder().decode(data));
+        if (inside && hits === 0 && window === "digest" && decoded.modelSelection) { completedDigests++; fire(); }
+        return result;
+    });
+    try { await action(); } finally { getSpy.mockRestore(); digestSpy.mockRestore(); f.app.generationRunRepository.createRunTransaction = originalCreate; }
+    expect(hits).toBe(1);
+    expect(window === "source_read" ? completedReads : completedDigests).toBe(1);
+}
+describe("EX6 Map提交最终来源窗口", () => {
+    for (const window of ["source_read", "digest"] as const) {
+        it.each(submitMutations)(window + "：$name必须拒绝且零新增", async mutation => {
+            const provider = { generate: vi.fn(async () => { throw Error("must_not_call"); }) };
+            const f = await fixture(provider);
+            await confirmScript(f);
+            // 保留真实 API/prepare/repository，仅阻止不合格的旧实现把反例变成后台外呼。
+            const dispatch = vi.spyOn(f.app.generationRunDispatcher, "dispatch").mockResolvedValue({ dispatched: false, reason: "not_claimable" });
+            let response!: Awaited<ReturnType<typeof f.app.inject>>;
+            await atSubmitWindow(f, window, () => mutation.change(f), async () => { response = await f.app.inject(generateRequest(f)); });
+            await new Promise(r => setImmediate(r));
+            expect.soft(response.statusCode, JSON.stringify(response.json())).toBe(mutation.status);
+            expect.soft(f.app.db.generationRuns.size).toBe(0);
+            expect.soft(f.app.db.runConfigurationSnapshots.size).toBe(0);
+            expect.soft(f.app.db.narrationRecords.size).toBe(0);
+            expect.soft([...f.app.db.generationRunEvents.values()].flat().filter(e => e.eventType === "narration_provider_intent")).toHaveLength(0);
+            expect(provider.generate).not.toHaveBeenCalled();
+            dispatch.mockRestore();
+        });
+        it.each(["名称变化", "无变化", "显式neutral覆盖", "配置等值替换", "省略默认narration"])(window + "：%s仍正常生成", async mode => {
+            const provider = syntheticProvider(), generate = vi.spyOn(provider, "generate");
+            const f = await fixture(provider);
+            await confirmScript(f);
+            let response!: Awaited<ReturnType<typeof f.app.inject>>;
+            const request = generateRequest(f);
+            if (mode === "显式neutral覆盖") Object.assign(request.payload, { settings_override: { tone: "neutral", rate: 1 } });
+            await atSubmitWindow(f, window, () => {
+                if (mode === "名称变化") f.project.name = "合法新名称";
+                if (mode === "配置等值替换") f.app.db.projectGenerationConfigurations.set(f.project.id, structuredClone(f.app.db.projectGenerationConfigurations.get(f.project.id)!));
+                if (mode === "省略默认narration") delete f.app.db.projectGenerationConfigurations.get(f.project.id)!.configurationJson.creative.narration;
+            }, async () => { response = await f.app.inject(request); });
+            expect(response.statusCode, JSON.stringify(response.json())).toBe(202);
+            expect((await untilDone(f, response.json().generation_run_id)).status).toBe("succeeded");
+            expect(f.app.db.generationRuns.size).toBe(1);
+            expect(f.app.db.runConfigurationSnapshots.size).toBe(1);
+            expect(f.app.db.narrationRecords.size).toBe(1);
+            expect(generate).toHaveBeenCalledTimes(1);
+            expect(generate.mock.calls[0][0].settings).toMatchObject({ tone: "neutral", rate: 1 });
+        });
+    }
+    it("同key并发沿用阶段锁，随后重放复用同一run和snapshot", async () => {
+        const f = await fixture(syntheticProvider());
+        await confirmScript(f);
+        const results = await Promise.all([f.app.inject(generateRequest(f)), f.app.inject(generateRequest(f))]);
+        expect(results.map(r => r.statusCode).sort()).toEqual([202, 409]);
+        expect(results.find(r => r.statusCode === 409)!.json().error).toBe("project_stage_run_in_progress");
+        const id = results.find(r => r.statusCode === 202)!.json().generation_run_id;
+        expect((await untilDone(f, id)).status).toBe("succeeded");
+        const replay = await f.app.inject(generateRequest(f));
+        expect(replay.statusCode).toBe(202);
+        expect(replay.json().generation_run_id).toBe(id);
+        expect(f.app.db.generationRuns.size).toBe(1);
+        expect(f.app.db.runConfigurationSnapshots.size).toBe(1);
+        expect(f.app.db.narrationRecords.size).toBe(1);
+    });
+});
