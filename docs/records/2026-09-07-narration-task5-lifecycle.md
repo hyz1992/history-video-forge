@@ -6,11 +6,11 @@
 |---|---|
 | TASK_BASE_SHA | d6542fa64ad1cf2d2a56822cfd684cf761f72ef3 |
 | 审查级别 | T2 |
-| 被终审候选 SHA | 96c8638875ac2b9222dbbf2bc36f94d34dc01233 |
-| 阶段 | R5 终审失败；来源派发竞态未修，停止追加整改 |
+| 上次终审候选 SHA | 96c8638875ac2b9222dbbf2bc36f94d34dc01233 |
+| 阶段 | 第 2 次受限例外累计双路复审已收敛，新候选待终审 |
 | 整改复审轮数 | 3 / 3 |
 | 终审调用次数 | 1 |
-| 受限例外 | 第 1 次已授权；本次追加复审 1 / 1 |
+| 受限例外 | 第 2 次已授权；本次追加复审 1 / 1；第 1 次已用完 |
 
 ## 原始验收清单
 
@@ -18,14 +18,14 @@
 
 | 编号 | 原始要求 | 状态 | 证据 |
 |---|---|---|---|
-| L1 | 文案已确认、来源 hash/revision 与完整 owner 权限前置校验 | 部分修 | 提交前 API/事务校验通过；root-final-dispatch-source-window-command.json 实测派发读取后、intent 事务前变更正文/active script/硬校验仍调用供应商，exit 1 |
-| L2 | 有限 overrides 进入冻结快照；正文/设置指纹幂等，旧 operation 不变 | 已修 | root-ex1-final-regression.json：幂等/冻结 override 及旧 operation 回归；root-api-ex1-final-command.json 同 key 只生成一次 |
+| L1 | 文案已确认、来源 hash/revision 与完整 owner 权限前置校验 | 已修 | root-original-dispatch-source-window-ex2-final-command.json 与 root-dispatch-source-window-ex2-final-command.json：原反例与 12 组矩阵通过，来源冲突零 intent/零外呼 |
+| L2 | 有限 overrides 进入冻结快照；正文/设置指纹幂等，旧 operation 不变 | 已修 | root-ex2-final-regression.json：幂等/冻结 override 及旧 operation 回归；root-api-ex2-final-command.json 同 key 只生成一次 |
 | L3 | 纯 readiness；真实模型/音色/协议与资格一致，非法组合零外呼 | 已修 | narration-lifecycle 10 项、narration-api 19 项；非法 rate/revision 零外呼，纯 readiness 读取正式本地报告 |
-| L4 | 持久化后 202、既有 dispatcher/lease；缺快照拒绝，未知结果不自动重发 | 已修 | root-recovery-ex1-final-command.json、root-intent-ex1-final-command.json、root-failure-boundary-ex1-final-command.json、root-storage-outcome-combinations-ex1-final-command.json、root-same-owner-claim-fencing-ex1-final-command.json、root-same-owner-successor-completion-ex1-final-command.json：正常与暂时 DB 故障恢复均不重发 |
-| L5 | 完整 bundle 后才 ready，取消持久化优先，迟到结果受状态和 lease fencing | 已修 | root-failure-ex1-final-command.json、root-failure-boundary-ex1-final-command.json、root-same-owner-claim-fencing-ex1-final-command.json、root-same-owner-successor-completion-ex1-final-command.json：真实 abort 保全用量，延期后取消仍 cancelled，lease 反向组合见正式测试 |
-| L6 | confirm 复查来源与接受区间；同 active 幂等、区间更新保留视觉、不同候选 CAS | 已修 | root-confirm-ex1-final-command.json：重复确认无副作用、区间重接受保留视觉、并发 CAS 200/409 |
-| L7 | 外呼 intent 先落事件；无资产任务媒体账本、文案归属、累计最大值、未知不记零 | 已修 | root-usage-ex1-final-command.json、root-failure-boundary-ex1-final-command.json、root-usage-write-failure-ex1-final-command.json：累计最大值、partial/final/none、已知失败与未知结果均实测 |
-| L8 | 独立新模型价格，不改变旧全局默认；回归和完整后端类型检查 | 已修 | pricing-catalog.seed.ts 独立北京单价；root-ex1-final-regression.json 26 文件 624 项，root-ex1-full-typecheck.json exit 0 |
+| L4 | 持久化后 202、既有 dispatcher/lease；缺快照拒绝，未知结果不自动重发 | 已修 | root-recovery-ex2-final-command.json、root-intent-ex2-final-command.json、root-failure-boundary-ex2-final-command.json、root-storage-outcome-combinations-ex2-final-command.json、root-same-owner-claim-fencing-ex2-final-command.json、root-same-owner-successor-completion-ex2-final-command.json：正常与暂时 DB 故障恢复均不重发 |
+| L5 | 完整 bundle 后才 ready，取消持久化优先，迟到结果受状态和 lease fencing | 已修 | root-failure-ex2-final-command.json、root-failure-boundary-ex2-final-command.json、root-same-owner-claim-fencing-ex2-final-command.json、root-same-owner-successor-completion-ex2-final-command.json：真实 abort 保全用量，延期后取消仍 cancelled，lease 反向组合见正式测试 |
+| L6 | confirm 复查来源与接受区间；同 active 幂等、区间更新保留视觉、不同候选 CAS | 已修 | root-confirm-ex2-final-command.json：重复确认无副作用、区间重接受保留视觉、并发 CAS 200/409 |
+| L7 | 外呼 intent 先落事件；无资产任务媒体账本、文案归属、累计最大值、未知不记零 | 已修 | root-usage-ex2-final-command.json、root-failure-boundary-ex2-final-command.json、root-usage-write-failure-ex2-final-command.json：累计最大值、partial/final/none、已知失败与未知结果均实测 |
+| L8 | 独立新模型价格，不改变旧全局默认；回归和完整后端类型检查 | 已修 | pricing-catalog.seed.ts 独立北京单价；root-ex2-final-regression.json 26 文件 648 项，root-ex2-full-typecheck.json exit 0 |
 
 ## 范围与基线
 
@@ -223,3 +223,38 @@ Important：narration-dispatch-handler.ts:118 取得来源后，经过异步事�
 常规整改复审仍为 3 / 3；第 1 次明确受限例外的追加复审为 1 / 1，已用完；没有第二次例外授权。依本记录授权停止条件及 harness/docs/independent-review-protocol.md“用户明确授权的例外除外”“例外须逐次单独授权”，停止自主整改，不进入任务 6。
 
 下一步具体建议：如用户另行批准第 2 次受限例外，仅在现有 narration repository/handler 与既有故障恢复测试内修正该来源不变量：把冻结 script ID、正文 hash、确认、硬校验及项目 TTS 设置投影与实际来源的比对放到写入 intent 的同一事务，冲突不得创建 intent 或调用 provider；保留无关项目/视觉设置变化和合法 frozen override 的行为。新增正式双 client 竞争矩阵并复验当前反例、原 26 文件集合和恢复/费用/lease 证据，重新累计双路审查收敛后才形成新候选终审。该建议尚未实施，不重置既有轮数，不授权后续无限修复。
+
+
+## 第 2 次受限例外授权与实施计划
+
+用户在看到上一节具体来源竞态、失败证据和修复建议后明确回复“批准，请继续”，批准第二次受限整改、累计专项复审及新候选终审。常规 3 / 3、第 1 次例外 1 / 1 和已执行 final 1 次均不重置；本次最多追加一次累计复审，若仍有未闭合 Critical/Important（含后续终审），停止并报告，不自行启动第三次例外。此前停止描述为授权前历史。
+
+当前 HEAD 为 22e9a3f25c56d95792abdf78e5bccc6fd222a785，TASK_BASE_SHA 仍为 d6542fa64ad1cf2d2a56822cfd684cf761f72ef3，上一失败候选为 96c8638875ac2b9222dbbf2bc36f94d34dc01233。本次产品范围限定既有 narration.repository.ts、narration-dispatch-handler.ts、narration-failure-recovery.test.ts，记录由 root 维护；累计范围仍为 30 路径。
+
+不变量：首次外呼的 intent 登记必须以同一事务读取的当前 source 与冻结身份核验一致为前提，包括 active script ID、正文 hash、显式用户确认、硬校验通过状态、实际生效的项目 TTS 设置投影；不一致时不得创建 intent 或调用 provider。无关配置 revision、项目名称、视觉或字幕样式变化不应误拒绝，合法 frozen override 不应与项目投影混淆。已有 intent 的未知结果不得自动重发，完整 bundle/本地事实恢复保持既有业务和费用语义。
+
+实施顺序：先在正式故障恢复测试补双 client 和 Map 来源变更矩阵，保留明确行为 RED；对比已有 confirm 事务的来源规则，最小修改 intent 事务及调用参数，不另造阶段/队列/API。随后同命令 GREEN，root 复跑原失败探针并补 TTS 投影与无关配置对照，再跑原 26 文件集合、完整后端类型检查、既有恢复/费用/lease 探针及三档原件回放。全部通过并冻结后，只进行一次本例外的累计双路复审；收敛后提交新候选并执行全新上下文 R5 两阶段终审。
+
+
+第二次例外 root 独立 RED：root-ex2-dispatch-source-window-red-command.json / -red-report.json 实际 exit 1。新增 12 组真实 SQLite 双 client 窗口：正文、active script、确认缺失、确认 hash、硬校验、TTS voice、TTS model 共 7 组应拒绝但 provider=1/intent=1/ready；改名、仅 revision、字幕、视觉、缺省 narration 等价共 5 组对照通过。所有提交含合格 neutral/rate=1 override；配置 fixture 写入前通过正式 GenerationConfigurationV1 并断言 TTS 投影是否变化；TTS 更改是 schema 有效的 DB fixture，不冒充新增合格组合或 UI 保存。provider 使用正式生产 WS/client 的短稿原件离线回放，原件 hash 和输出 WAV 均验证，外呼 0。该 RED 在产品修复前运行，不覆盖上一失败报告。
+
+
+## 第 2 次受限例外冻结与独立复验
+
+implementation-ex2-freeze.json 冻结本次允许的 3 路径，实际只修改 narration.repository.ts 与 narration-failure-recovery.test.ts，handler 无须改动；累计任务范围仍 30 路径。来源核验直接从 intent 事务内读取 run/record/snapshot/current source，拒绝相互不一致的冻结来源和调用参数；Map 在异步校验后同步封存比对并写 intent，续租时间不属于来源身份，最终核对当前 owner/count/有效 lease。已有 intent 仍不重发，正式 handler 分类保持。
+
+- implementation-ex2-red-corrected.json：14 FAIL / 2 PASS / 41 skipped，14 个失败均是 provider 实际调用 1 次而预期 0，原方法/事务读取被明确观测。初版 implementation-ex2-red.json 的两个 rate1.1 对照为无效夹具，产品改动前已修正，排除其失败证据；未扩大资格。
+- implementation-ex2-map-renew-red.json 虽文件名含 red，实际是 3 PASS/exit 0 的边界检查，不记为有效 RED。最终单文件 65 PASS 为下述集合子集，不叠加计数。
+- root-ex2-final-regression.json：root 实际完整串行 26 文件、648 项通过；root-ex2-full-typecheck.json：完整 npm run typecheck:backend 原始输出 exit 0，包括 Prisma generate。实施者最终同集合648通过是交叉核对，不重复加总。
+- root-{api,failure,confirm,recovery,intent,usage,submit-race,upgrade,failure-boundary,usage-write-failure,padded-request-id,storage-outcome-combinations,same-owner-claim-fencing,same-owner-successor-completion,claim-atomic-cas,original-dispatch-source-window,dispatch-source-window}-ex2-final-command.json：17 个独立脚本全部 exit 0；padded-request-id 为纯 WS，其余为隔离 SQLite/API。原失败探针使用独立脚本副本和新报告名，不覆盖首个候选失败报告。
+- 12 组来源矩阵：7 组来源冲突均 provider=0/intent=0、candidate/run failed；改名、revision、字幕、视觉、缺省参数等价的 5 组均正常 ready/succeeded。每组都检查原事务窗口命中与冻结 snapshot 不变；provider 为正式短稿原件回放，零外部调用。
+- root-three-sample-provider-replay-ex2-command.json：三档 WAV、完整 timing map 与任务 3 接受输出完全一致，原件 hash 保持，networkCalls=0。
+
+L1–L8 当前“已修”仅表示本次冻结实现与实测覆盖，仍待本例外唯一一次追加累计双路复审及新候选 R5 终审。常规 3 / 3、第 1 次例外 1 / 1、已执行 final 1 次不重置；本次追加复审 1 / 1。未新增付费调用，未操作默认数据库，未进入任务 6，未声称真实 UI 或整体端到端验收通过。
+
+
+## 第 2 次受限例外累计复审收敛
+
+本次 diff 与 contract 均为 Critical 0 / Important 0 / Minor 0，完整累计 30 路径审查均无新 finding，原终审来源竞态与历史各项不变量保持已修。根代理在 root-ex2-review-end-check.json 核对审前后全部路径 hash、HEAD、status 一致。命令证据精确区分：root-ex2-final-regression.json 保留 files/exit/stdout/stderr 原始结果，实际 executable/argv/cwd 在 root-ex2-verification-command-index.json 按本轮根代理工具调用参数整理；命令索引不是原始结果字段，不改写既有输出。
+
+本次追加复审 1 / 1 已收敛；常规整改 3 / 3、第 1 次例外 1 / 1、已执行 final 1 次不变。提交当前新候选后，执行新的全新上下文 R5 两阶段终审：阶段一仅原始需求/正式设计与计划/base/head/代码累计 diff，形成独立 finding 后阶段二同一代理核对验证证据。新候选写入时尚未执行第二次 final，不在此宣称终审通过或任务 6 完成。

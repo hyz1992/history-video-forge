@@ -1,5 +1,5 @@
 import { hasPassingNarrationScriptValidation } from "./narration-readiness.js";
-import { ResolvedGenerationConfigurationV1Schema } from "../../../../shared/src/index.js";
+import { DEFAULT_NARRATION_CREATIVE_SETTINGS, ResolvedGenerationConfigurationV1Schema } from "../../../../shared/src/index.js";
 import { settingsFromResolvedNarration } from "./narration-readiness.js";
 import { createHash } from "node:crypto";
 import { canonicalStringify, hashProjectNarrationTtsSettings, hashNarrationSettings, ConfirmNarrationRequest, NarrationDurationBand, GenerationConfigurationV1 } from "../../../../shared/src/index.js";
@@ -179,17 +179,135 @@ export class NarrationRepository {
       return this.client ? (await this.client.generationRunEvent.count({ where: { generationRunId: runId, eventType: "narration_provider_intent" } })) > 0 : (this.db.generationRunEvents.get(runId) ?? []).some(e => e.eventType === "narration_provider_intent");
   }
   async claimProviderIntent(ownerId: string, projectId: string, runId: string, lease: NarrationLease, requestKey: string, requestHash: string) {
+      // Map没有数据库事务：捕获相关来源，所有异步校验后同步复查并写入intent。
+      // 只比较语音投影，项目名、总revision、字幕和视觉配置不参与门禁。
+      const mapSeal = () => {
+          const project = this.db.projects.get(projectId), script = project?.activeScriptRecordId ? this.db.scriptRecords.get(project.activeScriptRecordId) : null;
+          const row = [...this.db.projectGenerationConfigurations.values()].find(c => c.projectId === projectId);
+          const configuration = row?.configurationJson as Partial<GenerationConfigurationV1> | undefined;
+          const run = this.db.generationRuns.get(runId);
+          return canonicalStringify({
+            project: {
+              id: project?.id,
+              ownerId: project?.ownerId,
+              archivedAt: project && "archivedAt" in project ? project.archivedAt : null,
+              mode: project?.narrationTimingMode,
+              activeScriptRecordId: project?.activeScriptRecordId,
+            },
+            script: script ? {
+              id: script.id,
+              projectId: script.projectId,
+              text: script.scriptText,
+              validation: script.validationResultJson,
+            } : null,
+            confirmation: script ? this.db.scriptConfirmations.get(script.id) : null,
+            tts: {
+              selection: configuration?.capabilities?.["tts.synthesize"],
+              voice: configuration?.creative?.voice_profile_id,
+              narration: configuration?.creative?.narration ?? DEFAULT_NARRATION_CREATIVE_SETTINGS,
+            },
+            run: run ? {
+              id: run.id,
+              projectId: run.projectId,
+              operation: run.operation,
+              snapshotId: run.runConfigurationSnapshotId,
+              payload: run.dispatchPayloadJson,
+              status: run.status,
+              owner: run.dispatchLeaseOwner,
+              claimCount: run.dispatchClaimCount,
+            } : null,
+            record: [...this.db.narrationRecords.values()].find(r => r.generationRunId === runId),
+            snapshot: run ? this.db.runConfigurationSnapshots.get(run.runConfigurationSnapshotId) : null,
+          });
+      };
       const action = async (client?: NarrationReadClient) => {
-          await readNarrationSource(this.db, projectId, ownerId, client);
-          await assertLease(this.db, runId, lease, client);
-          const events = client ? await client.generationRunEvent.findMany({ where: { generationRunId: runId, eventType: "narration_provider_intent" } }) : (this.db.generationRunEvents.get(runId) ?? []).filter(e => e.eventType === "narration_provider_intent");
+          const seal = client ? null : mapSeal();
+          const source = await readNarrationSource(this.db, projectId, ownerId, client);
+          const run = await assertLease(this.db, runId, lease, client);
+          if (run.projectId !== projectId || run.operation !== "script.narration.generate")
+              throw new Error("narration_source_conflict");
+          const events = client ? await client.generationRunEvent.findMany({
+              where: {
+                  generationRunId: runId, eventType: "narration_provider_intent"
+              }
+          }) : (this.db.generationRunEvents.get(runId) ?? []).filter(e => e.eventType === "narration_provider_intent");
           if (events.length)
               return false;
-          const event = { id: this.db.generateId(), generationRunId: runId, segmentId: null, eventType: "narration_provider_intent", eventJson: { provider_request_key: requestKey, attempt_index: 0, request_fingerprint: requestHash, lease_owner: lease.owner, claim_count: lease.claimCount }, createdAt: new Date() };
+          const row = client ? await client.narrationRecord.findFirst({
+              where: {
+                  generationRunId: runId, projectId
+              }
+          }) : null;
+          const record = client ? row ? decode(row) : null : [...this.db.narrationRecords.values()].find(r => r.generationRunId === runId);
+          const snapshot = client ? await client.runConfigurationSnapshot.findUnique({
+              where: {
+                  id: run.runConfigurationSnapshotId
+              }
+          }) : this.db.runConfigurationSnapshots.get(run.runConfigurationSnapshotId);
+          const payload = run.dispatchPayloadJson as Record<string, unknown>;
+          if (!record ||
+              record.projectId !== projectId ||
+              record.status !== "generating" ||
+              record.configurationSnapshotId !== snapshot?.id ||
+              snapshot.projectId !== projectId ||
+              snapshot.runId !== runId ||
+              payload?.owner_id !== ownerId ||
+              payload.narration_record_id !== record.id ||
+              payload.source_script_record_id !== record.scriptRecordId ||
+              payload.source_text_sha256 !== record.sourceTextSha256 ||
+              typeof payload.source_text !== "string" ||
+              textHash(payload.source_text) !== record.sourceTextSha256 ||
+              payload.settings_sha256 !== record.settingsSha256 ||
+              canonicalStringify(payload.settings) !== canonicalStringify(record.settings) ||
+              payload.source_project_tts_settings_sha256 !== record.sourceProjectTtsSettingsSha256 ||
+              payload.provider_request_key !== requestKey ||
+              requestHash !== textHash(canonicalStringify({
+              sourceText: payload.source_text, settings: record.settings
+          })))
+              throw new Error("narration_source_conflict");
+          const frozen = ResolvedGenerationConfigurationV1Schema.parse(snapshot.resolvedConfigurationJson);
+          if (canonicalStringify(settingsFromResolvedNarration(frozen, record.settings.voice)) !== canonicalStringify(record.settings) ||
+              await hashNarrationSettings(record.settings) !== record.settingsSha256)
+              throw new Error("narration_snapshot_conflict");
+          if (source.project.narrationTimingMode !== "narration_first_v1" ||
+              ("archivedAt" in source.project && source.project.archivedAt) ||
+              !source.script ||
+              source.project.activeScriptRecordId !== record.scriptRecordId ||
+              source.script.id !== record.scriptRecordId ||
+              source.script.projectId !== projectId ||
+              !hasPassingNarrationScriptValidation(source.script.validationResultJson) ||
+              !source.confirmation ||
+              source.confirmation.projectId !== projectId ||
+              source.confirmation.scriptRecordId !== record.scriptRecordId ||
+              source.confirmation.sourceTextSha256 !== record.sourceTextSha256 ||
+              textHash(source.script.scriptText) !== record.sourceTextSha256 ||
+              await hashProjectNarrationTtsSettings(source.configuration?.configurationJson) !== record.sourceProjectTtsSettingsSha256)
+              throw new Error("narration_stale");
+          const event = {
+              id: this.db.generateId(), generationRunId: runId, segmentId: null, eventType: "narration_provider_intent", eventJson: {
+                  provider_request_key: requestKey, attempt_index: 0, request_fingerprint: requestHash, lease_owner: lease.owner, claim_count: lease.claimCount
+              }, createdAt: new Date()
+          };
           if (client)
-              await client.generationRunEvent.create({ data: event });
-          else
+              await client.generationRunEvent.create({
+                  data: event
+              });
+          else {
+              if (seal !== mapSeal())
+                  throw new Error("narration_stale");
+              const currentRun = this.db.generationRuns.get(runId);
+              if (!currentRun ||
+                  currentRun.status !== "running" ||
+                  currentRun.dispatchLeaseOwner !== lease.owner ||
+                  currentRun.dispatchClaimCount !== lease.claimCount ||
+                  !currentRun.dispatchLeaseExpiresAt ||
+                  currentRun.dispatchLeaseExpiresAt.getTime() <= Date.now())
+                  throw new Error("narration_lease_lost");
+              // 与最终复查之间无await；并发Map调用也不能创建第二条intent。
+              if ((this.db.generationRunEvents.get(runId) ?? []).some(e => e.eventType === "narration_provider_intent"))
+                  return false;
               this.db.generationRunEvents.set(runId, [...(this.db.generationRunEvents.get(runId) ?? []), event]);
+          }
           return true;
       };
       return this.client ? this.client.$transaction(tx => action(tx)) : action();
@@ -341,4 +459,5 @@ export async function readNarrationSource(db: DbClient, projectId: string, owner
 async function assertLease(db: DbClient, runId: string, lease: NarrationLease, client?: NarrationReadClient) {
   const run = client ? await client.generationRun.findUnique({ where: { id: runId } }) : db.generationRuns.get(runId);
   if (!run || run.status !== "running" || run.dispatchLeaseOwner !== lease.owner || run.dispatchClaimCount !== lease.claimCount || !run.dispatchLeaseExpiresAt || run.dispatchLeaseExpiresAt.getTime() <= Date.now()) throw new Error("narration_lease_lost");
+  return run;
 }
