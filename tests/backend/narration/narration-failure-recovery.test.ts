@@ -172,6 +172,107 @@ async function sqliteFixture(provider:Pick<DashScopeNarrationProvider,'generate'
  const f={app,project:{id},url:'/api/projects/'+id,hash:narrationTextHash('你好')};await confirmScript(f as never);if(qualifiedOverride){const c=await client.projectGenerationConfiguration.findUniqueOrThrow({where:{projectId:id}});const configuration=structuredClone(c.configurationJson) as any;delete configuration.creative.narration;await client.projectGenerationConfiguration.update({where:{projectId:id},data:{configurationJson:configuration}});}const submission=await prepareNarrationRun(app,id,'u','u',{source_script_record_id:'s',expected_configuration_revision:1,idempotency_key:'cold',...(qualifiedOverride?{settings_override:{rate:1}}:{})});
  return {client,submission,app,dir,path,cold:async()=>{const c=await createPrismaClient(path);return {client:c,app:buildApp({prismaClient:c,firstAggregateWriter:await PrismaFirstAggregateWriter.create(c,'u'),skipSnapshotLoad:true,storageBaseDir:dir,narrationProvider:{async generate(){throw Error('forbidden_replay');}}})};}};
 }
+describe('真实 SQLite ready 写入冲突的恢复边界', () => {
+ it.each(['recover', 'cancel_after', 'cancel_during', 'same_owner', 'other_owner'] as const)('%s：真实快照冲突不丢本地产物且旧执行器不能越权', async mode => {
+  const provider = syntheticProvider(), generate = vi.spyOn(provider, 'generate');
+  const f = await sqliteFixture(provider), s = f.submission, other = await f.cold();
+  const transaction = f.client.$transaction.bind(f.client);
+  let inReady = false, hits = 0, actualError: unknown, replacement: unknown;
+  const saveReady = NarrationRepository.prototype.saveReadyBundle;
+  const spy = vi.spyOn(NarrationRepository.prototype, 'saveReadyBundle').mockImplementation(async function(...args) {
+   inReady = true;
+   try { return await saveReady.apply(this, args); } finally { inReady = false; }
+  });
+  (f.client as any).$transaction = (fn: any, ...args: any[]) => typeof fn !== 'function' ? (transaction as any)(fn, ...args) : (transaction as any)(async (tx: any) => {
+   const find = tx.narrationRecord.findUnique.bind(tx.narrationRecord);
+   const create = tx.narrationSubtitleRevision.create.bind(tx.narrationSubtitleRevision);
+   tx.narrationRecord.findUnique = async (input: any) => {
+    const row = await find(input);
+    if (inReady && hits === 0 && row?.id === s.record.id && row.status === 'generating') {
+     hits++;
+     if (mode === 'cancel_during') {
+      expect((await other.app.inject({method:'POST', url:`/api/projects/${s.run.projectId}/script/narrations/${s.record.id}/cancel`, auth, payload:{}})).statusCode).toBe(200);
+     } else if (mode === 'same_owner' || mode === 'other_owner') {
+      const run = await other.client.generationRun.findUniqueOrThrow({where:{id:s.run.id}});
+      const now = new Date(run.dispatchLeaseExpiresAt!.getTime() + 1);
+      expect(await other.app.generationRunRepository.claimRun(run.id, mode === 'same_owner' ? run.dispatchLeaseOwner! : 'next-worker', new Date(now.getTime()+60000), now, run.dispatchClaimCount)).toBe(true);
+     } else {
+      await other.client.project.update({where:{id:s.run.projectId}, data:{name:'无关名称更新'}});
+     }
+     replacement = await other.client.generationRun.findUniqueOrThrow({where:{id:s.run.id}});
+    }
+    return row;
+   };
+   tx.narrationSubtitleRevision.create = async (input: any) => {
+    try { return await create(input); } catch (error) { actualError = error; throw error; }
+   };
+   return fn(tx);
+  }, ...args);
+  let restarted: Awaited<ReturnType<typeof f.cold>> | undefined;
+  try {
+   const result = await f.app.generationRunDispatcher.dispatch(s.run.id);
+   spy.mockRestore(); (f.client as any).$transaction = transaction;
+   expect(hits).toBe(1);
+   expect(actualError).toBeInstanceOf(Prisma.PrismaClientKnownRequestError);
+   expect((actualError as Prisma.PrismaClientKnownRequestError).code).toBe('SQLITE_BUSY_SNAPSHOT');
+   const record = await new NarrationRepository(other.app.db).findByIdForOwner(s.run.projectId, 'u', s.record.id);
+   const project = await other.client.project.findUniqueOrThrow({where:{id:s.run.projectId}});
+   expect((await narrationStorage(f.app, project as never).recoverInitial({record:record!})).status).toBe('complete');
+   expect(await other.client.narrationSubtitleRevision.count()).toBe(0);
+   const displaced = mode === 'cancel_during' || mode === 'same_owner' || mode === 'other_owner';
+   expect(result).toMatchObject(displaced ? {dispatched:true, fencedOut:true} : {outcome:{status:'deferred'}});
+   expect(await other.client.generationRun.findUniqueOrThrow({where:{id:s.run.id}})).toEqual(replacement);
+   expect(record?.status).toBe(mode === 'cancel_during' ? 'cancelled' : 'generating');
+   if (mode === 'cancel_after') expect((await other.app.inject({method:'POST', url:`/api/projects/${s.run.projectId}/script/narrations/${s.record.id}/cancel`, auth, payload:{}})).statusCode).toBe(200);
+   expect(await other.app.generationRunDispatcher.scanAndDispatch()).toEqual({claimed:0});
+   if (mode === 'recover' || mode === 'same_owner' || mode === 'other_owner') await other.client.generationRun.update({where:{id:s.run.id}, data:{dispatchLeaseExpiresAt:new Date(Date.now()-1000)}});
+   await other.client.$disconnect(); await f.client.$disconnect();
+   restarted = await f.cold();
+   expect(restarted.app.db.projects.size).toBe(0);
+   expect(restarted.app.db.narrationRecords.size).toBe(0);
+   await restarted.app.generationRunDispatcher.scanAndDispatch();
+   expect(await restarted.app.generationRunDispatcher.scanAndDispatch()).toEqual({claimed:0});
+   const cancelled = mode === 'cancel_after' || mode === 'cancel_during';
+   expect(await restarted.client.narrationRecord.findUniqueOrThrow({where:{id:s.record.id}})).toMatchObject({status:cancelled?'cancelled':'ready'});
+   expect(await restarted.client.generationRun.findUniqueOrThrow({where:{id:s.run.id}})).toMatchObject({status:cancelled?'failed':'succeeded', dispatchClaimCount:mode === 'same_owner'||mode === 'other_owner'?3:cancelled?1:2});
+   expect(await restarted.client.narrationSubtitleRevision.count()).toBe(cancelled?0:1);
+   expect(await restarted.client.project.findUniqueOrThrow({where:{id:s.run.projectId}})).toMatchObject({activeNarrationRecordId:null});
+   expect(await restarted.client.usageCostRecord.findMany()).toMatchObject([{outputUnits:9, actualCostMicros:'1260', status:'succeeded'}]);
+   expect(await restarted.client.usageCostRecord.count()).toBe(1);
+   expect(await restarted.client.generationRunEvent.count({where:{eventType:'narration_provider_intent'}})).toBe(1);
+   expect(generate).toHaveBeenCalledOnce();
+  } finally { spy.mockRestore(); (f.client as any).$transaction = transaction; await restarted?.client.$disconnect(); await other.client.$disconnect(); await f.client.$disconnect(); }
+ });
+ it('真实外键约束错误不能误判为可恢复的 SQLite 临时冲突', async () => {
+  const provider = syntheticProvider(), generate = vi.spyOn(provider, 'generate'), f = await sqliteFixture(provider), s = f.submission;
+  const transaction = f.client.$transaction.bind(f.client); let actualError: unknown, hits = 0;
+  (f.client as any).$transaction = (fn:any, ...args:any[]) => typeof fn !== 'function' ? (transaction as any)(fn,...args) : (transaction as any)(async(tx:any) => {
+   const create = tx.narrationSubtitleRevision.create.bind(tx.narrationSubtitleRevision);
+   tx.narrationSubtitleRevision.create = async(input:any) => {
+    hits++;
+    try { return await create({...input, data:{...input.data, narrationRecordId:'missing-parent'}}); } catch(error) { actualError=error; throw error; }
+   };
+   return fn(tx);
+  },...args);
+  try {
+   expect(await f.app.generationRunDispatcher.dispatch(s.run.id)).toMatchObject({outcome:{status:'failed',reason_code:'narration_ready_persistence_failed'}});
+   expect(hits).toBe(1); expect(actualError).toBeInstanceOf(Prisma.PrismaClientKnownRequestError);
+   expect((actualError as Prisma.PrismaClientKnownRequestError).code).toBe('P2003');
+   expect(await f.client.narrationSubtitleRevision.count()).toBe(0);
+   expect(await f.client.narrationRecord.findUniqueOrThrow({where:{id:s.record.id}})).toMatchObject({status:'failed'});
+   expect(await f.app.generationRunDispatcher.scanAndDispatch()).toEqual({claimed:0});
+   expect(await f.client.usageCostRecord.findMany()).toMatchObject([{outputUnits:9,actualCostMicros:'1260'}]); expect(generate).toHaveBeenCalledOnce();
+  } finally { (f.client as any).$transaction=transaction; await f.client.$disconnect(); }
+ });
+ it.each(['shape', 'message', 'unknown_code'] as const)('仿冒或未识别的 SQLite 错误 %s 不能延期', async mode => {
+  const f = await fixture(syntheticProvider()), s = await prepared(f);
+  const error = mode === 'shape' ? Object.assign(Error('database is locked'), {code:'SQLITE_BUSY_SNAPSHOT'}) : mode === 'message' ? Error('SQLITE_BUSY_SNAPSHOT') : new Prisma.PrismaClientKnownRequestError('database is locked', {code:'SQLITE_CONSTRAINT_UNIQUE', clientVersion:'test'});
+  vi.spyOn(NarrationRepository.prototype, 'saveReadyBundle').mockRejectedValueOnce(error);
+  expect(await f.app.generationRunDispatcher.dispatch(s.run.id)).toMatchObject({outcome:{status:'failed',reason_code:'narration_ready_persistence_failed'}});
+  expect(f.app.db.narrationRecords.get(s.record.id)?.status).toBe('failed');
+  expect(await f.app.generationRunDispatcher.scanAndDispatch()).toEqual({claimed:0});
+ });
+});
 it.each(['event','ledger'] as const)('真实SQLite %s连续暂错后断开client，新实例只读journal补账',async target=>{
  const f=await sqliteFixture(syntheticProvider());let injected=0,readBeforeFailure=0;const original=f.client.$transaction.bind(f.client);
  if(target==='ledger')(f.client as any).$transaction=(fn:any,...args:any[])=>typeof fn!=='function'?(original as any)(fn,...args):(original as any)(async(tx:any)=>fn(new Proxy(tx,{get(t,key){if(key!=='usageCostRecord')return Reflect.get(t,key);return new Proxy(t.usageCostRecord,{get(model,method){if(method==='findUnique')return async(...a:any[])=>{readBeforeFailure++;return model.findUnique(...a)};if(method==='upsert')return async(...a:any[])=>{if(a[0].create.outputUnits!==null&&injected++<2)throw temporaryDbError();return model.upsert(...a)};return Reflect.get(model,method);}});}})),...args);

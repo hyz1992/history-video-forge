@@ -7,10 +7,10 @@
 | TASK_BASE_SHA | d6542fa64ad1cf2d2a56822cfd684cf761f72ef3 |
 | 审查级别 | T2 |
 | 最近已终审候选 SHA | 8003a80e49f13e529924655a66d92299cba3a7b7 |
-| 阶段 | 第三次例外累计复审未收敛；真实 SQLite 暂错恢复缺口未修，停止追加整改 |
+| 阶段 | 第四次例外累计复审未收敛；恢复入口暂错缺口未修，停止追加整改 |
 | 整改复审轮数 | 3 / 3 |
 | 终审调用次数 | 2 |
-| 受限例外 | 第 1、2、3 次均已用完；第 3 次追加复审 1 / 1；无第 4 次授权 |
+| 受限例外 | 第 1、2、3、4 次均已用完；第 4 次追加复审 1 / 1；无第 5 次授权 |
 
 ## 原始验收清单
 
@@ -18,14 +18,14 @@
 
 | 编号 | 原始要求 | 状态 | 证据 |
 |---|---|---|---|
-| L1 | 文案已确认、来源 hash/revision 与完整 owner 权限前置校验 | 已修 | root-original-dispatch-source-window-ex3-final-command.json 与 root-dispatch-source-window-ex3-final-command.json：原反例及 12 组来源矩阵通过，冲突零 intent/零外呼 |
-| L2 | 有限 overrides 进入冻结快照；正文/设置指纹幂等，旧 operation 不变 | 已修 | root-ex3-final-regression.json；root-api-ex3-final-command.json：冻结 override、请求指纹幂等、旧 operation 回归 |
-| L3 | 纯 readiness；真实模型/音色/协议与资格一致，非法组合零外呼 | 已修 | root-ex3-final-regression.json：narration-lifecycle 24 项、narration-api 19 项；非法组合零外呼 |
-| L4 | 持久化后 202、既有 dispatcher/lease；缺快照拒绝，未知结果不自动重发 | 部分修 | root-recovery-ex3-final-command.json、root-intent-ex3-final-command.json、root-claim-atomic-cas-ex3-final-command.json、root-map-lifecycle-ex3-final-command.json：恢复不重发、完整 claim 身份与 Map 原子写入验证 ；root-ex3-real-ready-read-window-command.json 真实暂错错误分类失败 |
-| L5 | 完整 bundle 后才 ready，取消持久化优先，迟到结果受状态和 lease fencing | 部分修 | root-failure-ex3-final-command.json、root-failure-boundary-ex3-final-command.json、root-map-lifecycle-ex3-final-command.json：取消保全、旧 claim 拒绝、bundle 后 ready；EX3-C1/C2 正式测试已通过 ；Map 取消/ready 已闭环，完整 bundle 的真实暂错恢复仍受 I1 影响 |
-| L6 | confirm 复查来源与接受区间；同 active 幂等、区间更新保留视觉、不同候选 CAS | 已修 | root-confirm-ex3-final-command.json、root-map-confirm-matrix-ex3-final-command.json：Prisma 确认 CAS/区间幂等及 Map 当前来源 14 组矩阵；EX3-C3 正式 26 项已通过 |
-| L7 | 外呼 intent 先落事件；无资产任务媒体账本、文案归属、累计最大值、未知不记零 | 已修 | root-map-ledger-ex3-final-command.json、root-usage-ex3-final-command.json、root-usage-write-failure-ex3-final-command.json、root-storage-outcome-combinations-ex3-final-command.json：唯一最大累计值、未知 null、不可变事实恢复 |
-| L8 | 独立新模型价格，不改变旧全局默认；回归和完整后端类型检查 | 已修 | pricing-catalog.seed.ts 独立北京模型单价；root-ex3-final-regression.json 26 文件 702 PASS；root-ex3-final-typecheck.json 完整类型检查 exit_code 0 |
+| L1 | 文案已确认、来源 hash/revision 与完整 owner 权限前置校验 | 已修 | root-original-dispatch-source-window-ex4-command.json 与 root-dispatch-source-window-ex4-command.json：原反例及 12 组来源矩阵通过，冲突零 intent/零外呼 |
+| L2 | 有限 overrides 进入冻结快照；正文/设置指纹幂等，旧 operation 不变 | 已修 | root-ex4-regression.json；root-api-ex4-command.json：冻结 override、请求指纹幂等、旧 operation 回归 |
+| L3 | 纯 readiness；真实模型/音色/协议与资格一致，非法组合零外呼 | 已修 | root-ex4-regression.json：narration-lifecycle 24 项、narration-api 19 项；非法组合零外呼 |
+| L4 | 持久化后 202、既有 dispatcher/lease；缺快照拒绝，未知结果不自动重发 | 部分修 | root-ex4-real-ready-recovery-command.json 首写暂错恢复已通过；新增 root-ex4-recovery-prefix-command.json 在 claim2 快照读取暂错后 run failed，完整 bundle 无法再扫描恢复 |
+| L5 | 完整 bundle 后才 ready，取消持久化优先，迟到结果受状态和 lease fencing | 部分修 | root-failure-ex4-command.json、root-failure-boundary-ex4-command.json、root-map-lifecycle-ex4-command.json 和本轮真实取消/接管测试通过；状态安全已修，完整产物恢复仍受 EX4-I1 影响 |
+| L6 | confirm 复查来源与接受区间；同 active 幂等、区间更新保留视觉、不同候选 CAS | 已修 | root-confirm-ex4-command.json、root-map-confirm-matrix-ex4-command.json：Prisma 确认 CAS/区间幂等及 Map 当前来源 14 组矩阵；EX3-C3 正式 26 项已通过 |
+| L7 | 外呼 intent 先落事件；无资产任务媒体账本、文案归属、累计最大值、未知不记零 | 已修 | root-map-ledger-ex4-command.json、root-usage-ex4-command.json、root-usage-write-failure-ex4-command.json、root-storage-outcome-combinations-ex4-command.json：唯一最大累计值、未知 null、不可变事实恢复 |
+| L8 | 独立新模型价格，不改变旧全局默认；回归和完整后端类型检查 | 已修 | pricing-catalog.seed.ts 独立北京模型单价；root-ex4-regression.json 26 文件 711 PASS；root-ex4-typecheck.json 完整类型检查 exit_code 0 |
 
 ## 范围与基线
 
@@ -423,3 +423,67 @@ EX3-C3 行为已通过上述专项验证，待完整累计回归与本次正式�
 已授权的 Map 原子写入修复作为局部可验证成果提交：只包含费用记录器、narration repository、两份生命周期测试和本记录，解决同一类 Map 异步读取后旧写覆盖问题；没有修改本次新发现所在的 dispatch handler。该提交不是通过候选，不表示任务 5 完成。未形成第三候选、不启动 R5，终审调用仍为 2，第三例外复审 1/1 已耗尽。
 
 若用户选择继续，建议第四次受限例外仅修改 narration-dispatch-handler.ts 的有来源/类型约束的临时错误分类、narration-failure-recovery.test.ts 的真实双 client 恢复测试及本记录：真实无关写冲突后完整 bundle 保持可恢复，后续重启/lease 接管只落本地 ready 不重发；取消/旧 claim 对照仍不能恢复或覆盖当前状态，永久错误不能误延期。需要真实 SQLite 反例与相反组合验证，再按固定 BASE 累计审查。协议要求超过建议 3 次例外时用户明确说明继续理由；当前没有第四次授权，不自主追加修复。
+
+
+## 第四次受限例外：授权、最小设计与实施计划
+
+用户针对上一轮明确提出的“是否以修复已定位的 SQLite 恢复缺口为继续理由，批准第四次受限例外”回复“按你的建议继续”，授权该理由和范围。固定 TASK_BASE_SHA 不变，起始 HEAD 为 33d43ed57ec34ebafe1fc92cfacf10f8ace14b58；审查级别 T2，常规 3/3、前三次例外各 1/1 保留，本次限 1 次累计 diff/contract 复审；无 Critical/Important 后才形成候选并按 R5 终审，不收敛则停止，不自主开启第五次例外。
+
+不变量：供应商事实和完整 bundle 已持久化后，已识别且来源为真实 Prisma 数据库异常的临时写冲突不得把当前仍有效的生成任务变成永久失败；后续已有 lease 接管只使用本地产物恢复，不能再次请求供应商。取消、旧 claim、合同拒绝和永久数据库错误不得因该分类新增而被误延期或覆盖。
+
+最小设计：只在 narration-dispatch-handler.ts 现有临时错误分类的 PrismaClientKnownRequestError 白名单中加入已实际复现的 SQLITE_BUSY_SNAPSHOT；不按错误文本、对象局部形状或 SQLITE 前缀放行，不新增重试循环，不改 dispatcher/lease/存储协议。其他 SQLite 码没有真实证据，不顺手扩大集合。
+
+实施计划：
+1. 在 narration-failure-recovery.test.ts 增加真实双 client 首次写入前冲突、冷恢复、取消/claim 接管及永久/仿冒错误反向组合；原件独立探针继续保留失败证据。先运行 RED 确认实际错误类型与数据库来源。
+2. 实施上述单点分类修复，运行相同专项及完整恢复测试；独立复验生产 API/原件输入的本地恢复与零重发。
+3. 固定原 26 文件集合累计回归、完整后端类型检查及既有独立探针，核对实际输出与数字；只修改 handler、恢复测试和本记录三个文件。
+4. 以固定 BASE 全累计 30 路径进行同模型新上下文 diff/contract 复审；收敛后提交中文候选并进行 R5 两阶段终审。Minor 默认留档；不进入任务 6。
+
+
+### 第四次例外实施与专项验证
+
+产品只改临时错误码白名单一处，仍要求 PrismaClientKnownRequestError 实例。正式测试增加 9 项：真实双 client 首次字幕写入前冲突的恢复、延期后取消、冲突期间取消、同 owner/不同 owner claim 接管；真实外键约束 P2003；普通 Error 仿冒 code、文本仿冒与未识别的约束错误码。真实冲突逐项断言原始 create 抛出 PrismaClientKnownRequestError / SQLITE_BUSY_SNAPSHOT，非手工抛同名 Error。新实例断开旧 client、清空 Map 后经既有扫描恢复；取消 run 沿用既有 failed 终态，候选 cancelled，已成功回执的账本不回退。
+
+- root-ex4-red.json 首次筛选因 shell 含空格参数未匹配，114 项全部 skipped，不算 RED。root-ex4-red-valid.json 实际运行 9 项，首次有一项取消 run 预期错误（把候选 cancelled 当作 run 枚举），核对既有取消合同后只修测试预期；该项不算产品缺陷。
+- root-ex4-red-confirmed.json：产品改动前有效 RED，2 FAIL / 7 PASS / 105 skipped；两项失败均为真实暂错被写成 failed 而非 deferred。
+- root-ex4-green.json：相同 9 项 PASS / 105 skipped。
+- root-ex4-failure-recovery.json：完整文件实际 114 PASS，包含既有 105 项。
+- root-ex4-real-ready-recovery-command.json / report.json：独立生产 API、实际 dispatcher、冻结原件和全迁移 SQLite 探针 exit 0；首次真实 SQLITE_BUSY_SNAPSHOT 后 run running / record generating，完整 bundle 保留；断开原两 client 后新实例 scan 接管 claim2，run succeeded / record ready，字幕 1 行、active 为空、费用单行 308 字符 / 43120 微元；恢复供应商调用 0、总离线回放 1、真实外部调用 0，原件指纹保持。旧第三例外失败证据未覆盖。
+- root-ex4-typecheck.json：完整后端类型检查含 Prisma generate，实际 exit_code 0；命令输出摘录仅省略 npm 更新提示。
+
+上述为专项闭环证据，累计验证与本次 1 次正式复审仍待完成，尚未形成候选、终审调用仍为 2。
+
+
+### 第四次例外累计验证与审查冻结
+
+固定 BASE 至起始 HEAD 33d43ed57ec34ebafe1fc92cfacf10f8ace14b58 累计仍为 30 路径；本轮只改 handler、恢复测试和记录。root-ex4-regression.json 实际 26 文件 711 PASS；本轮新增 9 项和完整恢复文件 114 项均为其中子集。root-ex4-probes-index.json 原固定 22 条探针/回放命令全部 exit 0，加 root-ex4-real-ready-recovery-command.json 一条新定点恢复命令 exit 0，共 23 条独立运行命令。类型检查 exit 0。测试输出中的目录禁用提示来自既有预期负向场景，不等同测试失败。
+
+自审：合同上保持临时恢复、未知不重发与当前 claim 限制；确认/取消/生成 API 由累计运行探针复验，任务 11 UI 尚未实现不在本次验收；没有新循环、阶段、默认开关或付费调用；边界测试区分真实数据库错误与仿冒对象。记录已按实际输出核对，历史第三例外失败保留，当前 L4/L5 专项闭环不等于已终审。
+
+现在消耗第四例外唯一一次累计 diff/contract 复审（1/1），终审调用仍为 2；ex4-review-freeze.json 保存审前 30 路径 SHA256 与工作区状态。两项复审均无 Critical/Important 后才形成候选，不收敛按停止条件报告。
+
+
+## 第四次例外累计复审结论：首写暂错已修，恢复入口仍有缺口
+
+| 审查 | Critical | Important | Minor | 结论 |
+|---|---:|---:|---:|---|
+| 第四例外 diff_reviewer | 0 | 1 | 1 | 未收敛 |
+| 第四例外 contract_reviewer | 0 | 1 | 1 | 未收敛 |
+
+两个 Important 是同一项 EX4-I1，两个 Minor 均为已留档兼容码命名漂移，不重复计数。contract 在新增证据到达前的无 Important 初步结论已被同一轮证据核对撤回，以上为最终计数，不新增复审轮。审后主代理 root-ex4-review-end-check.json：30 路径 SHA256 与 HEAD、完整 status 均匹配冻结。
+
+审查工具偏差：两名 reviewer 的 cmd node -e 箭头被 shell 解析成重定向，各产生一个空文件。主代理核实文件归属、精确根目录路径和零长度后仅删除该两文件，30 路径及工作区状态恢复冻结；双方改用直接 Node fs/cp 并重新完成本轮全部累计审查。root-ex4-review-tool-recovery.json 保留回滚与重跑事实，不能声称首次没有发生写入。此为同一审查执行偏差的纠正，不是额外产品整改或复审额度重置。
+
+### EX4-I1：冷恢复前置读取暂错落入通用永久失败（未修）
+
+narration-dispatch-handler.ts:76 的 getSnapshotById 位于 handler 自身 try 外；冷实例已取得 claim2 后的一次临时读取错误直接进入 generation-run-dispatcher.ts:147–152 通用 catch，并由终态写入把 run 设 failed。扫描只处理 pending/running，因此磁盘完整产物不能再被已有恢复机制接管，候选还停在 generating。违反设计 §7 的完整本地产物冷恢复不变量。
+
+主代理按 diff reviewer 点名窗口完成 root-ex4-recovery-prefix-command.json / report.json，实际 exit 1：先经真实 SQLite 首字幕写冲突保留完整 bundle，再关闭旧 clients，新实例在真实 getSnapshotById 成功返回、当前 DB run 为 claim2/running 的位置注入一次 PrismaClientKnownRequestError(P1001)。注入次数 1，真实成功快照读取 2 次；最终 run failed、record generating、bundle complete、claimCount2，后续 scan claimed0；初次离线 provider1、恢复0、真实外部0。这里是有来源/类型的定点注入，不是 SQLite 原生产生 P1001。失败是恢复不变量断言，不是数据库加载或环境故障。
+
+root-ex4-recovery-prefix-sweep-command.json / report.json 为位置对照，exit 0：同一暂错落在 claim 前事实补账扫描，会被隔离且随后正常 ready。第一版未限定 claim2，因此只能证明该前置扫描对照，不能覆盖目标 handler 窗口。原 23 条绿命令与 711 PASS 保持有效；新增前缀反例单独失败，不能混成全部通过。
+
+### 局部提交与后续建议
+
+本次已授权、已验证的 SQLite 首字幕写入暂错分类作为局部修复提交，仅三个文件：handler、恢复测试、本记录。没有修改新增 EX4-I1 所在的入口错误边界。该提交不是通过候选；未启动 R5，终审调用仍为 2，常规 3/3、四次例外各 1/1 均保留。不进入任务 6。
+
+建议下一次若获批准，以“统一收口完整冷恢复入口，避免继续逐个读写点补漏”为明确继续理由，仍限制 handler、恢复测试和本记录。先审计从进入 handler 到读出已持久化事实/完整 bundle 的全部前置数据库读取，把临时数据库故障纳入同一受当前 claim 保护的延期出口；缺快照、合同拒绝、取消/旧 claim、永久及仿冒错误仍各按现有边界失败或拒绝，不新增供应商重试。验收矩阵覆盖 snapshot、candidate/source 与恢复事实读取，claim 前/后、已有完整产物/未知 intent、取消/同异 owner、永久错误；每个目标窗口验证真实调用路径、后续跨实例扫描及零重复外呼，再进行固定 BASE 累计审查。当前第五例外未授权，不实施该新边界。

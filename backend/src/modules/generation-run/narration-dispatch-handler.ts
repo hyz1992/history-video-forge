@@ -17,7 +17,7 @@ import { assertNarrationExecutionCompatibility } from "../narration/narration-ex
 import { recordNarrationUsage } from "../generation-cost/usage-cost-recorder.js";
 export type NarrationProvider = Pick<DashScopeNarrationProvider, "generate">;
 function isTransientReadyPersistenceError(error: unknown): boolean {
-    return error instanceof Prisma.PrismaClientKnownRequestError && ["P1001", "P1002", "P1008", "P1017", "P2024", "P2034"].includes(error.code)
+    return error instanceof Prisma.PrismaClientKnownRequestError && ["P1001", "P1002", "P1008", "P1017", "P2024", "P2034", "SQLITE_BUSY_SNAPSHOT"].includes(error.code)
         || error instanceof Prisma.PrismaClientInitializationError && ["P1001", "P1002", "P1008", "P1017"].includes(error.errorCode ?? "");
 }
 
