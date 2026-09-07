@@ -73,25 +73,20 @@ export function createNarrationDispatchHandler(options: {
         const phase: {current: "fact" | "usage" | "bundle" | "ready" | "state_read" | null} = {current:null};
         let storage: ReturnType<typeof narrationStorage> | null = null, savedFact: StoredFact | null = null, pendingFact: NarrationProviderFact | null = null;
         const fail = (reason: string) => ({ status: "failed" as const, reason_code: reason, message: reason });
-        const snapshot = await context.repository.getSnapshotById(run.runConfigurationSnapshotId);
+        let snapshot: RunConfigurationSnapshotRecord | null = null;
+        const requireSnapshot = () => {
+            if (!snapshot) throw new Error("dispatch_snapshot_missing");
+            return snapshot;
+        };
         const parsed = NarrationDispatchPayload.safeParse(run.dispatchPayloadJson);
         if (!parsed.success)
             return fail("narration_dispatch_payload_invalid");
         const payload = parsed.data;
-        if (!snapshot || snapshot.projectId !== run.projectId || snapshot.runId !== run.id) {
-            try {
-                candidate = await repo.findByIdForOwner(run.projectId, payload.owner_id, payload.narration_record_id);
-                if (candidate)
-                    await repo.transitionCandidate(payload.owner_id, run.projectId, candidate.id, "failed", "dispatch_snapshot_missing", lease);
-            }
-            catch { /* 缺失/越权来源不得回写。 */ }
-            return fail("dispatch_snapshot_missing");
-        }
-        const usage = (status: "submitted" | "succeeded" | "failed" | "canceled", characters: number | null, durationMs?: number, receiptKind?: "partial" | "final") => recordNarrationUsage({ db: context.db, snapshot, runId: run.id, providerRequestKey: payload.provider_request_key, providerModelId: payload.pricing.provider_model_id, pricingVersion: payload.pricing.pricing_version, priceMicrosPer10k: payload.pricing.price_micros_per_10k_characters, sourceCharacters: payload.source_text.length, usageCharacters: characters, status, durationMs, receiptKind });
+        const usage = (status: "submitted" | "succeeded" | "failed" | "canceled", characters: number | null, durationMs?: number, receiptKind?: "partial" | "final") => recordNarrationUsage({ db: context.db, snapshot: requireSnapshot(), runId: run.id, providerRequestKey: payload.provider_request_key, providerModelId: payload.pricing.provider_model_id, pricingVersion: payload.pricing.pricing_version, priceMicrosPer10k: payload.pricing.price_micros_per_10k_characters, sourceCharacters: payload.source_text.length, usageCharacters: characters, status, durationMs, receiptKind });
         const persistFact = async (values: Pick<NarrationProviderFact,"providerTaskId"|"providerRequestId"|"characters"|"receiptKind"|"remoteOutcome"|"errorCode"|"durationMs"|"canceled">) => {
             if(!candidate||!storage)throw new Error("narration_fact_source_mismatch");
             phase.current="fact";
-            pendingFact=NarrationProviderFact.parse({schemaVersion:"narration_provider_fact_v1",projectId:run.projectId,generationRunId:run.id,configurationSnapshotId:snapshot.id,providerRequestKey:payload.provider_request_key,sourceTextSha256:payload.source_text_sha256,settingsSha256:payload.settings_sha256,observedAt:new Date().toISOString(),...values});
+            pendingFact=NarrationProviderFact.parse({schemaVersion:"narration_provider_fact_v1",projectId:run.projectId,generationRunId:run.id,configurationSnapshotId:requireSnapshot().id,providerRequestKey:payload.provider_request_key,sourceTextSha256:payload.source_text_sha256,settingsSha256:payload.settings_sha256,observedAt:new Date().toISOString(),...values});
             savedFact=await storage.commitProviderFact({record:candidate,fact:pendingFact});
         };
         // 诊断事件不是供应商事实或已应用标记；写入失败不得改变远端分类。
@@ -114,6 +109,17 @@ export function createNarrationDispatchHandler(options: {
             return unknown?{status:"needs_reconciliation" as const,reason_code:code,message:code}:fail(code);
         };
         try {
+            // 整段恢复准备共用错误出口，不能在尚未读出本地事实时提前永久失败。
+            snapshot = await context.repository.getSnapshotById(run.runConfigurationSnapshotId);
+            if (!snapshot || snapshot.projectId !== run.projectId || snapshot.runId !== run.id) {
+                try {
+                    candidate = await repo.findByIdForOwner(run.projectId, payload.owner_id, payload.narration_record_id);
+                    if (candidate)
+                        await repo.transitionCandidate(payload.owner_id, run.projectId, candidate.id, "failed", "dispatch_snapshot_missing", lease);
+                }
+                catch { /* 已确认缺失/越权的快照不得因清理暂错转为可执行。 */ }
+                return fail("dispatch_snapshot_missing");
+            }
             candidate = await repo.findByIdForOwner(run.projectId, payload.owner_id, payload.narration_record_id);
             const source = await repo.sourceContext(run.projectId, payload.owner_id);
             const frozen = ResolvedGenerationConfigurationV1Schema.parse(snapshot.resolvedConfigurationJson);
@@ -204,6 +210,8 @@ export function createNarrationDispatchHandler(options: {
             }
         }
         catch (error) {
+            // 补账会改变phase；延期资格必须取自最初出错位置，而非补账后的阶段。
+            const retryLocal = isTransientReadyPersistenceError(error) && (!called || phase.current === "ready" || Boolean(savedFact) && (phase.current === "usage" || phase.current === "state_read"));
             if(phase.current === "fact" && !savedFact)return journalFailure();
             const remoteUnknown = called && !providerCompleted && (!(error instanceof NarrationProviderError) || error.remoteOutcome === "unknown");
             if(phase.current === "state_read")await auditLocalFailure("state_read","narration_state_read_failed");
@@ -211,7 +219,7 @@ export function createNarrationDispatchHandler(options: {
             if (called && phase.current !== "fact" && phase.current !== "usage") {
                 try {
                     if(!savedFact){const e=error instanceof NarrationProviderError?error:null;await persistFact({providerTaskId:e?.receipt?.providerTaskId??null,providerRequestId:e?.receipt?.providerRequestId??null,characters:e?.receipt?.characters??null,receiptKind:e?.receipt?.kind??"none",remoteOutcome:e?.remoteOutcome??"unknown",errorCode:e?.code??"narration_provider_unknown",durationMs:null,canceled:cancelRequested});}
-                    phase.current="usage";await applyProviderFact(context.db,context.repository,run,snapshot,savedFact!,cancelRequested);
+                    phase.current="usage";await applyProviderFact(context.db,context.repository,run,requireSnapshot(),savedFact!,cancelRequested);
                 } catch(persistenceError) {
                     if(savedFact&&isTransientReadyPersistenceError(persistenceError))return {status:"deferred",reason_code:"narration_ready_persistence_retry",message:"口播供应商事实等待本地记账恢复"};
                     return journalFailure();
@@ -219,14 +227,14 @@ export function createNarrationDispatchHandler(options: {
             }
             let current: GenerationRunRecord | null;
             try {current=await context.repository.getRunById(run.id);} catch(readError) {
-                if(savedFact&&isTransientReadyPersistenceError(readError))return {status:"deferred",reason_code:"narration_ready_persistence_retry",message:"口播供应商事实等待本地恢复"};
+                if((savedFact||retryLocal)&&isTransientReadyPersistenceError(readError))return {status:"deferred",reason_code:"narration_ready_persistence_retry",message:"口播任务等待本地恢复"};
                 return fail("narration_state_read_failed");
             }
             if (!current || current.status !== "running" || current.dispatchLeaseOwner !== lease.owner || current.dispatchClaimCount !== lease.claimCount)
                 return fail("narration_lease_lost");
-            if ((phase.current === "ready" || savedFact && phase.current === "usage") && isTransientReadyPersistenceError(error)) {
-                // 只对完整且已验证的bundle落库暂错延期；合同/权限/lease拒绝不会进入此分支。
-                return { status: "deferred", reason_code: "narration_ready_persistence_retry", message: "完整口播产物等待本地落库恢复" };
+            if (retryLocal) {
+                // 下次仍从冻结合同、本地产物和intent重新检查；延期不授予供应商重发许可。
+                return { status: "deferred", reason_code: "narration_ready_persistence_retry", message: "口播任务等待本地恢复" };
             }
             if (candidate) {
                 try {

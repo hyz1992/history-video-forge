@@ -170,8 +170,124 @@ async function sqliteFixture(provider:Pick<DashScopeNarrationProvider,'generate'
  await client.topicPackage.create({data:{id:'t',projectId:id,title:'历史',selectedAngle:'压力',familyLabel:'人物',scopeLabel:'事件',coreConflict:'冲突',strongScene:'场景',packagingSeed:'故事',canonicalQuotesJson:[],canonicalQuoteIntentsJson:[],durationBandJson:{min_sec:1,max_sec:5},narrativeTensionMapJson:{},mustIncludeBeatsJson:[],forbiddenExpansionsJson:[],riskHintsJson:[],sourceAnchorRefsJson:[],ambiguityNotesJson:[]}});
  await client.scriptRecord.create({data:{id:'s',projectId:id,topicPackageId:'t',scriptText:'你好',openingSpan:'你好',endingSpan:'你好',estimatedDurationSec:1,beatTraceJson:[],quoteTraceJson:[],reviewStatus:'skipped',validationResultJson:{stage:'script_local_validation',decision:'pass',errors:[],warnings:[],metrics:{}},executionStateJson:{}}});await client.project.update({where:{id},data:{activeScriptRecordId:'s',activeTopicPackageId:'t'}});
  const f={app,project:{id},url:'/api/projects/'+id,hash:narrationTextHash('你好')};await confirmScript(f as never);if(qualifiedOverride){const c=await client.projectGenerationConfiguration.findUniqueOrThrow({where:{projectId:id}});const configuration=structuredClone(c.configurationJson) as any;delete configuration.creative.narration;await client.projectGenerationConfiguration.update({where:{projectId:id},data:{configurationJson:configuration}});}const submission=await prepareNarrationRun(app,id,'u','u',{source_script_record_id:'s',expected_configuration_revision:1,idempotency_key:'cold',...(qualifiedOverride?{settings_override:{rate:1}}:{})});
- return {client,submission,app,dir,path,cold:async()=>{const c=await createPrismaClient(path);return {client:c,app:buildApp({prismaClient:c,firstAggregateWriter:await PrismaFirstAggregateWriter.create(c,'u'),skipSnapshotLoad:true,storageBaseDir:dir,narrationProvider:{async generate(){throw Error('forbidden_replay');}}})};}};
+ return {client,submission,app,dir,path,cold:async(recoveryProvider:Pick<DashScopeNarrationProvider,'generate'>={async generate(){throw Error('forbidden_replay');}})=>{const c=await createPrismaClient(path);return {client:c,provider:recoveryProvider,app:buildApp({prismaClient:c,firstAggregateWriter:await PrismaFirstAggregateWriter.create(c,'u'),skipSnapshotLoad:true,storageBaseDir:dir,narrationProvider:recoveryProvider})};}};
 }
+describe('EX5 完整冷恢复入口', () => {
+ type State = 'complete' | 'intent';
+ type Point = 'snapshot' | 'candidate' | 'source' | 'ensure_candidate' | 'fact_event' | 'intent_check';
+ const positions: Array<[State, Point]> = [
+  ...(['snapshot', 'candidate', 'source', 'ensure_candidate'] as const).flatMap(point => (['complete', 'intent'] as const).map(state => [state, point] as [State, Point])),
+  ['complete', 'fact_event'], ['intent', 'intent_check'],
+ ];
+ async function recoveryFixture(state: State) {
+  const provider = syntheticProvider(), generated = vi.spyOn(provider, 'generate'), f = await sqliteFixture(provider), s = f.submission;
+  if (state === 'complete') {
+   const ready = vi.spyOn(NarrationRepository.prototype, 'saveReadyBundle').mockRejectedValueOnce(temporaryDbError());
+   try { expect(await f.app.generationRunDispatcher.dispatch(s.run.id)).toMatchObject({outcome:{status:'deferred'}}); } finally { ready.mockRestore(); }
+  } else {
+   const lease = {owner:'old-worker', claimCount:1}, now = new Date(), payload = s.run.dispatchPayloadJson as any;
+   expect(await f.app.generationRunRepository.claimRun(s.run.id, lease.owner, new Date(now.getTime()+60000), now, 0)).toBe(true);
+   expect(await new NarrationRepository(f.app.db).claimProviderIntent('u', s.run.projectId, s.run.id, lease, payload.provider_request_key, narrationTextHash(canonicalStringify({sourceText:payload.source_text, settings:payload.settings})))).toBe(true);
+  }
+  await f.client.generationRun.update({where:{id:s.run.id}, data:{dispatchLeaseExpiresAt:new Date(Date.now()-1000)}});
+  await f.client.$disconnect();
+  const cold = await f.cold(), resumed = vi.spyOn(cold.provider, 'generate');
+  return {...f, reopen:f.cold, s, generated, cold, resumed};
+ }
+ function inject(f: Awaited<ReturnType<typeof recoveryFixture>>, point: Point, error: unknown, effect?: () => Promise<void>) {
+  const [object, key]: [any, string] = point === 'snapshot' ? [f.cold.app.generationRunRepository, 'getSnapshotById'] : point === 'fact_event' ? [f.cold.client.generationRunEvent, 'findUnique'] : [NarrationRepository.prototype, {candidate:'findByIdForOwner', source:'sourceContext', ensure_candidate:'findForRunForOwner', intent_check:'hasProviderIntent'}[point]];
+  const original = object[key]; let hits = 0, completedReads = 0;
+  const spy = vi.spyOn(object, key).mockImplementation(async function(this:unknown, ...args:any[]) {
+   const result = await original.apply(this, args); completedReads++;
+   if (hits === 0) { hits++; await effect?.(); throw error; }
+   return result;
+  });
+  return {spy, hits:()=>hits, completedReads:()=>completedReads};
+ }
+ it.each(positions.flatMap(([state, point]) => (['transient', 'permanent'] as const).map(kind => ({state, point, kind}))))('$state/$point/$kind：读取位置不改变恢复或明确失败的边界', async ({state, point, kind}) => {
+  const f = await recoveryFixture(state), error = new Prisma.PrismaClientKnownRequestError('injected after successful local read', {code:kind==='transient'?'P1001':'P2003', clientVersion:'test'});
+  const fault = inject(f, point, error); let next: Awaited<ReturnType<typeof f.reopen>> | undefined;
+  try {
+   const first = await f.cold.app.generationRunDispatcher.dispatch(f.s.run.id); fault.spy.mockRestore();
+   expect(fault.hits()).toBe(1); expect(fault.completedReads()).toBeGreaterThan(0);
+   expect(first).toMatchObject({outcome:{status:kind==='transient'?'deferred':'failed'}});
+   expect(await f.cold.client.generationRun.findUniqueOrThrow({where:{id:f.s.run.id}})).toMatchObject({status:kind==='transient'?'running':'failed', dispatchClaimCount:2});
+   if (kind === 'transient') {
+    expect(await f.cold.client.narrationRecord.findUniqueOrThrow({where:{id:f.s.record.id}})).toMatchObject({status:'generating'});
+    await f.cold.client.generationRun.update({where:{id:f.s.run.id}, data:{dispatchLeaseExpiresAt:new Date(Date.now()-1000)}});
+   }
+   await f.cold.client.$disconnect(); next = await f.reopen(); const replay = vi.spyOn(next.provider, 'generate');
+   expect(next.app.db.narrationRecords.size).toBe(0);
+   await next.app.generationRunDispatcher.scanAndDispatch();
+   expect(await next.app.generationRunDispatcher.scanAndDispatch()).toEqual({claimed:0});
+   const row = await next.client.narrationRecord.findUniqueOrThrow({where:{id:f.s.record.id}});
+   if (kind === 'transient') {
+    expect(row.status).toBe(state==='complete'?'ready':'unknown');
+    expect(await next.client.generationRun.findUniqueOrThrow({where:{id:f.s.run.id}})).toMatchObject({status:state==='complete'?'succeeded':'needs_reconciliation', dispatchClaimCount:3});
+   } else expect(await next.client.generationRun.findUniqueOrThrow({where:{id:f.s.run.id}})).toMatchObject({status:'failed', dispatchClaimCount:2});
+   expect(await next.client.narrationSubtitleRevision.count()).toBe(kind==='transient'&&state==='complete'?1:0);
+   expect(await next.client.project.findUniqueOrThrow({where:{id:f.s.run.projectId}})).toMatchObject({activeNarrationRecordId:null});
+   if (state === 'complete') expect(await next.client.usageCostRecord.findMany()).toMatchObject([{outputUnits:9,actualCostMicros:'1260',status:'succeeded'}]);
+   if (kind==='transient'&&state==='intent') expect(await next.client.usageCostRecord.findMany()).toMatchObject([{outputUnits:null,actualCostMicros:null}]);
+   expect(await next.client.generationRunEvent.count({where:{eventType:'narration_provider_intent'}})).toBe(1);
+   expect(f.generated).toHaveBeenCalledTimes(state==='complete'?1:0); expect(f.resumed).not.toHaveBeenCalled(); expect(replay).not.toHaveBeenCalled();
+  } finally {fault.spy.mockRestore();await next?.client.$disconnect();await f.cold.client.$disconnect();await f.client.$disconnect();}
+ });
+ it.each((['snapshot','candidate','source','ensure_candidate'] as const).flatMap(point => (['cancel','same_owner','other_owner'] as const).map(action=>({point,action}))))('$point 暂错同时 $action：旧执行器不改变新状态', async ({point,action}) => {
+  const f = await recoveryFixture('complete'); let expectedRun:unknown, expectedRecord:unknown;
+  const fault = inject(f, point, temporaryDbError(), async () => {
+   if (action === 'cancel') expect((await f.cold.app.inject({method:'POST',url:`/api/projects/${f.s.run.projectId}/script/narrations/${f.s.record.id}/cancel`,auth,payload:{}})).statusCode).toBe(200);
+   else {
+    const current=await f.cold.client.generationRun.findUniqueOrThrow({where:{id:f.s.run.id}}), now=new Date(current.dispatchLeaseExpiresAt!.getTime()+1);
+    expect(await f.cold.app.generationRunRepository.claimRun(current.id,action==='same_owner'?current.dispatchLeaseOwner!:'next-worker',new Date(now.getTime()+60000),now,current.dispatchClaimCount)).toBe(true);
+   }
+   expectedRun=await f.cold.client.generationRun.findUniqueOrThrow({where:{id:f.s.run.id}});expectedRecord=await f.cold.client.narrationRecord.findUniqueOrThrow({where:{id:f.s.record.id}});
+  });
+  try {
+   expect(await f.cold.app.generationRunDispatcher.dispatch(f.s.run.id)).toMatchObject({fencedOut:true});fault.spy.mockRestore();expect(fault.hits()).toBe(1);
+   expect(await f.cold.client.generationRun.findUniqueOrThrow({where:{id:f.s.run.id}})).toEqual(expectedRun);
+   expect(await f.cold.client.narrationRecord.findUniqueOrThrow({where:{id:f.s.record.id}})).toEqual(expectedRecord);
+   expect(await f.cold.client.narrationSubtitleRevision.count()).toBe(0);expect(f.resumed).not.toHaveBeenCalled();
+   expect(await f.cold.app.generationRunDispatcher.scanAndDispatch()).toEqual({claimed:0});
+  } finally {fault.spy.mockRestore();await f.cold.client.$disconnect();await f.client.$disconnect();}
+ });
+ it.each(['shape','message','missing','mismatch'] as const)('快照 $0 不得当成临时故障无限延期', async mode => {
+  const f=await recoveryFixture('complete'), original=f.cold.app.generationRunRepository.getSnapshotById;
+  const spy=vi.spyOn(f.cold.app.generationRunRepository,'getSnapshotById').mockImplementationOnce(async id=>{
+   const value=await original(id);
+   if(mode==='missing')return null;if(mode==='mismatch')return {...value!,projectId:'wrong-project'};
+   throw mode==='shape'?Object.assign(Error('not a database exception'),{code:'P1001'}):Error('P1001');
+  });
+  try {expect(await f.cold.app.generationRunDispatcher.dispatch(f.s.run.id)).toMatchObject({outcome:{status:'failed'}});expect(spy).toHaveBeenCalledOnce();expect(f.resumed).not.toHaveBeenCalled();expect(await f.cold.app.generationRunDispatcher.scanAndDispatch()).toEqual({claimed:0});}
+  finally {spy.mockRestore();await f.cold.client.$disconnect();await f.client.$disconnect();}
+ });
+ it('恢复前缀与错误出口的当前run读取连续暂错，不把不可读当作永久失败', async()=>{
+  const f=await recoveryFixture('complete');let failing=false, runHits=0;
+  const fault=inject(f,'snapshot',temporaryDbError(),async()=>{failing=true;});
+  const original=f.cold.app.generationRunRepository.getRunById;
+  const runSpy=vi.spyOn(f.cold.app.generationRunRepository,'getRunById').mockImplementation(async id=>{const row=await original(id);if(failing){runHits++;throw temporaryDbError();}return row;});
+  try {
+   await f.cold.app.generationRunDispatcher.dispatch(f.s.run.id).catch(()=>undefined);fault.spy.mockRestore();runSpy.mockRestore();
+   expect(fault.hits()).toBe(1);expect(runHits).toBeGreaterThan(0);
+   expect(await f.cold.client.generationRun.findUniqueOrThrow({where:{id:f.s.run.id}})).toMatchObject({status:'running',dispatchClaimCount:2});
+   expect(await f.cold.client.narrationRecord.findUniqueOrThrow({where:{id:f.s.record.id}})).toMatchObject({status:'generating'});
+   await f.cold.client.generationRun.update({where:{id:f.s.run.id},data:{dispatchLeaseExpiresAt:new Date(Date.now()-1000)}});
+   await f.cold.app.generationRunDispatcher.scanAndDispatch();
+   expect(await f.cold.client.narrationRecord.findUniqueOrThrow({where:{id:f.s.record.id}})).toMatchObject({status:'ready'});expect(f.resumed).not.toHaveBeenCalled();
+  } finally {fault.spy.mockRestore();runSpy.mockRestore();await f.cold.client.$disconnect();await f.client.$disconnect();}
+ });
+ it('首次运行前缀暂错没有intent，恢复只调用供应商一次', async()=>{
+  const provider=syntheticProvider(),generate=vi.spyOn(provider,'generate'),f=await sqliteFixture(provider);
+  const spy=vi.spyOn(f.app.generationRunRepository,'getSnapshotById').mockRejectedValueOnce(temporaryDbError());
+  try {expect(await f.app.generationRunDispatcher.dispatch(f.submission.run.id)).toMatchObject({outcome:{status:'deferred'}});spy.mockRestore();expect(generate).not.toHaveBeenCalled();expect(await f.client.generationRunEvent.count({where:{eventType:'narration_provider_intent'}})).toBe(0);await f.client.generationRun.update({where:{id:f.submission.run.id},data:{dispatchLeaseExpiresAt:new Date(Date.now()-1000)}});await f.app.generationRunDispatcher.scanAndDispatch();expect(generate).toHaveBeenCalledOnce();expect(await f.client.narrationRecord.findUniqueOrThrow({where:{id:f.submission.record.id}})).toMatchObject({status:'ready'});}
+  finally {spy.mockRestore();await f.client.$disconnect();}
+ });
+ it('供应商抛同类Prisma异常仍是未知远端结果，不能进入前置延期',async()=>{
+  const generate=vi.fn(async()=>{throw temporaryDbError();}),f=await fixture({generate}),s=await prepared(f);
+  expect(await f.app.generationRunDispatcher.dispatch(s.run.id)).toMatchObject({outcome:{status:'needs_reconciliation'}});
+  expect(f.app.db.narrationRecords.get(s.record.id)?.status).toBe('unknown');expect(await f.app.generationRunDispatcher.scanAndDispatch()).toEqual({claimed:0});expect(generate).toHaveBeenCalledOnce();
+ });
+});
 describe('真实 SQLite ready 写入冲突的恢复边界', () => {
  it.each(['recover', 'cancel_after', 'cancel_during', 'same_owner', 'other_owner'] as const)('%s：真实快照冲突不丢本地产物且旧执行器不能越权', async mode => {
   const provider = syntheticProvider(), generate = vi.spyOn(provider, 'generate');
