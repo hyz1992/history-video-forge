@@ -6,9 +6,10 @@
 |---|---|
 | TASK_BASE_SHA | d6542fa64ad1cf2d2a56822cfd684cf761f72ef3 |
 | 审查级别 | T2 |
-| 阶段 | 追加双路累计复审已收敛，候选待终审 |
+| 被终审候选 SHA | 96c8638875ac2b9222dbbf2bc36f94d34dc01233 |
+| 阶段 | R5 终审失败；来源派发竞态未修，停止追加整改 |
 | 整改复审轮数 | 3 / 3 |
-| 终审调用次数 | 0 |
+| 终审调用次数 | 1 |
 | 受限例外 | 第 1 次已授权；本次追加复审 1 / 1 |
 
 ## 原始验收清单
@@ -17,7 +18,7 @@
 
 | 编号 | 原始要求 | 状态 | 证据 |
 |---|---|---|---|
-| L1 | 文案已确认、来源 hash/revision 与完整 owner 权限前置校验 | 已修 | root-api-ex1-final-command.json、root-submit-race-ex1-final-command.json：确认/hash/owner/revision 冲突均零写入、零外呼 |
+| L1 | 文案已确认、来源 hash/revision 与完整 owner 权限前置校验 | 部分修 | 提交前 API/事务校验通过；root-final-dispatch-source-window-command.json 实测派发读取后、intent 事务前变更正文/active script/硬校验仍调用供应商，exit 1 |
 | L2 | 有限 overrides 进入冻结快照；正文/设置指纹幂等，旧 operation 不变 | 已修 | root-ex1-final-regression.json：幂等/冻结 override 及旧 operation 回归；root-api-ex1-final-command.json 同 key 只生成一次 |
 | L3 | 纯 readiness；真实模型/音色/协议与资格一致，非法组合零外呼 | 已修 | narration-lifecycle 10 项、narration-api 19 项；非法 rate/revision 零外呼，纯 readiness 读取正式本地报告 |
 | L4 | 持久化后 202、既有 dispatcher/lease；缺快照拒绝，未知结果不自动重发 | 已修 | root-recovery-ex1-final-command.json、root-intent-ex1-final-command.json、root-failure-boundary-ex1-final-command.json、root-storage-outcome-combinations-ex1-final-command.json、root-same-owner-claim-fencing-ex1-final-command.json、root-same-owner-successor-completion-ex1-final-command.json：正常与暂时 DB 故障恢复均不重发 |
@@ -207,3 +208,18 @@ root-same-owner-claim-fencing-r3-red-command.json 实际 exit 1：真实 SQLite 
 本次 diff 与 contract 均为 Critical 0 / Important 0 / Minor 0。两路审查及根代理核对审前后 30 路径 hash、HEAD 与 git status 保持一致；完整累计范围包含未跟踪文件，未仅审本轮四文件。原同 owner claim 身份 finding 已闭环，原费用、错误分类、恢复等不变量累计复核仍成立；L1–L8 均在任务 5 的代码和当前证据范围内已修。
 
 常规整改复审 3 / 3、第 1 次受限例外追加复审 1 / 1 已收敛，未消耗第二次例外；本记录写入候选时终审调用仍为 0。按流程提交当前候选后，再由全新上下文 R5 阶段一仅审原始需求/设计/base/head/代码与 diff；阶段二同一代理核对原始验证证据。此处不宣称终审或后续任务完成。
+
+
+## R5 两阶段终审结论与停止状态
+
+被终审候选 SHA：`96c8638875ac2b9222dbbf2bc36f94d34dc01233`；固定 TASK_BASE_SHA：`d6542fa64ad1cf2d2a56822cfd684cf761f72ef3`。已执行 final 共 1 次：同一全新上下文代理先独立审查 29 个代码/测试/正式文档路径（阶段一排除本记录内容及 diff），形成 finding 后，阶段二核对运行原始证据。两阶段是同一次终审，不计两次。最终 Critical 0 / Important 1 / Minor 0，候选失败，任务 5 整体未通过。此前各节“终审调用 0”和待终审描述为当时历史状态，本节及顶部状态表为当前结论。
+
+Important：narration-dispatch-handler.ts:118 取得来源后，经过异步事实读取、bundle 恢复、目录和 voice 查询，后续仍用旧对象核对正文和配置。narration.repository.ts:181–195 的 claimProviderIntent 事务虽再次读取来源，但丢弃结果，只检查 owner、lease 和已有 intent；调用前最后一次检查也只有 run 身份。因此另一实例在前次读取后、intent 事务前改变来源时，旧正文仍能进入供应商。此为任务 5 的调用前来源验收缺口，不归入任务 6 统一失效来推迟处理。
+
+根代理独立复现 root-final-dispatch-source-window.mts，实际命令 `node --import tsx harness/scripts/runtime/output/narration-task5-evidence-20260907/root-final-dispatch-source-window.mts`；原始输出 root-final-dispatch-source-window-command.json，报告 root-final-dispatch-source-window-report.json。隔离 SQLite 两个真实 Prisma client，在原 claimProviderIntent 方法进入前由第二 client 修改正文、切换 active script 或将硬校验改为失败，然后继续原生产事务。三组 windowHit=true、intent=1、providerCalls=1（预期 0）；仅修改项目名称的无关对照为 1（预期 1）。实际 exit 1 来自行为断言，并非环境故障。provider 为明确抛异常的 fake，外部网络调用 0；数据库变更为测试夹具，不冒充真实 UI 操作。TTS 投影变化的同窗口目前只有代码依据，本次没有实测该组合。
+
+原始验收：L1 部分修；L2–L8 在任务 5 既定范围内已修。26 文件 624 项通过、完整后端类型检查 exit 0、15 个既有独立探针和三档原件回放通过仍为真实结果，但不能抵消上述新失败，也不代表全仓全量或 UI/成品验收。根代理核对终审前后 30 路径 hash 与 git status 一致；本次仅新增 ignored 隔离反例证据并机械更新本记录，未修改产品或正式设计/计划。
+
+常规整改复审仍为 3 / 3；第 1 次明确受限例外的追加复审为 1 / 1，已用完；没有第二次例外授权。依本记录授权停止条件及 harness/docs/independent-review-protocol.md“用户明确授权的例外除外”“例外须逐次单独授权”，停止自主整改，不进入任务 6。
+
+下一步具体建议：如用户另行批准第 2 次受限例外，仅在现有 narration repository/handler 与既有故障恢复测试内修正该来源不变量：把冻结 script ID、正文 hash、确认、硬校验及项目 TTS 设置投影与实际来源的比对放到写入 intent 的同一事务，冲突不得创建 intent 或调用 provider；保留无关项目/视觉设置变化和合法 frozen override 的行为。新增正式双 client 竞争矩阵并复验当前反例、原 26 文件集合和恢复/费用/lease 证据，重新累计双路审查收敛后才形成新候选终审。该建议尚未实施，不重置既有轮数，不授权后续无限修复。
