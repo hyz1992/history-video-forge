@@ -6,11 +6,11 @@
 |---|---|
 | TASK_BASE_SHA | d6542fa64ad1cf2d2a56822cfd684cf761f72ef3 |
 | 审查级别 | T2 |
-| 上次终审候选 SHA | 96c8638875ac2b9222dbbf2bc36f94d34dc01233 |
-| 阶段 | 第 2 次受限例外累计双路复审已收敛，新候选待终审 |
+| 当前被终审候选 SHA | 8003a80e49f13e529924655a66d92299cba3a7b7 |
+| 阶段 | 第二次 R5 终审失败；Map 并发账本缺口未修，停止追加整改 |
 | 整改复审轮数 | 3 / 3 |
-| 终审调用次数 | 1 |
-| 受限例外 | 第 2 次已授权；本次追加复审 1 / 1；第 1 次已用完 |
+| 终审调用次数 | 2 |
+| 受限例外 | 第 1、2 次均已用完；第 2 次追加复审 1 / 1；无第 3 次授权 |
 
 ## 原始验收清单
 
@@ -24,7 +24,7 @@
 | L4 | 持久化后 202、既有 dispatcher/lease；缺快照拒绝，未知结果不自动重发 | 已修 | root-recovery-ex2-final-command.json、root-intent-ex2-final-command.json、root-failure-boundary-ex2-final-command.json、root-storage-outcome-combinations-ex2-final-command.json、root-same-owner-claim-fencing-ex2-final-command.json、root-same-owner-successor-completion-ex2-final-command.json：正常与暂时 DB 故障恢复均不重发 |
 | L5 | 完整 bundle 后才 ready，取消持久化优先，迟到结果受状态和 lease fencing | 已修 | root-failure-ex2-final-command.json、root-failure-boundary-ex2-final-command.json、root-same-owner-claim-fencing-ex2-final-command.json、root-same-owner-successor-completion-ex2-final-command.json：真实 abort 保全用量，延期后取消仍 cancelled，lease 反向组合见正式测试 |
 | L6 | confirm 复查来源与接受区间；同 active 幂等、区间更新保留视觉、不同候选 CAS | 已修 | root-confirm-ex2-final-command.json：重复确认无副作用、区间重接受保留视觉、并发 CAS 200/409 |
-| L7 | 外呼 intent 先落事件；无资产任务媒体账本、文案归属、累计最大值、未知不记零 | 已修 | root-usage-ex2-final-command.json、root-failure-boundary-ex2-final-command.json、root-usage-write-failure-ex2-final-command.json：累计最大值、partial/final/none、已知失败与未知结果均实测 |
+| L7 | 外呼 intent 先落事件；无资产任务媒体账本、文案归属、累计最大值、未知不记零 | 部分修 | Prisma/本地事实恢复证据已通过；root-ex2-final-map-ledger-race-command.json 实测同 key Map 并发产生重复行、累计用量/最终回执回退，exit 1 |
 | L8 | 独立新模型价格，不改变旧全局默认；回归和完整后端类型检查 | 已修 | pricing-catalog.seed.ts 独立北京单价；root-ex2-final-regression.json 26 文件 648 项，root-ex2-full-typecheck.json exit 0 |
 
 ## 范围与基线
@@ -258,3 +258,20 @@ L1–L8 当前“已修”仅表示本次冻结实现与实测覆盖，仍待本
 本次 diff 与 contract 均为 Critical 0 / Important 0 / Minor 0，完整累计 30 路径审查均无新 finding，原终审来源竞态与历史各项不变量保持已修。根代理在 root-ex2-review-end-check.json 核对审前后全部路径 hash、HEAD、status 一致。命令证据精确区分：root-ex2-final-regression.json 保留 files/exit/stdout/stderr 原始结果，实际 executable/argv/cwd 在 root-ex2-verification-command-index.json 按本轮根代理工具调用参数整理；命令索引不是原始结果字段，不改写既有输出。
 
 本次追加复审 1 / 1 已收敛；常规整改 3 / 3、第 1 次例外 1 / 1、已执行 final 1 次不变。提交当前新候选后，执行新的全新上下文 R5 两阶段终审：阶段一仅原始需求/正式设计与计划/base/head/代码累计 diff，形成独立 finding 后阶段二同一代理核对验证证据。新候选写入时尚未执行第二次 final，不在此宣称终审通过或任务 6 完成。
+
+
+## 第二次 R5 终审结论与停止状态
+
+当前被终审候选 SHA：`8003a80e49f13e529924655a66d92299cba3a7b7`；TASK_BASE_SHA 仍为 `d6542fa64ad1cf2d2a56822cfd684cf761f72ef3`。累计已执行 final 共 2 次：首个候选 96c8638875ac2b9222dbbf2bc36f94d34dc01233 因来源竞态失败；本候选使用另一全新上下文按 R5 两阶段审查，先形成独立 finding，再由同一代理核对运行证据。最终 Critical 0 / Important 1 / Minor 0，候选失败，任务 5 整体未通过。历史节内 final 0/1 或待终审表述为当时状态，顶部和本节为当前结论。
+
+原来源竞态已修：L1 在本轮终审核对为已修，事务内 current source/冻结身份/确认/硬校验/TTS 投影及 Map 同步 seal 的 12 组矩阵通过。L2–L6、L8 亦在任务 5 相应范围内已修；L7 改为部分修。
+
+新增 Important：usage-cost-recorder.ts:413–425 的 recordNarrationUsage Map 分支在 async action 中读取行、计算 maximum/状态/回执并生成 ID，等 await action 返回后才 Map.set。同 key 并发调用会在写回前同时读到旧状态，导致空账本重复行，或较低/未知回执覆盖较大 final 用量。该 finding 针对 Map 内存模式，不将其扩大表述为已复现 Prisma/API 失败。
+
+根代理独立复现：root-ex2-final-map-ledger-race.mts 直接对隔离 createDbClient Map 调用生产 recordNarrationUsage，命令 `node --import tsx harness/scripts/runtime/output/narration-task5-evidence-20260907/root-ex2-final-map-ledger-race.mts`；原始结果 root-ex2-final-map-ledger-race-command.json，报告 root-ex2-final-map-ledger-race-report.json。实际 exit 1 来自行为断言：空账本并发308 final/120 partial产生两行；已有100时同组合最后为120/failed/partial/16800微元；再加入null submitted最后为100/submitted/partial/14000微元；相同输入串行对照保持单行308/succeeded/final/43120微元。共4组合，3失败、1对照通过；零网络、零数据库写入。此新增脚本和输出只在ignored证据目录，没有产品修复。
+
+已核对26文件648 PASS、完整后端类型检查exit 0、17个已有独立探针与三档原件一致，均是指定范围真实结果，不能抵消本次并发反例。候选证据使用 candidate-ex2-final-review-freeze.json（HEAD 8003a80e…）及 root-ex2-final-candidate-check.json：30路径hash/status一致。root-ex2-review-end-check.json是提交前专项复审记录（HEAD 22e9a3f…），不作为当前候选HEAD证明，不改写旧证据。
+
+常规整改仍3 / 3，两次受限例外各自追加复审1 / 1均已用完，尚无第三次授权。按第二次授权的明确停止条件及独立审查协议，停止自主整改，不进入任务6；仅机械落盘本终审结果，不修改产品或正式设计/计划。
+
+下一步具体建议：如用户另行批准第三次受限例外，仅修改既有 usage-cost-recorder.ts 与 narration-lifecycle.test.ts，在 Map 路径将读旧行、合并累计值/状态/回执、写回放在无 await 的同一同步段，避免后续异步返回再覆盖；保持 Prisma 事务和既有定价/事实/来源/lease语义。补空账本同key并发唯一性、已有行高低/未知乱序、final及已知费用不回退、独立key不串账和串行对照，并复验当前反例及完整累计集合/探针后再双路收敛与新候选终审。累计任务范围仍30路径，尚未实施该建议；不重置既有计数、不默认授权无限重试。
