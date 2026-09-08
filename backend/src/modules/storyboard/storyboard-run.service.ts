@@ -522,12 +522,12 @@ export async function runStoryboardSegmentRegeneration(
       editing_hint: generatedSegment.editing_hint, on_screen_text: generatedSegment.on_screen_text,
       api_video_suitability: generatedSegment.api_video_suitability, risk_notes: generatedSegment.risk_notes,
     } : generatedSegment;
-    const newPlan = {
+    const newPlan = StoryboardPlan.parse({
       ...existingPlan,
       segments: existingPlan.segments.map((s) =>
         s.segment_id === input.segmentId ? newSegment : s,
       ),
-    };
+    });
 
     const localValidation = validateStoryboardPlan({ draft, plan: newPlan });
 

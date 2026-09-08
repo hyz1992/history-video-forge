@@ -3,6 +3,7 @@ import type {
   StoryboardPlan,
   StoryboardValidationResult,
 } from "../../../../shared/src/index.js";
+import { validateStoryboardTiming, type StoryboardTimingContext } from "./storyboard-timing-projector.js";
 import { StoryboardValidationResult as StoryboardValidationResultSchema } from "../../../../shared/src/index.js";
 import {
   isTextEquivalentWithDrift,
@@ -113,6 +114,7 @@ function buildLinkedNormalizedSet(values: string[]): Set<string> {
 export function validateStoryboardPlan(input: {
   draft: ScriptDraftPackage;
   plan: StoryboardPlan;
+  narrationTiming?: StoryboardTimingContext;
 }): StoryboardValidationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
@@ -120,6 +122,15 @@ export function validateStoryboardPlan(input: {
   const scriptText = draft.script_text;
   const locatedExcerpts: LocatedExcerpt[] = [];
   const traceSets = getTraceLookups(draft);
+  if (plan.plan_version === "storyboard_v2") {
+    try {
+      if (!input.narrationTiming) throw new Error("missing_narration_timing");
+      const verified = validateStoryboardTiming(plan, input.narrationTiming);
+      const sourceText = (input.narrationTiming.timingMap as { sourceText: string }).sourceText;
+      if (sourceText !== scriptText || verified.segments.at(-1)!.source_end !== scriptText.length) throw new Error("source_text_mismatch");
+      locatedExcerpts.push(...verified.segments.map(s => ({ start: s.source_start, end: s.source_end })));
+    } catch { pushUnique(errors, "storyboard_narration_timing_invalid"); }
+  }
 
   plan.segments.forEach((segment, index) => {
     if (segment.order !== index) {
@@ -160,6 +171,7 @@ export function validateStoryboardPlan(input: {
       }
     }
 
+    if (plan.plan_version === "storyboard_v2") return;
     const strictStart = scriptText.indexOf(segment.script_excerpt);
     let start = strictStart;
     // end 默认按 needle 长度算（strict 命中场景）。
@@ -189,7 +201,7 @@ export function validateStoryboardPlan(input: {
   });
 
   const hasMissingExcerpt = errors.includes("storyboard_excerpt_not_in_script");
-  if (!hasMissingExcerpt) {
+  if (plan.plan_version === "storyboard_v1" && !hasMissingExcerpt) {
     for (let index = 1; index < locatedExcerpts.length; index += 1) {
       const previous = locatedExcerpts[index - 1];
       const current = locatedExcerpts[index];
@@ -246,7 +258,7 @@ export function validateStoryboardPlan(input: {
     0,
   );
   const durationDeviation =
-    draft.estimated_duration_sec > 0
+    plan.plan_version === "storyboard_v1" && draft.estimated_duration_sec > 0
       ? Math.abs(totalDurationHintSec - draft.estimated_duration_sec) /
         draft.estimated_duration_sec
       : 0;
