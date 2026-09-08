@@ -111,10 +111,23 @@ export type ComposeTimelineSegment = z.infer<typeof ComposeTimelineSegment>;
 export type ComposeTimeline = z.infer<typeof ComposeTimeline>;
 
 /** 消费者必须验证完整v2合同，不能把缺失来源当legacy。 */
-export function assertNarrationTimelineManifest(timeline:unknown,manifest:unknown){
+export function assertNarrationTimelineManifest(timeline:unknown,manifest:unknown,options:{allowMissingVisuals?:boolean}={}){
  const t=ComposeTimelineV2.parse(timeline),m=AssetManifestV2.parse(manifest);
  if(t.source_asset_plan_record_id!==m.source_asset_plan_id||t.source_storyboard_record_id!==m.source_storyboard_record_id||t.source_script_record_id!==m.source_script_record_id||JSON.stringify(t.narration_reference)!==JSON.stringify(m.narration_reference)||t.subtitle_revision_id!==m.subtitle_revision_id||t.subtitle_settings_hash!==m.subtitle_settings_hash)throw new Error('narration_render_source_mismatch');
  if(t.segments.length!==m.segment_routes.length||t.segments.some((s,i)=>s.segment_id!==m.segment_routes[i]!.segment_id||s.startMs!==m.segment_routes[i]!.narrationRange.startMs||s.endMs!==m.segment_routes[i]!.narrationRange.endMs))throw new Error('narration_render_interval_mismatch');
+ const visualTracks=t.tracks.filter(x=>x.track_type==='visual');
+ if(visualTracks.length!==1)throw new Error('narration_visual_track_invalid');
+ const visuals=visualTracks[0]!.clips,ids=new Set<string>();
+ for(const clip of visuals){if(ids.has(clip.clip_id))throw new Error('narration_visual_clip_duplicate');ids.add(clip.clip_id);if(clip.segment_id!==null&&!t.segments.some(s=>s.segment_id===clip.segment_id))throw new Error('narration_visual_owner_invalid');}
+ for(const segment of t.segments){
+  const clips=visuals.filter(c=>c.segment_id===segment.segment_id).sort((a,b)=>a.startMs!-b.startMs!);
+  if(JSON.stringify([...segment.visual_clip_ids].sort())!==JSON.stringify(clips.map(c=>c.clip_id).sort()))throw new Error('narration_visual_references_invalid');
+  if(!clips.length){if(options.allowMissingVisuals)continue;throw new Error("narration_visual_coverage_missing");}
+  if(clips[0]!.startMs!==segment.startMs||clips.some(c=>c.startMs!<segment.startMs!||c.endMs!>segment.endMs!))throw new Error('narration_visual_interval_invalid');
+  let covered=segment.startMs!;for(const c of clips){if(c.startMs!>covered)throw new Error('narration_visual_gap');covered=Math.max(covered,c.endMs!);}if(covered!==segment.endMs)throw new Error('narration_visual_coverage_invalid');
+ }
+ const outro=visuals.filter(c=>c.segment_id===null);
+ if((!options.allowMissingVisuals&&t.outroDurationMs>0&&outro.length!==1)||outro.length>1||outro.some(c=>!c.notes.includes('explicit_outro_hold')||c.startMs!==t.contentDurationMs||c.endMs!==t.contentDurationMs+t.outroDurationMs))throw new Error('narration_visual_outro_invalid');
  for(const segment of t.segments)projectNarrationFrameRange({startMs:segment.startMs!,endMs:segment.endMs!,fps:t.output_profile.fps});
  for(const track of t.tracks)for(const clip of track.clips){projectNarrationFrameRange({startMs:clip.startMs!,endMs:clip.endMs!,fps:t.output_profile.fps});if(track.track_type==='narration'&&clip.artifact_id!==m.audio_summary.tts_merged_artifact_id||track.track_type==='subtitle'&&clip.artifact_id!==m.audio_summary.subtitle_artifact_id)throw new Error('narration_render_artifact_mismatch');}
  return {timeline:t,manifest:m};
