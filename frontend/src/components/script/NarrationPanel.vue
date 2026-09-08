@@ -6,6 +6,7 @@ const props=defineProps<{store:NarrationStore;estimatedDurationSec:number}>();
 const emit=defineEmits<{(e:'proceed'):void}>();
 const s=computed(()=>props.store.state),d=computed(()=>s.value.detail),c=computed(()=>s.value.context);
 const status=computed(()=>d.value?.effective_status??'empty');
+const polling=computed(()=>status.value==='generating'||s.value.snapshot?.latest_narration_candidate?.effective_status==='generating');
 const labels:Record<string,string>={empty:'尚未生成口播',generating:'口播生成中',ready:'口播已生成，等待试听确认',confirmed:'口播已确认',failed:'口播生成失败',cancelled:'口播已取消',unknown:'供应商结果未知，请先核对费用后再决定重新生成',stale:'口播已过期，请重新生成'};
 const failureLabels:Record<string,string>={narration_timing_invalid:'原生时间校验未通过',narration_provider_unknown:'供应商结果未知，请核对已有费用',narration_text_too_long:'正文超出供应商长度限制',narration_paragraph_too_long:'段落超出供应商长度限制'};
 const needsConfirmation=computed(()=>status.value==='ready'||(status.value==='confirmed'&&s.value.snapshot?.narration_readiness?.reason==='narration_duration_not_accepted'));
@@ -23,13 +24,17 @@ async function save(){if(!selected.value)return;await props.store.saveSettings({
 const cue=computed(()=>d.value?.subtitle?.timeline.cues.find(q=>time.value*1000>=q.displayStartMs&&time.value*1000<q.displayEndMs));
 const subtitleStyle=computed(()=>{const style=d.value?.subtitle?.revision.subtitleSettingsSnapshotJson.resolvedStyle;if(!style)return {};const css=makeSubtitleContainerStyle({frameWidth:1080,frameHeight:1920,style});return Object.fromEntries(Object.entries(css).map(([k,v])=>[k,typeof v==='number'&&['left','right','top','bottom','fontSize'].includes(k)?v+'px':v])) as CSSProperties;});
 let timer:ReturnType<typeof setTimeout>|undefined,disposed=false;
-async function tick(){if(disposed)return;await props.store.refresh();if(!disposed&&status.value==='generating')timer=setTimeout(tick,1500);}
-watch(status,v=>{if(timer)clearTimeout(timer);if(v==='generating')timer=setTimeout(tick,1500);},{immediate:true});
+async function tick(){if(disposed)return;await props.store.refresh();if(!disposed&&polling.value)timer=setTimeout(tick,1500);}
+watch(polling,v=>{if(timer)clearTimeout(timer);if(v)timer=setTimeout(tick,1500);},{immediate:true});
 onBeforeUnmount(()=>{disposed=true;if(timer)clearTimeout(timer);});
 </script>
 <template>
 <section class="narration-panel" data-testid="narration-panel">
 <h2>准备口播</h2><p data-testid="narration-status" aria-live="polite">{{ labels[status] }}</p>
+<label v-if="s.snapshot?.active_narration && s.snapshot?.latest_narration_candidate && s.snapshot.active_narration.narration_record_id!==s.snapshot.latest_narration_candidate.narration_record_id">试听版本
+<select data-testid="narration-record-select" :value="d?.record.id" :disabled="s.loading||s.busy" @change="store.selectRecord(($event.target as HTMLSelectElement).value)">
+<option :value="s.snapshot.latest_narration_candidate.narration_record_id">最新生成候选</option><option :value="s.snapshot.active_narration.narration_record_id">当前已确认音频</option>
+</select></label>
 <p v-if="d?.record.errorCode" data-testid="narration-failure-reason">失败原因：{{ failureLabels[d.record.errorCode] ?? d.record.errorCode }}</p>
 <p v-if="s.error" role="alert">{{ s.error }}</p>
 <p>文案预估 {{ estimatedDurationSec }} 秒 · 实测 {{ duration===null?'尚未生成':(duration/1000)+' 秒' }}<template v-if="band"> · 目标 {{ band.minMs/1000 }}–{{ band.maxMs/1000 }} 秒</template></p>
@@ -46,7 +51,7 @@ onBeforeUnmount(()=>{disposed=true;if(timer)clearTimeout(timer);});
 </div>
 <button v-if="!s.snapshot?.script_confirmation" :disabled="s.busy||!c?.source_script_record_id" @click="store.confirmScript">确认正文</button>
 <button v-if="status!=='generating'" :disabled="s.busy||!s.snapshot?.script_confirmation||editing" @click="store.generate">{{ d?'重新生成口播':'生成口播' }}</button>
-<button v-else :disabled="s.busy" @click="store.cancel">取消本次生成</button>
+<button v-else :disabled="s.loading||s.busy" @click="store.cancel">取消本次生成</button>
 <button :disabled="s.loading" @click="store.refresh()">刷新状态</button>
 <template v-if="d?.files?.audio">
 <audio :key="d.record.id" controls :src="d.files.audio" @timeupdate="time=($event.target as HTMLAudioElement).currentTime" />
@@ -57,7 +62,7 @@ onBeforeUnmount(()=>{disposed=true;if(timer)clearTimeout(timer);});
 <p v-if="status==='confirmed'">目标区间已变化，可复用这版音频重新确认，无需重新生成。</p>
 <p v-if="outside">实测时长超出目标区间，请重新生成或明确接受本次时长。</p>
 <label v-if="outside"><input v-model="accepted" data-testid="accept-duration" type="checkbox">我接受本次超区间时长</label>
-<button data-testid="narration-confirm" :disabled="s.busy||!band||(outside&&!accepted)" @click="confirmAndProceed">确认这版口播</button>
+<button data-testid="narration-confirm" :disabled="s.loading||s.busy||!band||(outside&&!accepted)" @click="confirmAndProceed">确认这版口播</button>
 </template>
 <p v-if="s.snapshot?.narration_readiness?.reason==='narration_stale'">正文或生效参数已变化，原口播已过期。</p>
 <button :disabled="!store.canProceed()||s.busy" @click="emit('proceed')">进入分镜规划</button>
