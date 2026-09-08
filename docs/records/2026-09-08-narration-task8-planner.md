@@ -37,3 +37,9 @@ R1最终固定7文件累计回归regression-r1.json：213项全部passed、0失�
 ## R1双审收敛
 
 diff与contract均未发现Critical / Important / Minor（0/0/0），原始验收A至G离线证据闭环；完整磁盘成功使用合成WAV与实际stub，不是供应商验收。审查前后11文件hash一致，原始报告再次核对为7文件213通过0失败。整改复审1、已执行final1、额外授权0；形成候选2后交全新R5终审。
+
+## 候选2终审结论（机械落盘）
+
+被终审SHA：745f0b8802bb1b3d50fdbfc5be020aef08cafe02。全新final2按R5两阶段完成，0 Critical / 0 Important / 0 Minor；原始工程验收A至G全部已修，Task8工程范围通过。独立核对7文件213通过0失败、集成70通过以及候选11文件hash一致；typecheck/prompt检查依据已有exit0证据和产品hash保持。真实provider节奏质量、UI、成品未验证，不在本结论中扩张。
+
+最终计数：整改复审1；已执行final2；额外授权0。候选1只获部分验收，候选2为本任务最终通过对象。机械落盘前确认候选引用、计数、原始JSON与11文件hash一致；本提交只含本审查记录，不修改测试、产品、prompt或计划。下一步按持续授权进入Task9A。
