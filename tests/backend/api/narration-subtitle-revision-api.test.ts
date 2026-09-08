@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { PrismaFirstAggregateWriter } from "../../../backend/src/db/repositories/prisma-first-aggregate-writer.js";
 import Database from "better-sqlite3";
 import { applyAllDatabaseMigrations } from "../db/migration-test-utils.js";
@@ -180,12 +181,22 @@ async function manifestFixture() { const f = await runnable(), manifest = await 
 describe('Task9C 视觉复用与真实数据库', () => {
     it('已有manifest只替换字幕引用，视觉文件和历史manifest不变', async () => {
         const f = await manifestFixture(), before = structuredClone(f.manifest), c = [...f.db.projectGenerationConfigurations.values()][0]!;
+        const video = join(f.path, 'visual.mp4');
+        await writeFile(video, Buffer.from([0, 0, 0, 24, 102, 116, 121, 112, 109, 112, 52, 50]));
+        const videoArtifact = { artifact_id: 'video', artifact_type: 'video' as const, origin: 'local' as const, file_uri: video, created_at: new Date().toISOString(), metadata: { width: 720, height: 1280, duration_sec: 2, fps: 30 } };
+        f.manifest.artifacts.push(videoArtifact);
+        before.artifacts.push(structuredClone(videoArtifact));
+        const fileHash = (path: string) => createHash('sha256').update(readFileSync(path)).digest('hex');
+        const imageHash = fileHash(f.image), videoHash = fileHash(video);
         c.configurationJson.creative.subtitle_style_preset_id = SUBTITLE_STYLE_PRESET_REGISTRY_V1[0]!.preset_id;
         const revision = await deriveNarrationSubtitleRevision({ db: f.db, storageBaseDir: f.path }, 'p1', f.project.ownerId);
         expect(f.project.activeAssetManifestRecordId).not.toBe('m');
         const next = AssetManifestV2.parse(f.db.assetManifestRecords.get(f.project.activeAssetManifestRecordId!)!.manifestJson);
         expect(next.subtitle_revision_id).toBe(revision.id);
         expect(next.artifacts.find(a => a.artifact_id === 'image')).toEqual(before.artifacts.find(a => a.artifact_id === 'image'));
+        expect(next.artifacts.find(a => a.artifact_id === 'video')).toEqual(videoArtifact);
+        expect(fileHash(f.image)).toBe(imageHash);
+        expect(fileHash(video)).toBe(videoHash);
         expect(next.executions).toEqual(before.executions);
         expect(readFileSync(f.image, 'utf8')).toBe('visual-bytes');
         expect(f.db.assetManifestRecords.get('m')!.manifestJson).toEqual(before);
