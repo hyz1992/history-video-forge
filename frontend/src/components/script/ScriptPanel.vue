@@ -9,6 +9,8 @@ import { useWorkspaceStore, PIPELINE_STEPS } from "../../stores/workspace";
 import { useGenerationCostStore } from "../../stores/generation-cost";
 import { useStagePolling } from "../../composables/useStagePolling";
 import { resolvePipelineStagePhase } from "../../composables/usePipelineStagePhase";
+import NarrationPanel from './NarrationPanel.vue';
+import { createNarrationStore } from '../../stores/narration';
 import StageGenerating from "../workspace/StageGenerating.vue";
 import StageLoadingBar from "../workspace/StageLoadingBar.vue";
 import RegenFeedbackModal from "./RegenFeedbackModal.vue";
@@ -27,6 +29,9 @@ const router = useRouter();
 const projectStore = useProjectStore();
 const { checkStageRollback } = useCompetitionGuard();
 const initialLoadDone = ref(false);
+const narrationStore = createNarrationStore({projectId:()=>projectStore.state.projectId});
+const narrationMode = computed(()=>scriptStore.state.snapshot?.narration_timing_mode==="narration_first_v1");
+watch([narrationMode,()=>projectStore.state.projectId,()=>scriptStore.state.snapshot?.active_script?.script_record_id,()=>scriptStore.state.snapshot?.active_script?.script_text],([enabled])=>{if(enabled)void narrationStore.refresh(true);},{immediate:true});
 
 const { startPolling } = useStagePolling({
   loadSnapshot: () => scriptStore.loadActiveScriptSnapshot(),
@@ -413,7 +418,8 @@ function handleSelectHistory(entryId: string) {
   scriptStore.selectHistoryEntry(entryId);
 }
 
-function handleConfirm() {
+async function handleConfirm() {
+  if(narrationMode.value){await narrationStore.refresh();if(!narrationStore.canProceed())return;}
   if (!canConfirmVisibleScript.value) {
     return;
   }
@@ -604,7 +610,7 @@ function handleConfirm() {
           </div>
 
           <!-- Action buttons -->
-          <div v-if="visibleScript && !isViewingHistoryEntry" class="script-actions-card">
+          <div v-if="visibleScript && !isViewingHistoryEntry && !narrationMode" class="script-actions-card">
             <el-button
               type="primary"
               :disabled="scriptStore.state.isRunningAction || !canConfirmVisibleScript"
@@ -624,6 +630,7 @@ function handleConfirm() {
           </div>
         </div>
       </div>
+      <NarrationPanel v-if="narrationMode && !isViewingHistoryEntry" :store="narrationStore" :estimated-duration-sec="scriptDurationSec" @proceed="handleConfirm" />
     </template>
 
     <RegenFeedbackModal

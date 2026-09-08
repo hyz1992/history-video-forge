@@ -474,3 +474,5 @@ describe("ProjectCostPanel（费用清单面板）", () => {
     expect(loadSummary).toHaveBeenCalled();
   });
 });
+
+it('新口播operation归文案且未知实际费用保持未知',async()=>{const store=createMockCostStore();const record=store.state.costRecords.data!.records.find(r=>r.capability==='tts.synthesize')!;record.operation='script.narration.generate';record.actual_cost_cny=null;const w=mountPanel(store);await flushPromises();const group=w.findAll('[data-testid=cost-stage-group]').find(g=>g.text().includes('文案'))!;expect(group.text()).toContain('TTS 口播');expect(group.text()).toContain('未知');w.unmount();});

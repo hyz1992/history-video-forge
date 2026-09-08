@@ -1,3 +1,6 @@
+import { readNarrationUiContext } from './narration-ui-context.js';
+import { NarrationBundleStorage } from './narration-bundle-storage.js';
+import { resolveProjectStorageRoot } from '../../db/repositories/prisma-first-aggregate-hydrator.js';
 import { deriveNarrationSubtitleRevision, refreshSavedNarrationSubtitles } from "./narration-subtitle-revision.service.js";
 import { DeriveNarrationSubtitlesRequest } from "../../../../shared/src/index.js";
 import { narrationVisibleStatus } from "./narration-readiness.js";
@@ -33,6 +36,7 @@ function route(handler: (context: RouteContext, ownerId: string, actorId: string
     };
 }
 export function registerNarrationRoutes(app: AppInstance) {
+    app.addRoute("GET", "/api/projects/:projectId/script/narration/context", route(async(c,owner)=>({statusCode:200,body:await readNarrationUiContext(c.app.db,c.params.projectId,owner)})));
     app.addRoute("POST", "/api/projects/:projectId/script/narrations/:recordId/subtitles", route(async(c,owner)=> {
       const revision=await deriveNarrationSubtitleRevision(c.app,c.params.projectId,owner,DeriveNarrationSubtitlesRequest.parse(c.payload),c.params.recordId);
       return {statusCode:200,body:{revision}};
@@ -51,8 +55,20 @@ export function registerNarrationRoutes(app: AppInstance) {
         if (!record)
             return { statusCode: 404, body: { error: "narration_not_found" } };
         const run = await c.app.generationRunRepository.getRunById(record.generationRunId);
+        const project = await repo.projectForOwner(c.params.projectId, owner);
+        const requested = c.payload?.subtitle_revision_id;
+        if(requested!==undefined && (typeof requested!=="string"||!requested.trim())) return {statusCode:422,body:{error:"narration_request_invalid"}};
+        const revisionId = requested ?? (project.activeNarrationRecordId===record.id?project.activeNarrationSubtitleRevisionId:null) ?? record.output?.initialSubtitleRevisionId;
+        const revision = revisionId ? await repo.findSubtitleForOwner(record.projectId,owner,revisionId) : null;
+        if(requested && (!revision||revision.narrationRecordId!==record.id)) return {statusCode:404,body:{error:"narration_subtitle_not_found"}};
+        let subtitle = null;
+        if(record.output && revision){
+          const shortId="p_"+project.id.replace(/[^a-zA-Z0-9]/g,"").toLowerCase().slice(0,8).padEnd(8,"0");
+          const storageRootDir = "storageRootDir" in project ? project.storageRootDir as string : resolveProjectStorageRoot({storageRoot:c.app.storageBaseDir,createdAt:project.createdAt,displayName:project.storageDisplayName,shortId,storageKey:project.storageKey});
+          subtitle = await new NarrationBundleStorage({projectId:record.projectId,storageRootDir}).readSubtitleRevision({record,revision});
+        }
         const base = "/api/projects/" + encodeURIComponent(record.projectId) + "/script/narrations/" + encodeURIComponent(record.id);
-        return { statusCode: 200, body: { record, effective_status: narrationVisibleStatus(record.status, run?.status ?? null), run_status: run?.status ?? null, files: record.output ? { audio: base + "/files/audio", timing: base + "/files/timing", events: base + "/files/events", srt: base + "/subtitles/" + record.output.initialSubtitleRevisionId + "/files/srt", vtt: base + "/subtitles/" + record.output.initialSubtitleRevisionId + "/files/vtt" } : null } };
+        return { statusCode: 200, body: { record, subtitle, idempotency_key: run?.idempotencyKey ?? null, effective_status: narrationVisibleStatus(record.status, run?.status ?? null), run_status: run?.status ?? null, files: record.output ? { audio: base + "/files/audio", timing: base + "/files/timing", events: base + "/files/events", srt: base + "/subtitles/" + (revision?.id ?? record.output.initialSubtitleRevisionId) + "/files/srt", vtt: base + "/subtitles/" + (revision?.id ?? record.output.initialSubtitleRevisionId) + "/files/vtt" } : null } };
     }));
     app.addRoute("POST", "/api/projects/:projectId/script/narrations/:recordId/confirm", route(async (c, owner, actor) => {
         const record = await confirmNarration(c.app, c.params.projectId, owner, actor, c.params.recordId, ConfirmNarrationRequest.parse(c.payload));

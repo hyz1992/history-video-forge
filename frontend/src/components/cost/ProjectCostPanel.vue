@@ -543,6 +543,7 @@ const runStatusSummary = computed(() => {
               >
                 实际 ¥{{ microsDecimalToCnyDisplay(row.totalActual) }}
               </span>
+              <span v-if="row.totalActual === null" class="cost-record-actual">实际费用未知</span>
               <span v-if="row.costBasis" class="cost-record-basis">{{ COST_BASIS_LABELS[row.costBasis] ?? row.costBasis }}</span>
             </div>
           </li>

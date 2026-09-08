@@ -302,6 +302,10 @@ expect(projectVisualIntervals(boundaries, [
 - [ ] UI 显示预估、实测、目标区间与字幕预览；预览使用选定 revision 的完整样式快照。显示实际固定模型/音色；新模式的“应用推荐”是显式配置变更，不伪装持续 auto。修改/保存生效参数前展示失效影响。取消未保存编辑不影响 active。费用入口识别新 operation，按文案阶段显示 TTS。
 - [ ] 回跑上述测试及 `npm run build:frontend`，PASS 后提交 `在文案页提供口播生成预览与确认门禁`。
 
+2026-09-08 Task11A接线细化（固定基线d1bd0a2f）：独立narration store负责请求幂等、项目切换隔离、刷新恢复和后端readiness；NarrationPanel只负责试听/状态/确认及本地未保存设置。新增只读context API返回权威正文hash、目标区间、配置revision和当前可用资格选项；资格控件读取后端能力投影，当前仅开放已实测Qwen neutral/rate=1，不因旧计划中的CosyVoice示例扩大资格。record详情返回所选字幕revision完整快照和真实cue，失败明确不可预览。新增共享narration-ui.schema.ts约束响应、narration-ui-context.ts组织只读查询，以及对应API测试；独立store由文案面板创建并传给口播组件，无全局单例或main.ts改动。路由仅在无历史下游可浏览且新路径未ready时回到文案，生成API保持现有权威门禁。ProjectCostPanel已按script前缀分组，本任务补新operation回归及未知实际费用明确标注，不改变金额聚合规则。
+
+实施顺序：先写context/详情和store失败测试；实现只读数据与幂等恢复；再写面板/深链/费用测试，实现两层确认和完整样式试听；最后最小回归、前端构建、真实浏览器及T2累计复审。参数保存始终携带完整现有video/creative/capabilities和expected revision，明确展示失效范围，取消本地编辑零请求。浏览器使用本地fixture与隔离存储，无真实provider调用。
+
 ### 任务 11B：下游时长展示与旧项目显式升级
 
 新增：`tests/backend/narration/narration-mode-upgrade.test.ts`、`tests/frontend/narration-mode-upgrade.spec.ts`。

@@ -56,6 +56,7 @@ export interface ActiveScriptSnapshot {
 }
 
 export interface ScriptSnapshot {
+  narration_timing_mode?: "legacy_estimated" | "narration_first_v1";
   project_id: string;
   current_status: string;
   active_topic_package?: {

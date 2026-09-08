@@ -1,3 +1,4 @@
+import { apiFetch } from '../utils/api';
 import { createMemoryHistory, createRouter, createWebHistory, type Router } from "vue-router";
 
 import HomePage from "../views/HomePage.vue";
@@ -108,5 +109,16 @@ export function createAppRouter(mode: "memory" | "web" = "memory", options?: Cre
     });
   }
 
+  router.beforeResolve(async(to)=>{
+    const step=to.params.step,projectId=to.params.projectId;
+    if(typeof projectId!=="string"||!["storyboard","asset","compose-render","publish"].includes(String(step)))return true;
+    try{const snapshot=await apiFetch<Record<string,any>>("/api/projects/"+encodeURIComponent(projectId));
+      if(snapshot.narration_timing_mode==="narration_first_v1"&&snapshot.narration_readiness?.ready!==true){
+        const existing=step==="storyboard"?snapshot.active_storyboard:step==="asset"?snapshot.active_assets:step==="compose-render"?(snapshot.active_compose??snapshot.active_render):snapshot.active_publish_package;
+        if(!existing)return {path:"/projects/"+encodeURIComponent(projectId)+"/script",query:{reason:"narration_required"}};
+      }
+    }catch{/* API生成入口仍执行权威门禁，网络失败由页面提供重试。 */}
+    return true;
+  });
   return router;
 }
