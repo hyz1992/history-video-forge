@@ -4,7 +4,9 @@ import { importNarrationManifest } from '../../../backend/src/modules/assets/nar
 import { buildComposeTimeline } from '../../../backend/src/modules/compose/compose-timeline-builder.js';
 import { buildRemotionInputProps } from '../../../backend/src/modules/render/remotion-input-builder.js';
 import { AssetManifestV2 } from '../../../shared/src/index.js';
-import { writeFile } from 'node:fs/promises';
+import { writeFile, readFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { join } from 'node:path';
 async function fixture() { const f = await runnable(); const manifest = await importNarrationManifest(f); manifest.artifacts.push({artifact_id:'base-image',artifact_type:'image',origin:'local',file_uri:'https://example.invalid/base.png',created_at:new Date().toISOString(),metadata:{width:1080,height:1920}});const template = {...manifest.segment_routes[0]!,primary_visual_artifact_id:'base-image',visual_route_type:'image_only' as const,motion_artifact_id:null}; manifest.segment_routes = Array.from({ length: 22 }, (_, i) => ({ ...template, segment_id: 's' + i, narrationRange: { startMs: Math.round(i * 117000 / 22), endMs: Math.round((i + 1) * 117000 / 22) } })); return { ...f, manifest }; }
 function build(f: Awaited<ReturnType<typeof fixture>>) { return buildComposeTimeline({ manifest: f.manifest, assetManifestRecordId: 'm', assetPlanRecordId: 'ap', storyboardRecordId: 'sb', scriptRecordId: 's1', projectStorageRootDir: f.path }); }
 describe('narration first timeline', () => {
@@ -42,3 +44,31 @@ for(const change of ['start','end','owner'])it('拒绝单独篡改视觉clip '+c
 
 import { validateRenderSources } from '../../../backend/src/modules/render/render-source-validator.js';
 for(const which of ['first','last','outro'])it('真实render拒绝删除完整视觉区间 '+which,async()=>{const f=await fixture();f.manifest.artifacts.push({artifact_id:'img',artifact_type:'image',origin:'local',file_uri:'https://example.invalid/a.png',created_at:new Date().toISOString(),metadata:{width:10,height:10}});for(const route of f.manifest.segment_routes){route.primary_visual_artifact_id='img';route.visual_route_type='image_only';route.motion_artifact_id=null;}const t=build(f),track=t.tracks.find(x=>x.track_type==='visual')!;if(which==='outro')track.clips=track.clips.filter(c=>c.segment_id!==null);else{const seg=which==='first'?t.segments[0]!:t.segments.at(-1)!;track.clips=track.clips.filter(c=>c.segment_id!==seg.segment_id&&(which!=='last'||c.segment_id!==null));seg.visual_clip_ids=[];}const result=await validateRenderSources({activeComposeRecordId:'c',composeRecord:{id:'c',timelineJson:t,assetManifestRecordId:'m'} as any,assetManifestRecord:{id:'m',manifestJson:f.manifest} as any});expect(result.decision).toBe('blocked');expect(result.errors).toContain('render_narration_source_invalid');});
+
+for (const firstStart of [1000, 250]) it('真实原生字幕完整贯通且源文件不变 start=' + firstStart, async () => {
+  const f = await runnable({ singleCharacterCues: true, words: [
+    { text: '甲', begin_index: 0, end_index: 1, begin_time: firstStart, end_time: 2000 },
+    { text: '乙', begin_index: 1, end_index: 2, begin_time: 114000, end_time: 115000 },
+  ] });
+  const sha = (bytes: Buffer) => createHash('sha256').update(bytes).digest('hex');
+  const timingPath = join(f.path, f.record.output!.timingMap.uri);
+  const srtPath = join(f.path, f.revision.srt.uri);
+  const timingBefore = await readFile(timingPath), srtBefore = await readFile(srtPath);
+  expect(sha(timingBefore)).toBe(f.record.output!.timingMap.sha256);
+  const source = await f.store.readSubtitleRevision({record:f.record, revision:f.revision});
+  expect(source.timeline.cues.map(c => [c.speechStartMs, c.speechEndMs])).toEqual([[firstStart,2000],[114000,115000]]);
+  expect(source.timeline.cues).toHaveLength(2);
+  const manifest = await importNarrationManifest(f);
+  manifest.artifacts.push({artifact_id:'image',artifact_type:'image',origin:'local',file_uri:'https://example.invalid/image.png',created_at:f.record.createdAt,metadata:{width:1080,height:1920}});
+  for (const route of manifest.segment_routes) { route.primary_visual_artifact_id='image';route.visual_route_type='image_only';route.motion_artifact_id=null; }
+  const timeline = buildComposeTimeline({manifest,assetManifestRecordId:'m',assetPlanRecordId:'ap',storyboardRecordId:'sb',scriptRecordId:'s1',projectStorageRootDir:f.path});
+  const props = await buildRemotionInputProps({timeline,manifest,assetBaseDir:f.path,projectStorageRootDir:f.path,width:1080,height:1920,fps:30});
+  expect(props.subtitleCues).toEqual(source.timeline.cues.map(c => ({start_sec:c.displayStartMs/1000,end_sec:c.displayEndMs/1000,text:c.text})));
+  expect(props.subtitleCues![0]!.start_sec).toBe(firstStart/1000);
+  expect(props.subtitleCues!.at(-1)!.end_sec).toBe(115);
+  expect(props.subtitleCues![0]!.end_sec).toBeLessThan(props.subtitleCues![1]!.start_sec);
+  expect(timeline).toMatchObject({contentDurationMs:117000,outroDurationMs:3000});
+  expect(await readFile(srtPath)).toEqual(srtBefore);
+  expect(sha(await readFile(timingPath))).toBe(sha(timingBefore));
+  expect(manifest.narration_reference.timing_map_hash).toBe(sha(timingBefore));
+});

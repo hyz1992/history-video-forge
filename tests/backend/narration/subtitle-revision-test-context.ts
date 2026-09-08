@@ -14,7 +14,8 @@ const disposers: Array<() => Promise<void>> = [];
 afterEach(async () => { vi.restoreAllMocks(); for (const close of disposers.splice(0))
     await close(); for (const path of roots.splice(0))
     await rm(path, { recursive: true, force: true }); });
-async function fixture() {
+type NativeFixtureOptions = { words?: Array<{ text: string; begin_index: number; end_index: number; begin_time: number; end_time: number }>; singleCharacterCues?: boolean };
+async function fixture(options: NativeFixtureOptions = {}) {
     const path = await mkdtemp(join(tmpdir(), 'narration-bundle-'));
     roots.push(path);
     const audio = Buffer.alloc(5616044);
@@ -31,12 +32,13 @@ async function fixture() {
     audio.write('data', 36);
     audio.writeUInt32LE(5616000, 40);
     const settings = { model: 'qwen-audio-3.0-tts-plus', voice: 'qwen-audio-3.0-tts-plus-longyimuling', region: 'cn-beijing', protocol: 'dashscope_ws', parametersVersion: 'neutral-pcm24k-v1', tone: 'neutral', rate: 1, pitch: 1, volume: 50, sampleRate: 24000, format: 'pcm', textType: 'PlainText', wordTimestampEnabled: true, enableSsml: false, seed: 0, inputMode: 'natural_paragraphs_single_task' } as const;
-    const words = [{ text: '甲', begin_index: 0, end_index: 1, begin_time: 0, end_time: 6400 }, { text: '乙', begin_index: 1, end_index: 2, begin_time: 6400, end_time: 116000 }];
+    const words = options.words ?? [{ text: '甲', begin_index: 0, end_index: 1, begin_time: 0, end_time: 6400 }, { text: '乙', begin_index: 1, end_index: 2, begin_time: 6400, end_time: 116000 }];
     const timingMap = normalizeNarrationTiming({ sourceText: '甲乙', audioHash: sha(audio), durationMs: 117000, sentences: [{ providerSentenceIndex: 0, originalText: '甲乙', normalizedText: '甲乙', words }] });
     const event = (name: string, output?: unknown) => ({ kind: 'json', elapsedMs: 0, data: { header: { event: name, task_id: 'task' }, payload: output === undefined ? {} : { output } } });
     const nativeEvents = [event('task-started'), event('result-generated', { type: 'sentence-begin', sentence: { index: 0 } }), { kind: 'audio', elapsedMs: 0, byteOffset: 0, byteLength: 5616000 }, event('result-generated', { type: 'sentence-end', sentence: { index: 0, words }, original_text: '甲乙', normalized_text: '甲乙' }), event('task-finished')];
     const record: NarrationRecord = { schemaVersion: 'narration_record_v1', id: 'n1', projectId: 'p1', scriptRecordId: 's1', generationRunId: 'run1', createdAt: now, updatedAt: now, sourceTextSha256: sha('甲乙'), spokenTextSha256: null, settingsSha256: await hashNarrationSettings(settings), sourceProjectTtsSettingsSha256: sha('settings'), textMappingVersion: 'narration-native-spans/v1', configurationSnapshotId: 'snap1', settings, timingSource: 'provider_native', providerTaskId: 'task', providerRequestId: null, status: 'generating', errorCode: null, confirmedAt: null, confirmedBy: null, acceptedDurationBandSnapshot: null, output: null };
     const subtitleSettings = { presetId: null, presetVersion: null, resolvedStyle: { ...DEFAULT_SUBTITLE_STYLE }, overrides: {}, lineBreak: { strategy: 'punctuation_and_length' as const, maxCharactersPerLine: 20, version: 'v1' }, resolverVersion: 'v1' };
+    if (options.singleCharacterCues) { subtitleSettings.lineBreak.maxCharactersPerLine = 1; subtitleSettings.resolvedStyle.max_lines = 1; }
     return { path, store: new NarrationBundleStorage({ projectId: 'p1', storageRootDir: path }), input: { record, audio, timingMap, nativeEvents, subtitleSettings, subtitleRevisionId: 'sub1', createdAt: now } };
 }
 import { canonicalStringify, AssetManifestV2 } from "../../../shared/src/index.js";
@@ -44,8 +46,8 @@ import { projectStoryboardTiming } from "../../../backend/src/modules/storyboard
 import { compileNarrationAssetPlan } from "../../../backend/src/modules/asset-planning/narration-reference-compiler.js";
 import { importNarrationManifest } from "../../../backend/src/modules/assets/narration-manifest-importer.js";
 import { createDashscopeImageToVideoProvider } from "../../../backend/src/modules/assets/providers/dashscope/dashscope-image-to-video-provider.js";
-async function prepared(projectSettingsHash?: string) {
-    const f = await fixture();
+async function prepared(projectSettingsHash?: string, options: NativeFixtureOptions = {}) {
+    const f = await fixture(options);
     if (projectSettingsHash)
         f.input.record.sourceProjectTtsSettingsSha256 = projectSettingsHash;
     const bundle = await f.store.commitInitial(f.input);
@@ -72,12 +74,12 @@ import { buildPricingCatalogSeed } from "../../../backend/src/modules/generation
 import { seedGlobalVoiceProfiles } from "../../../backend/src/modules/assets/voice/voice-profile.repository.js";
 import * as chunking from "../../../backend/src/modules/assets/tts-chunking.service.js";
 import * as voices from "../../../backend/src/modules/assets/voice/voice-resolution.service.js";
-async function runnable() {
+async function runnable(options: NativeFixtureOptions = {}) {
     const db = createDbClient(), generate = db.generateId;
     db.generateId = vi.fn().mockReturnValueOnce("p1").mockImplementation(generate);
     const project = await createProject(db, { name: "Task9B" });
     const config = [...db.projectGenerationConfigurations.values()][0]!;
-    const f = await prepared(projectTtsHash(config.configurationJson));
+    const f = await prepared(projectTtsHash(config.configurationJson), options);
     Object.assign(project, { narrationTimingMode: "narration_first_v1", storageRootDir: f.path, activeTopicPackageId: "t1", activeScriptRecordId: "s1", activeNarrationRecordId: "n1", activeNarrationSubtitleRevisionId: "sub1", activeStoryboardRecordId: "sb", activeAssetPlanRecordId: "ap" });
     db.narrationRecords.set("n1", f.record);
     db.narrationSubtitleRevisions.set("sub1", f.revision);
