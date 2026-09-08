@@ -288,6 +288,8 @@ expect(projectVisualIntervals(boundaries, [
 - [ ] compose-run/render-run 在 dispatch 与激活前从 DB 复查 narration/timing/subtitle/direct upstream 链；测试跨实例变更、冷启动、渲染中换口播或字幕，迟到输出只能留历史不得激活。
 - [ ] 回跑上述测试、`tests/renderer/narration-frame-projection.test.ts`、`renderer/src/audio-rendering.test.ts`、`tests/backend/compose/compose-timeline-builder.test.ts`、`tests/backend/render/remotion-input-builder.test.ts`、`npm run harness:compose-runtime-smoke`、`npm run harness:render-runtime-smoke`，PASS 后提交 `统一真实时间轴到合成与渲染帧边界`。
 
+2026-09-08 Task10接线补充：新增 narration-downstream-source.ts / narration-downstream-run.service.ts 共用既有口播来源事务闸门，既有字幕入口同步数据库模式字段以防跨实例升级后误入legacy；v2分支独立维护历史输出及原子激活，避免沿用legacy全项目镜像回写。新增 narration-downstream-source.test.ts 覆盖SQLite冷启动和跨实例失效；TimelineVideo.tsx同步传递绝对毫秒区间与显式片尾末帧停留。compose/render runtime smoke补目录/音色种子和隔离输出，compose移除废弃请求音色覆盖并修复Windows入口；无付费调用。
+
 ### 任务 11A：文案口播面板与前后端门禁
 
 新增：`frontend/src/components/script/NarrationPanel.vue`、`frontend/src/stores/narration.ts`、`tests/frontend/narration-panel.spec.ts`、`tests/frontend/narration-store.spec.ts`。

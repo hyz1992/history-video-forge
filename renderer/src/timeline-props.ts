@@ -47,7 +47,11 @@ export interface RenderVisualClipProp {
   src: string;
   startSec: number;
   durationSec: number;
+  startMs?: number;
+  endMs?: number;
   motion?: RenderMotionProp;
+  freezeAtSec?: number;
+  frozenMotionProgress?: number;
   /** Transition into this clip from the previous visual clip. */
   transition?: RenderVisualTransitionProp;
 }
@@ -59,6 +63,8 @@ export interface RenderAudioClipProp {
   src: string;
   startSec: number;
   durationSec: number;
+  startMs?: number;
+  endMs?: number;
   volume: number;
   fadeInSec?: number;
   fadeOutSec?: number;

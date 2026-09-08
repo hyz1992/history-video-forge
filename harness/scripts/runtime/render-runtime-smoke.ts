@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+import { seedGlobalVoiceProfiles } from "../../../backend/src/modules/assets/voice/voice-profile.repository.js";
 import { createAuthenticatedAuthContext } from "../../../backend/src/auth/auth-context.js";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -418,6 +420,10 @@ async function seedSmokeMediaLibrary(
     }
   }
 
+  // 独立输出目录不继承工作区SFX库；准备一个本地静音WAV验证音轨接线。
+  const wav=Buffer.alloc(48044);wav.write('RIFF');wav.writeUInt32LE(48036,4);wav.write('WAVEfmt ',8);wav.writeUInt32LE(16,16);wav.writeUInt16LE(1,20);wav.writeUInt16LE(1,22);wav.writeUInt32LE(24000,24);wav.writeUInt32LE(48000,28);wav.writeUInt16LE(2,32);wav.writeUInt16LE(16,34);wav.write('data',36);wav.writeUInt32LE(48000,40);
+  mkdirSync(app.storageBaseDir,{recursive:true});const sfxPath=resolve(app.storageBaseDir,'smoke-sfx.wav');writeFileSync(sfxPath,wav);
+  await saveMediaLibraryItem(app.db,{library_item_id:'sfx_hit_sharp_001',type:'sfx',file_uri:sfxPath,mime_type:'audio/wav',duration_sec:1,loopable:false,tags:['hit'],mood_tags:['sharp','impact'],license:{license_type:'owned',commercial_use_allowed:true,attribution_required:false},file_hash:createHash('sha256').update(wav).digest('hex'),imported_at:new Date().toISOString(),approved_for_use:true});
   return { bgmCue };
 }
 
@@ -581,6 +587,7 @@ export async function runRenderRuntimeSmoke(
   // 付费闸门（9A）：seedCatalog 路径需要可报价 readiness（媒体凭据 + 区域）。
   // 与 quote 测试上下文同构；无 seedCatalog 的用例不创建 quote，不受影响。
   const app = buildApp({
+    storageBaseDir:resolve(finalOutputDir,"app"),skipSnapshotLoad:true,
     renderAdapter: createSmokeRenderAdapter(adapter),
     generationQuoteReadinessInput: input.seedCatalog
       ? {
@@ -598,7 +605,7 @@ export async function runRenderRuntimeSmoke(
         }
       : undefined,
   });
-  if (input.seedCatalog) {
+  if (input.seedCatalog || input.ttsProvider !== "dashscope_tts") {
     const { buildPricingCatalogSeed } = await import(
       "../../../backend/src/modules/generation-cost/pricing-catalog.seed.js"
     );
@@ -609,6 +616,7 @@ export async function runRenderRuntimeSmoke(
       app.db.providerModelCatalog.set(entry.id, entry);
     }
   }
+  await seedGlobalVoiceProfiles(app.db);
   const projectBody = await injectOrThrow({
     app,
     method: "POST",

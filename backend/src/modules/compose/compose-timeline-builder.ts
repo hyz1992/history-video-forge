@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 
-import { ComposeTimeline as ComposeTimelineSchema } from "../../../../shared/src/index.js";
+import { AssetManifestV2, ComposeTimeline as ComposeTimelineSchema } from "../../../../shared/src/index.js";
 import { readAudioDurationSec } from "../assets/audio-duration-probe.js";
 import { resolveArtifactFileUri } from "../assets/artifact-file-resolver.js";
 
@@ -534,6 +534,8 @@ function createSegments(input: {
 export function buildComposeTimeline(
   input: BuildComposeTimelineInput,
 ): ComposeTimeline {
+  if(input.manifest.manifest_version === "asset_manifest_v2") input = {...input,manifest:AssetManifestV2.parse(input.manifest)};
+  const native=input.manifest.manifest_version === "asset_manifest_v2" ? input.manifest : null;
   const artifactsById = indexArtifacts(input.manifest);
   const notes: string[] = [];
   const mergedTtsArtifactId = input.manifest.audio_summary.tts_merged_artifact_id;
@@ -553,18 +555,18 @@ export function buildComposeTimeline(
     mergedTtsDurationSec ??
     input.manifest.audio_summary.tts_total_duration_sec ??
     0;
-  const timings = deriveSegmentTimings({
+  const timings = native ? native.segment_routes.map(r=>({segmentId:r.segment_id,startSec:r.narrationRange.startMs/1000,durationSec:(r.narrationRange.endMs-r.narrationRange.startMs)/1000})) : deriveSegmentTimings({
     manifest: input.manifest,
     artifactsById,
     totalDurationSec: narrationDurationSec,
     notes,
   });
 
-  if (timings.length > 0) {
+  if (!native && timings.length > 0) {
     timings[timings.length - 1]!.durationSec += END_PADDING_SEC;
   }
 
-  const totalDurationSec = timings.length > 0
+  const totalDurationSec = native ? native.narration_reference.duration_ms/1000+END_PADDING_SEC : timings.length > 0
     ? timings.reduce((sum, t) => sum + t.durationSec, 0)
     : narrationDurationSec + END_PADDING_SEC;
   notes.push(`含 ${END_PADDING_SEC} 秒片尾缓冲`);
@@ -603,8 +605,15 @@ export function buildComposeTimeline(
     (track): track is ComposeTrack => track !== null,
   );
 
+  const segments=createSegments({timings,visualTrack,hasNarration:narrationTrack!==null,hasSubtitle:subtitleTrack!==null});
+  if(native){
+    const last=visualTrack.clips.filter(c=>c.segment_id===timings.at(-1)?.segmentId).at(-1);
+    if(last)visualTrack.clips.push({...last,clip_id:last.clip_id+"_outro",segment_id:null,start_sec:native.narration_reference.duration_ms/1000,duration_sec:END_PADDING_SEC,notes:["explicit_outro_hold"]});
+    for(const item of [...segments,...tracks.flatMap(t=>t.clips)]){item.startMs=Math.round(item.start_sec*1000);item.endMs=Math.round((item.start_sec+item.duration_sec)*1000);item.start_sec=item.startMs/1000;item.duration_sec=(item.endMs-item.startMs)/1000;}
+  }
   return ComposeTimelineSchema.parse({
-    timeline_version: "compose_timeline_v1",
+    timeline_version: native?"compose_timeline_v2":"compose_timeline_v1",
+    ...(native?{narration_reference:native.narration_reference,subtitle_revision_id:native.subtitle_revision_id,subtitle_settings_hash:native.subtitle_settings_hash,contentDurationMs:native.narration_reference.duration_ms,outroDurationMs:END_PADDING_SEC*1000}:{}),
     source_asset_manifest_record_id: input.assetManifestRecordId,
     source_asset_plan_record_id: input.assetPlanRecordId,
     source_storyboard_record_id: input.storyboardRecordId,
@@ -617,12 +626,7 @@ export function buildComposeTimeline(
     },
     duration_sec: totalDurationSec,
     tracks,
-    segments: createSegments({
-      timings,
-      visualTrack,
-      hasNarration: narrationTrack !== null,
-      hasSubtitle: subtitleTrack !== null,
-    }),
+    segments,
     readiness: "ready_for_render",
     notes,
   });

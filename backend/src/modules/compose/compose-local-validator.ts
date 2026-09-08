@@ -1,3 +1,4 @@
+import { assertNarrationTimelineManifest } from "../../../../shared/src/compose/compose-timeline.schema.js";
 import { stat } from "node:fs/promises";
 import { join } from "node:path";
 
@@ -98,6 +99,7 @@ export async function validateComposeTimeline(
   const { manifest, timeline } = input;
   const errors: string[] = [];
   const warnings: string[] = [];
+  if(timeline.timeline_version==="compose_timeline_v2"||manifest.manifest_version==="asset_manifest_v2"){try{assertNarrationTimelineManifest(timeline,manifest);}catch{errors.push("compose_narration_source_invalid");}}
   const artifactsById = indexArtifacts(manifest);
   const clips = listTimelineClips(timeline);
   const referencedArtifactIds = new Set<string>();

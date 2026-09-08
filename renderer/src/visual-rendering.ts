@@ -1,3 +1,4 @@
+import { projectNarrationFrameRange } from "../../shared/src/narration/timeline-frame-projection";
 import type { CSSProperties } from "react";
 
 import type { RenderVisualClipProp } from "./timeline-props";
@@ -37,8 +38,9 @@ function getVisualLayers(input: {
   for (let index = 0; index < input.clips.length; index += 1) {
     const clip = input.clips[index]!;
     const nextClip = input.clips[index + 1];
-    const startSec = clip.startSec;
-    const endSec = clip.startSec + clip.durationSec;
+    const frames=clip.startMs!==undefined||clip.endMs!==undefined?projectNarrationFrameRange({startMs:clip.startMs!,endMs:clip.endMs!,fps:input.fps}):null;
+    const startSec = frames?frames.from/input.fps:clip.startSec;
+    const endSec = frames?(frames.from+frames.durationInFrames)/input.fps:clip.startSec + clip.durationSec;
     const fadeInSec =
       clip.transition?.type === "crossfade" ? clip.transition.durationSec : 0;
     const fadeOutSec =
@@ -66,10 +68,10 @@ function getVisualLayers(input: {
     layers.push({
       clip,
       opacity: clamp(opacity, 0, 1),
-      localSec: Math.max(0, currentSec - clip.startSec),
+      localSec: Math.max(0, currentSec - startSec),
       localFrame: Math.max(
         0,
-        Math.round((currentSec - clip.startSec) * input.fps),
+        Math.round((currentSec - startSec) * input.fps),
       ),
     });
   }
@@ -96,7 +98,10 @@ export function getVisualSequenceFrames(input: {
   startSec: number;
   durationSec: number;
   fps: number;
+  startMs?: number;
+  endMs?: number;
 }): { from: number; durationInFrames: number } {
+  if(input.startMs!==undefined||input.endMs!==undefined)return projectNarrationFrameRange({startMs:input.startMs!,endMs:input.endMs!,fps:input.fps});
   return {
     from: Math.round(input.startSec * input.fps),
     durationInFrames: Math.max(1, Math.round(input.durationSec * input.fps)),

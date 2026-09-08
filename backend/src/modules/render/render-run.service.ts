@@ -1,3 +1,4 @@
+import { runNarrationRender } from "../narration/narration-downstream-run.service.js";
 import { currentNarrationSubtitleError } from "../narration/narration-subtitle-revision.service.js";
 import { dirname, join, resolve } from "node:path";
 
@@ -199,6 +200,7 @@ export async function runRenderGeneration(input: RunRenderGenerationInput) {
     };
   }
 
+  if(project.narrationTimingMode==="narration_first_v1")return runNarrationRender(input);
   const composeRecord = db.composeRecords.get(activeComposeRecordId) ?? null;
   if (!composeRecord) {
     return {

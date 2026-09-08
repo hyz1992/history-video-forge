@@ -1,3 +1,4 @@
+import { assertNarrationTimelineManifest } from "../../../../shared/src/compose/compose-timeline.schema.js";
 import { stat } from "node:fs/promises";
 
 import { normalizeAssetManifestDates } from "../assets/manifest-date-normalizer.js";
@@ -210,6 +211,7 @@ export async function validateRenderSources(
     });
   }
   const manifest = manifestResult.data;
+  if(timeline.timeline_version==="compose_timeline_v2"||manifest.manifest_version==="asset_manifest_v2"){try{assertNarrationTimelineManifest(timeline,manifest);}catch{errors.push("render_narration_source_invalid");}}
   const artifactsById = indexArtifacts(manifest);
 
   if (isRequiredTrackMissing(timeline, "narration")) {

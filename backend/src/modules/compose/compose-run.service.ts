@@ -1,3 +1,4 @@
+import { runNarrationCompose } from "../narration/narration-downstream-run.service.js";
 import { currentNarrationSubtitleError } from "../narration/narration-subtitle-revision.service.js";
 import { AssetManifest as AssetManifestSchema } from "../../../../shared/src/index.js";
 import type { DbClient, ProjectRecord } from "../../db/client";
@@ -54,6 +55,7 @@ export async function runComposeGeneration(input: RunComposeGenerationInput) {
     };
   }
 
+  if(project.narrationTimingMode==="narration_first_v1")return runNarrationCompose(input);
   const assetManifestRecord = db.assetManifestRecords.get(
     activeAssetManifestRecordId,
   );

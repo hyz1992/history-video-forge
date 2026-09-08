@@ -1,3 +1,6 @@
+import { projectNarrationFrameRange } from "../../../../shared/src/narration/timeline-frame-projection.js";
+import { assertNarrationTimelineManifest, ComposeTimelineV2 } from "../../../../shared/src/compose/compose-timeline.schema.js";
+import { AssetManifestV2, canonicalStringify } from "../../../../shared/src/index.js";
 import { readFile } from "node:fs/promises";
 import { isAbsolute, join, relative } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -302,6 +305,14 @@ async function buildVisualClips(input: {
             }
           : undefined;
 
+      let frozen:Pick<RenderVisualClipProp,'freezeAtSec'|'frozenMotionProgress'>={};
+      if(input.timeline.timeline_version==='compose_timeline_v2'&&clip.notes.includes('explicit_outro_hold')){
+        const previous=[...clips].reverse().find(c=>c.artifact_id===clip.artifact_id&&c.endMs===clip.startMs&&!c.notes.includes('explicit_outro_hold'));
+        if(!previous)throw new Error('narration_outro_source_missing');
+        const frames=projectNarrationFrameRange({startMs:previous.startMs!,endMs:previous.endMs!,fps:input.timeline.output_profile.fps});
+        const lastLocalSec=(frames.durationInFrames-1)/input.timeline.output_profile.fps;
+        frozen={frozenMotionProgress:lastLocalSec/previous.duration_sec,...(artifact.artifact_type==='video'?{freezeAtSec:Math.min(lastLocalSec,Math.max(0,(Math.ceil(artifact.metadata.duration_sec*input.timeline.output_profile.fps)-1)/input.timeline.output_profile.fps))}:{})};
+      }
       const renderClip: RenderVisualClipProp = {
         clipId: clip.clip_id,
         artifactId: clip.artifact_id,
@@ -313,8 +324,10 @@ async function buildVisualClips(input: {
         }),
         startSec: clip.start_sec,
         durationSec: clip.duration_sec,
+        ...(input.timeline.timeline_version==="compose_timeline_v2"?{startMs:clip.startMs,endMs:clip.endMs}:{}),
         ...(motion ? { motion } : {}),
-        ...(index > 0 && mediaType === "video"
+        ...frozen,
+        ...(input.timeline.timeline_version!=="compose_timeline_v2" && index > 0 && mediaType === "video"
           ? {
               transition: {
                 type: "crossfade" as const,
@@ -368,6 +381,7 @@ async function buildAudioClips(input: {
             }),
             startSec: clip.start_sec,
             durationSec: clip.duration_sec,
+        ...(input.timeline.timeline_version==="compose_timeline_v2"?{startMs:clip.startMs,endMs:clip.endMs}:{}),
             volume: volumeForAudioClip({
               manifest: input.manifest,
               role,
@@ -455,6 +469,12 @@ export async function buildRemotionInputProps(input: {
   height: number;
   fps: number;
 }): Promise<TimelineVideoProps> {
+  const native=input.timeline.timeline_version==='compose_timeline_v2'||input.manifest.manifest_version==='asset_manifest_v2';
+  if(native){
+   const {timeline,manifest}=assertNarrationTimelineManifest(input.timeline,input.manifest);
+   if(canonicalStringify(timeline.narration_reference)!==canonicalStringify(manifest.narration_reference)||timeline.subtitle_revision_id!==manifest.subtitle_revision_id||timeline.subtitle_settings_hash!==manifest.subtitle_settings_hash)throw new Error('narration_render_source_mismatch');
+   input={...input,timeline,manifest};
+  }
   const artifactsById = indexArtifacts(input.manifest);
   const subtitleArtifact = getSubtitleArtifact({
     timeline: input.timeline,
@@ -472,7 +492,9 @@ export async function buildRemotionInputProps(input: {
         content: subtitleContent,
       })
     : [];
-  const subtitleCues = normalizeSubtitleCuesToNarration({
+  if(native && (!subtitleContent || rawSubtitleCues.length===0))throw new Error("narration_render_subtitle_missing");
+  if(native && rawSubtitleCues.some(c=>!Number.isFinite(c.start_sec)||c.start_sec<0||c.end_sec<=c.start_sec||c.end_sec>(input.timeline.timeline_version==="compose_timeline_v2"?input.timeline.contentDurationMs/1000:input.timeline.duration_sec)))throw new Error("narration_render_subtitle_invalid");
+  const subtitleCues = native ? rawSubtitleCues : normalizeSubtitleCuesToNarration({
     cues: rawSubtitleCues,
     narrationDurationSec: getNarrationDurationSec(input.timeline),
     timingSource: readSubtitleTimingSource(subtitleArtifact),

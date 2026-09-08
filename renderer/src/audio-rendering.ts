@@ -1,8 +1,12 @@
+import { projectNarrationFrameRange } from "../../shared/src/narration/timeline-frame-projection";
 export function getAudioSequenceFrames(input: {
   startSec: number;
   durationSec: number;
   fps: number;
+  startMs?: number;
+  endMs?: number;
 }) {
+  if(input.startMs!==undefined||input.endMs!==undefined)return projectNarrationFrameRange({startMs:input.startMs!,endMs:input.endMs!,fps:input.fps});
   return {
     from: Math.max(0, Math.round(input.startSec * input.fps)),
     durationInFrames: Math.max(1, Math.round(input.durationSec * input.fps)),
@@ -59,4 +63,14 @@ export function getAudioLoopSequences(input: {
   }
 
   return sequences;
+}
+
+/** 内部循环只保留可见帧；零帧尾余量不改变外层音轨覆盖。 */
+export function getAudioLoopSequenceFrames(input:{startMs:number;endMs:number;sourceDurationSec?:number;fps:number}){
+ const outer=projectNarrationFrameRange(input),durationMs=input.endMs-input.startMs;
+ const step=input.sourceDurationSec===undefined?durationMs:Math.round(input.sourceDurationSec*1000);
+ if(!Number.isSafeInteger(step)||step<=0)throw new Error('narration_audio_loop_source_invalid');
+ const loops:Array<{from:number;durationInFrames:number}>=[];
+ for(let offset=0;offset<durationMs;offset+=step){const startMs=input.startMs+offset,endMs=Math.min(input.endMs,startMs+step);if(Math.round(startMs*input.fps/1000)===Math.round(endMs*input.fps/1000))continue;const range=projectNarrationFrameRange({startMs,endMs,fps:input.fps});loops.push({from:range.from-outer.from,durationInFrames:range.durationInFrames});}
+ return loops;
 }

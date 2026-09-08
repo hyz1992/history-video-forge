@@ -167,7 +167,7 @@ export async function refreshSavedNarrationSubtitles(app: Pick<AppInstance, "db"
     return deriveNarrationSubtitleRevision(app, projectId, ownerId);
 }
 function publishSubtitleContext(db: DbClient, c: Context, provided?: import('../../db/client.js').ProjectRecord) {
-    const keys = ['activeNarrationRecordId', 'activeNarrationSubtitleRevisionId', 'activeStoryboardRecordId', 'activeAssetPlanRecordId', 'activeAssetManifestRecordId', 'activeComposeRecordId', 'activeRenderJobRecordId', 'activePublishPackageRecordId', 'latestComposeRunTraceJson', 'latestRenderRunTraceJson', 'status', 'updatedAt'] as const;
+    const keys = ['narrationTimingMode', 'activeNarrationRecordId', 'activeNarrationSubtitleRevisionId', 'activeStoryboardRecordId', 'activeAssetPlanRecordId', 'activeAssetManifestRecordId', 'activeComposeRecordId', 'activeRenderJobRecordId', 'activePublishPackageRecordId', 'latestComposeRunTraceJson', 'latestRenderRunTraceJson', 'status', 'updatedAt'] as const;
     const patch = Object.fromEntries(keys.map(key => [key, c.source.project[key] ?? null]));
     for (const project of [provided, db.projects.get(c.source.project.id)])
         if (project && project.id === c.source.project.id && project.ownerId === c.source.project.ownerId)

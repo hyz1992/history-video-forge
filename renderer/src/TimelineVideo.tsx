@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
   AbsoluteFill,
+  Freeze,
   Audio,
   continueRender,
   delayRender,
@@ -16,6 +17,7 @@ import {
 import type { RenderVisualClipProp, TimelineVideoProps } from "./timeline-props";
 import {
   getAudioLoopSequences,
+  getAudioLoopSequenceFrames,
   getAudioSequenceFrames,
   getFadedAudioVolume,
   normalizeAudioVolume,
@@ -94,11 +96,13 @@ function renderVisualClip(clip: RenderVisualClipProp, fps: number) {
     const sequence = getVisualSequenceFrames({
       startSec: clip.startSec,
       durationSec: clip.durationSec,
+      startMs: clip.startMs, endMs: clip.endMs,
       fps,
     });
 
     return (
       <Sequence from={sequence.from} durationInFrames={sequence.durationInFrames}>
+        <Freeze frame={clip.freezeAtSec===undefined?0:Math.round(clip.freezeAtSec*fps)} active={clip.freezeAtSec!==undefined}>
         <OffthreadVideo
           src={src}
           style={{
@@ -109,6 +113,7 @@ function renderVisualClip(clip: RenderVisualClipProp, fps: number) {
             display: "block",
           }}
         />
+        </Freeze>
       </Sequence>
     );
   }
@@ -234,9 +239,9 @@ export function TimelineVideo(props: TimelineVideoProps) {
                 transform: makeMotionTransform({
                   recipeType: layer.clip.motion?.recipeType ?? "hold",
                   progress:
-                    layer.clip.durationSec > 0
+                    layer.clip.frozenMotionProgress ?? (layer.clip.durationSec > 0
                       ? layer.localSec / layer.clip.durationSec
-                      : 0,
+                      : 0),
                   parameters: layer.clip.motion?.parameters ?? {},
                 }),
               })}
@@ -260,6 +265,7 @@ export function TimelineVideo(props: TimelineVideoProps) {
         const sequence = getAudioSequenceFrames({
           startSec: clip.startSec,
           durationSec: clip.durationSec,
+          startMs: clip.startMs, endMs: clip.endMs,
           fps: props.fps,
         });
         const localSec = frame / props.fps - clip.startSec;
@@ -270,12 +276,9 @@ export function TimelineVideo(props: TimelineVideoProps) {
           fadeInSec: clip.fadeInSec,
           fadeOutSec: clip.fadeOutSec,
         });
-        const loopSequences = clip.loop
-          ? getAudioLoopSequences({
-              clipDurationSec: clip.durationSec,
-              sourceDurationSec: clip.sourceDurationSec,
-            })
-          : [{ offsetSec: 0, durationSec: clip.durationSec }];
+        const loopFramesList = clip.startMs!==undefined
+          ? getAudioLoopSequenceFrames({startMs:clip.startMs,endMs:clip.endMs!,sourceDurationSec:clip.loop?clip.sourceDurationSec:undefined,fps:props.fps})
+          : (clip.loop?getAudioLoopSequences({clipDurationSec:clip.durationSec,sourceDurationSec:clip.sourceDurationSec}):[{offsetSec:0,durationSec:clip.durationSec}]).map(loop=>getAudioSequenceFrames({startSec:loop.offsetSec,durationSec:loop.durationSec,fps:props.fps}));
 
         return (
           <Sequence
@@ -283,13 +286,7 @@ export function TimelineVideo(props: TimelineVideoProps) {
             from={sequence.from}
             durationInFrames={sequence.durationInFrames}
           >
-            {loopSequences.map((loopSequence, index) => {
-              const loopFrames = getAudioSequenceFrames({
-                startSec: loopSequence.offsetSec,
-                durationSec: loopSequence.durationSec,
-                fps: props.fps,
-              });
-
+            {loopFramesList.map((loopFrames, index) => {
               return (
                 <Sequence
                   key={`${clip.clipId}_loop_${index}`}

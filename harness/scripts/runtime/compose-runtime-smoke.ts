@@ -1,3 +1,6 @@
+import { pathToFileURL } from "node:url";
+import { buildPricingCatalogSeed } from "../../../backend/src/modules/generation-cost/pricing-catalog.seed.js";
+import { seedGlobalVoiceProfiles } from "../../../backend/src/modules/assets/voice/voice-profile.repository.js";
 import { createAuthenticatedAuthContext } from "../../../backend/src/auth/auth-context.js";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -247,7 +250,7 @@ async function injectOrThrow(input: {
 
   if (response.statusCode >= 400) {
     throw new Error(
-      `request_failed ${input.method} ${input.url}: ${response.statusCode} ${JSON.stringify(response.json())}`,
+      `request_failed ${input.method} ${input.url}: ${response.statusCode} ${JSON.stringify(response.json())} ${JSON.stringify([...input.app.db.generationRunEvents.values()].flat().filter(e=>e.eventType==="dispatch_failed").map(e=>(e.eventJson as {message?:string}).message))}`,
     );
   }
 
@@ -261,7 +264,9 @@ export async function runComposeRuntimeSmoke(
     input.outputDir ?? resolve(process.cwd(), "harness/scripts/runtime/output/compose-runtime-smoke");
   mkdirSync(finalOutputDir, { recursive: true });
 
-  const app = buildApp();
+  const app = buildApp({storageBaseDir:resolve(finalOutputDir,"app"),skipSnapshotLoad:true});
+  for(const row of buildPricingCatalogSeed({llm:{mode:"stub"},media:{deploymentScope:"cn-beijing"}}))app.db.providerModelCatalog.set(row.id,row);
+  await seedGlobalVoiceProfiles(app.db);
   const projectBody = await injectOrThrow({
     app,
     method: "POST",
@@ -284,7 +289,6 @@ export async function runComposeRuntimeSmoke(
     method: "POST",
     url: `/api/projects/${projectId}/assets/generate`,
     payload: {
-      voice_profile_id: "voice_compose_smoke",
       execution_mode: "auto_available",
     },
   });
@@ -315,7 +319,6 @@ export async function runComposeRuntimeSmoke(
     method: "POST",
     url: `/api/projects/${projectId}/assets/generate`,
     payload: {
-      voice_profile_id: "voice_compose_smoke",
       execution_mode: "auto_available",
     },
   });
@@ -376,7 +379,7 @@ export async function runComposeRuntimeSmoke(
   };
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   runComposeRuntimeSmoke()
     .then((result) => {
       console.log(JSON.stringify(result.status, null, 2));
