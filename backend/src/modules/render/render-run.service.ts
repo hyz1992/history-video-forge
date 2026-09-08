@@ -1,3 +1,4 @@
+import { currentNarrationSubtitleError } from "../narration/narration-subtitle-revision.service.js";
 import { dirname, join, resolve } from "node:path";
 
 import {
@@ -184,6 +185,8 @@ function buildSuccessBody(input: {
 
 export async function runRenderGeneration(input: RunRenderGenerationInput) {
   const { db, project } = input;
+  const subtitleError=await currentNarrationSubtitleError(db,project.id,project.ownerId,project);
+  if(subtitleError)return {statusCode:409,body:{error:subtitleError}};
   const activeComposeRecordId = project.activeComposeRecordId;
   const previousActiveRenderJobRecordId = project.activeRenderJobRecordId;
 

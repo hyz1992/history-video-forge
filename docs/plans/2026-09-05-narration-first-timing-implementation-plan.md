@@ -262,14 +262,16 @@ expect(projectVisualIntervals(boundaries, [
 
 ### 任务 9C：字幕派生版本编排与配置保存触发
 
-新增：`backend/src/modules/narration/narration-subtitle-revision.service.ts`、`tests/backend/api/narration-subtitle-revision-api.test.ts`。
+新增：`backend/src/modules/narration/narration-subtitle-revision.service.ts`、`narration-subtitle-settings.ts`、`narration-subtitle-target.ts`；`tests/backend/api/narration-subtitle-revision-api.test.ts`、`tests/backend/narration/subtitle-revision-test-context.ts`。
 
-修改：`backend/src/modules/narration/narration.routes.ts`、`backend/src/modules/narration/narration.repository.ts`、`backend/src/modules/generation-config/generation-config.controller.ts`、`backend/src/modules/assets/asset-manifest-record.repository.ts`、`backend/src/modules/projects/project-snapshot.service.ts`。
+修改：`backend/src/modules/narration/narration.routes.ts`、`backend/src/modules/generation-config/generation-config.controller.ts`、`backend/src/modules/projects/project-snapshot.service.ts`、`shared/src/generation/generation-configuration.schema.ts`；compose/render 的 run service 仅接入字幕待更新及 DB 活动指针前置读取。revision/manifest 同事务写入由独立 service 编排，复用既有仓储解码，不经先发布 Map 的旧 save API。
 
 - [ ] 写 API 测试：字幕配置保存触发本地派生；同 narration/settings/builder 版本幂等；仅样式变化且 SRT 相同仍创建新快照；无 manifest 时只切字幕，有 manifest 时复用视觉创建新引用版本；失败保留旧结果但新 compose 报字幕待更新；跨用户拒绝，另实例更换 narration/字幕设置或预设版本后旧派生不能激活。
 - [ ] 运行 `npx vitest run --configLoader runner tests/backend/api/narration-subtitle-revision-api.test.ts`，观察 FAIL。
 - [ ] 实现配置保存到独立 revision service 的接线及设计 §7 的 subtitles 重试 API；请求开始时解析并冻结完整样式/预设版本/断行配置，builder 保持纯函数。激活事务复查当前 narration/hash/目标完整字幕设置投影（含预设版本），原子写 revision、活动字幕引用、可选新 manifest 与 compose/render/publish 失效。唯一键采用 narrationRecordId + subtitleSettingsHash + builderVersion。初始字幕与当前样式不同也要通过此服务派生，不能覆盖初始 bundle。
 - [ ] 断言 TTS/ASR 请求均为 0，图/视频文件 hash 不变，初始 bundle 不被改写；回跑测试与后端 typecheck PASS，提交 `编排字幕派生版本与视觉资产复用`。
+
+2026-09-08 实现补充：按设计§7用既有 GenerationRunEvent 持久化完整字幕目标与派生状态；补同设置文件损坏、两个SQLite实例不同预设版本交错、热/冷活动指针读取及有manifest事务回滚测试。新增事件不创建付费run，不改变Task10时间轴职责。
 
 ### 任务 10：compose/render 共用时间轴与字幕显示投影
 

@@ -236,6 +236,8 @@ Project snapshot 添加 active narration 摘要、当前 script 的最新候选/
 
 字幕设置保存后由配置 controller 调用独立 subtitle revision service；新字幕接口是显式重试入口。纯 builder 不负责 DB 副作用。尚无口播时只保存偏好；已有口播时本地派生，激活前复查 narration 与字幕配置投影。派生失败保留旧文件/引用并标记字幕待更新，旧成品可查看，新 compose/render 不得用新设置假称旧字幕已更新。该服务没有外部 TTS/ASR 调用。
 
+2026-09-08 任务9C编排细化：复用口播 run 的 `GenerationRunEvent` 持久化 `narration_subtitle_target` 事件，保存完整目标字幕投影、项目字幕配置投影 hash、builder 版本、target ID 和 pending/ready/failed 状态。派生前以事务登记目标，激活事务必须复查同一目标，成功事件与 revision/manifest/活动引用一起提交；失败不修改旧引用，pending/failed 状态由快照及新 compose/render 共用读取。另一实例登记新预设版本后，旧目标即失去激活资格；同一预设更高版本不能被旧部署重试降级，同版本内容变动须显式升级版本。状态事件不计为供应商调用，不改不可变字幕 revision 或初始 bundle。Prisma 提交后同步活动引用镜像；下游入口再次读取数据库活动指针，防止热缓存或其他实例沿用已失效结果。
+
 复用 GenerationRun / RunConfigurationSnapshot / usage ledger，新增内部 operation `script.narration.generate`，capability 仍为 `tts.synthesize`，成本归属文案步骤。显式模型由已冻结 resolved_capabilities 构造，音色由 resolved_creative 及兼容能力表解析；不能临场读取环境默认值覆盖 run。不恢复 quote API、预算闸门或辅助音色自动创建。
 
 输出保存在项目根下 `narration-runs/<runId>/`；现有 artifact resolver/file API 增加该目录及 owner 检查，不依赖 assets run 才能播放。先写临时文件，全部验证后原子提交 bundle manifest，随后 DB 标为 ready；半成品不可被 active 引用。沿用项目删除/备份恢复边界，不新增自动清理历史音频。

@@ -1,3 +1,5 @@
+import { deriveNarrationSubtitleRevision, refreshSavedNarrationSubtitles } from "./narration-subtitle-revision.service.js";
+import { DeriveNarrationSubtitlesRequest } from "../../../../shared/src/index.js";
 import { narrationVisibleStatus } from "./narration-readiness.js";
 import { getNarrationProjectSnapshot } from "../projects/project-snapshot.service.js";
 import { z } from "zod";
@@ -31,6 +33,10 @@ function route(handler: (context: RouteContext, ownerId: string, actorId: string
     };
 }
 export function registerNarrationRoutes(app: AppInstance) {
+    app.addRoute("POST", "/api/projects/:projectId/script/narrations/:recordId/subtitles", route(async(c,owner)=> {
+      const revision=await deriveNarrationSubtitleRevision(c.app,c.params.projectId,owner,DeriveNarrationSubtitlesRequest.parse(c.payload),c.params.recordId);
+      return {statusCode:200,body:{revision}};
+    }));
     app.addRoute("POST", "/api/projects/:projectId/script/:scriptRecordId/confirm", route(async (c, owner, actor) => {
         const input = z.object({ source_text_sha256: z.string().regex(/^[0-9a-f]{64}$/) }).strict().parse(c.payload);
         const confirmation = await new NarrationRepository(c.app.db).confirmScript(owner, actor, c.params.projectId, c.params.scriptRecordId, input.source_text_sha256);
@@ -50,6 +56,7 @@ export function registerNarrationRoutes(app: AppInstance) {
     }));
     app.addRoute("POST", "/api/projects/:projectId/script/narrations/:recordId/confirm", route(async (c, owner, actor) => {
         const record = await confirmNarration(c.app, c.params.projectId, owner, actor, c.params.recordId, ConfirmNarrationRequest.parse(c.payload));
+        try { await refreshSavedNarrationSubtitles(c.app,c.params.projectId,owner,true); } catch { /* 确认已成功；快照明确字幕待更新，允许显式重试。 */ }
         const snapshot = await getNarrationProjectSnapshot(c.app.db, c.params.projectId, owner, c.app.storageBaseDir, c.app.topicCandidateStore);
         return { statusCode: 200, body: { record, snapshot } };
     }));

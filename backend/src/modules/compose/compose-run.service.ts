@@ -1,3 +1,4 @@
+import { currentNarrationSubtitleError } from "../narration/narration-subtitle-revision.service.js";
 import { AssetManifest as AssetManifestSchema } from "../../../../shared/src/index.js";
 import type { DbClient, ProjectRecord } from "../../db/client";
 import { buildComposeTimeline } from "./compose-timeline-builder";
@@ -39,6 +40,8 @@ function createComposeTrace(input: {
 
 export async function runComposeGeneration(input: RunComposeGenerationInput) {
   const { db, project } = input;
+  const subtitleError=await currentNarrationSubtitleError(db,project.id,project.ownerId,project);
+  if(subtitleError)return {statusCode:409,body:{error:subtitleError}};
   const activeAssetManifestRecordId = project.activeAssetManifestRecordId;
   const previousActiveComposeRecordId = project.activeComposeRecordId;
 

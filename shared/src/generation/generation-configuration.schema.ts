@@ -364,6 +364,7 @@ export const ProjectGenerationConfigurationResponse = z
     source_user_preference_revision: z.number().int().nonnegative().nullable(),
     diff_from_user_default: z.record(z.string(), z.unknown()).nullable(),
     invalidation_preview: ConfigurationInvalidationPreview,
+    subtitle_update: z.discriminatedUnion("status", [z.object({status:z.literal("ready")}).strict(), z.object({status:z.literal("pending"),error:z.literal("narration_subtitle_update_required")}).strict()]).optional(),
   })
   .strict();
 export type ProjectGenerationConfigurationResponse = z.infer<typeof ProjectGenerationConfigurationResponse>;

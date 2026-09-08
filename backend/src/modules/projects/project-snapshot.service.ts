@@ -1,3 +1,5 @@
+import { readSubtitleTarget } from "../narration/narration-subtitle-target.js";
+import { resolveNarrationSubtitleReadiness } from "../narration/narration-subtitle-settings.js";
 import { narrationVisibleStatus } from "../narration/narration-readiness.js";
 import { hasPassingNarrationScriptValidation } from "../narration/narration-readiness.js";
 import { hashProjectNarrationTtsSettings } from "../../../../shared/src/index.js";
@@ -329,6 +331,7 @@ export async function getProjectSnapshot(
     narration_timing_mode: narrationProject.narrationTimingMode ?? "legacy_estimated",
     script_confirmation: scriptConfirmed ? narrationSource.confirmation : null,
     narration_readiness: narrationReadiness,
+    narration_subtitle_readiness: resolveNarrationSubtitleReadiness({mode:narrationSource.project.narrationTimingMode ?? "legacy_estimated",configuration:narrationSource.configuration?.configurationJson,record:narration,revision:narrationSubtitle,target:narration?await readSubtitleTarget(db,narration.generationRunId,narrationClient):null}),
     active_narration: summarizeNarration(narration),
     active_narration_subtitle_revision: narrationSubtitle ? { id: narrationSubtitle.id, narration_record_id: narrationSubtitle.narrationRecordId, subtitle_settings_hash: narrationSubtitle.subtitleSettingsHash, builder_version: narrationSubtitle.builderVersion } : null,
     latest_narration_candidate: latestNarration ? {...summarizeNarration(latestNarration), run_status:latestNarrationRun?.status ?? null,effective_status:narrationVisibleStatus(latestNarration.status,latestNarrationRun?.status ?? null)} : null,

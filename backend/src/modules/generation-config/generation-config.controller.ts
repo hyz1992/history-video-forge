@@ -1,3 +1,5 @@
+import { refreshSavedNarrationSubtitles } from "../narration/narration-subtitle-revision.service.js";
+import { readProjectNarrationContext } from "../narration/narration-execution-compatibility.js";
 import { readProjectNarrationMode } from "../narration/narration-execution-compatibility.js";
 import { NarrationSourceError } from "../narration/narration-invalidation.js";
 import type { AppResponse, RouteContext } from "../../app.js";
@@ -143,6 +145,12 @@ export const patchProjectConfigController = guardOwnedRoute(
         body: { error: result.error.code, current_revision: result.error.current_revision },
       };
     }
+    const owned=await readProjectNarrationContext(context.app.db,context.params.projectId,user.userId,user.role);
+    let subtitleUpdate: {status:string;error?:string} | undefined;
+    if(owned.mode==="narration_first_v1") {
+      try {const revision=await refreshSavedNarrationSubtitles(context.app,context.params.projectId,owned.ownerId);if(revision)subtitleUpdate={status:"ready"};}
+      catch {subtitleUpdate={status:"pending",error:"narration_subtitle_update_required"};}
+    }
     const body = ProjectGenerationConfigurationResponse.parse({
       source: "stored",
       revision: result.value.revision,
@@ -152,7 +160,7 @@ export const patchProjectConfigController = guardOwnedRoute(
       diff_from_user_default: result.value.diff_from_user_default,
       invalidation_preview: result.value.invalidation_preview,
     });
-    return { statusCode: 200, body };
+    return { statusCode: 200, body: ProjectGenerationConfigurationResponse.parse({...body,...(subtitleUpdate?{subtitle_update:subtitleUpdate}:{})}) };
   },
 );
 
