@@ -25,3 +25,15 @@ red.json先观察7项新输入/输出合同失败；修复后服务层7项通过
 ## 初审收敛
 
 diff与contract均0 Critical / 0 Important / 0 Minor，11文件hash审查前后一致。初审不计整改：整改0、final0、额外授权0。保留证据缺口：完整磁盘bundle到planner成功链路及v2真实服务regen_once专项未独立端到端验证，已有模块/服务接线和独立存储回归；真实LLM/UI/成品未验证。候选待R5两阶段终审。
+
+## 候选1终审与R1补证
+
+候选1为134ee823c4b00341068bebbccd9c2a9fdb8564f8，final1完成：0 Critical / 0 Important / 0 Minor产品finding，但原验收D仅部分通过，缺v2结构regen_once执行证据。为完整闭环原要求，追加测试形成新候选，不将局部通过称整体通过。
+
+R1只修改集成测试及记录，产品/prompt保持候选1不变。补充三种真实生成服务结构重生序列：成功、第二次派发前来源变化、第二次调用期间来源变化；核对相同冻结上下文、有限调用次数和迟到不激活。另用真实WAV/原始事件/完整字幕bundle落盘，取消readFile mock，验证真实磁盘读取→stub→v2成功，随后原件损坏时零新派发且active保留。r1-integration.json70项全部通过。当前整改复审1、已执行final1、额外授权0，R1双路复审待执行。
+
+R1最终固定7文件累计回归regression-r1.json：213项全部passed、0失败；产品/prompt文件hash与已typecheck及prompt检查的候选1完全相同。工作区diff检查通过。
+
+## R1双审收敛
+
+diff与contract均未发现Critical / Important / Minor（0/0/0），原始验收A至G离线证据闭环；完整磁盘成功使用合成WAV与实际stub，不是供应商验收。审查前后11文件hash一致，原始报告再次核对为7文件213通过0失败。整改复审1、已执行final1、额外授权0；形成候选2后交全新R5终审。

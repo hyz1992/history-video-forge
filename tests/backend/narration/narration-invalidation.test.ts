@@ -34,7 +34,9 @@ import { PrismaFirstAggregateWriter } from "../../../backend/src/db/repositories
 import { PrismaSecondAggregateWriter } from "../../../backend/src/db/repositories/prisma-second-aggregate-writer.js";
 import { NarrationRepository } from "../../../backend/src/modules/narration/narration.repository.js";
 import { DEFAULT_SUBTITLE_STYLE } from "../../../shared/src/index.js";
-import { canonicalStringify } from "../../../shared/src/index.js";
+import { createHash } from "node:crypto";
+import { writeFile } from "node:fs/promises";
+import { hashNarrationSettings, canonicalStringify } from "../../../shared/src/index.js";
 import { normalizeNarrationTiming } from "../../../backend/src/modules/narration/narration-timing-normalizer.js";
 import { NarrationBundleStorage } from "../../../backend/src/modules/narration/narration-bundle-storage.js";
 import { projectStoryboardTiming } from "../../../backend/src/modules/storyboard/storyboard-timing-projector.js";
@@ -703,5 +705,64 @@ describe("Task8 真实生成服务与冻结来源接线", () => {
     expect(result.body).toMatchObject(mode === "text" ? { error: "script_not_confirmed" } : { error: "internal_server_error", message: "project_scope_denied" });
     expect(planner).not.toHaveBeenCalled();
     expect(f.db.projects.get(f.project.id)!.activeStoryboardRecordId).toBe("old");
+  });
+});
+
+describe("Task8 R1 补齐结构重生与完整磁盘成功序列", () => {
+  it.each(["success", "before_second", "during_second"])("v2结构regen_once：%s", async mode => {
+    const f = await readyFixture();
+    const actual = await vi.importActual<typeof import("../../../backend/src/modules/storyboard/storyboard-generation.service.js")>("../../../backend/src/modules/storyboard/storyboard-generation.service.js");
+    let calls = 0;
+    planner.mockImplementation(async (input: any) => {
+      const plan = structuredClone(f.plan); plan.segments[0]!.visual_intent = ++calls === 1 ? " " : "重生后的画面";
+      const result = await actual.generateStoryboardPlan({ ...input, llmGateway: { invokeStructuredPrompt: vi.fn().mockResolvedValue(plan) } as any });
+      if (mode === "before_second" && calls === 1 || mode === "during_second" && calls === 2)
+        f.db.scriptRecords.set(f.script.id, { ...f.script, scriptText: "后来的正文" });
+      return result;
+    });
+    const result = await runStoryboardGeneration({ db: f.db, project: f.project });
+    expect(result.statusCode, JSON.stringify(result.body)).toBe(mode === "success" ? 200 : 409);
+    expect(planner).toHaveBeenCalledTimes(mode === "before_second" ? 1 : 2);
+    if (calls === 2) {
+      expect(planner.mock.calls[1]![0].narrationTiming).toEqual(planner.mock.calls[0]![0].narrationTiming);
+      expect(planner.mock.calls[1]![0].regenerationContext.reason).toBe("storyboard_local_validation_regen_once");
+    }
+    if (mode !== "success") expect(f.project.activeStoryboardRecordId).toBe("old");
+    else expect((await getProjectSnapshot(f.db, f.project.id))!.active_storyboard!.plan.segments[0]!.visual_intent).toBe("重生后的画面");
+  });
+  it("完整磁盘bundle→真实stub→v2成功；随后损坏原件则零派发且保留active", async () => {
+    const f = await readyFixture(); f.timingRead.mockRestore();
+    const audio = Buffer.alloc(96044); audio.write("RIFF"); audio.writeUInt32LE(96036, 4); audio.write("WAVEfmt ", 8);
+    audio.writeUInt32LE(16, 16); audio.writeUInt16LE(1, 20); audio.writeUInt16LE(1, 22); audio.writeUInt32LE(24000, 24);
+    audio.writeUInt32LE(48000, 28); audio.writeUInt16LE(2, 32); audio.writeUInt16LE(16, 34); audio.write("data", 36); audio.writeUInt32LE(96000, 40);
+    const audioHash = createHash("sha256").update(audio).digest("hex");
+    const text = f.script.scriptText, words = [{ text, begin_index: 0, end_index: 1, begin_time: 0, end_time: 2000 }];
+    const timingMap = normalizeNarrationTiming({ sourceText: text, audioHash, durationMs: 2000,
+      sentences: [{ providerSentenceIndex: 0, originalText: text, normalizedText: text, words }] });
+    const event = (name: string, output?: unknown) => ({ kind: "json", elapsedMs: 0,
+      data: { header: { event: name, task_id: "task" }, payload: output === undefined ? {} : { output } } });
+    const nativeEvents = [event("task-started"), event("result-generated", { type: "sentence-begin", sentence: { index: 0 } }),
+      { kind: "audio", elapsedMs: 0, byteOffset: 0, byteLength: 96000 },
+      event("result-generated", { type: "sentence-end", sentence: { index: 0, words }, original_text: text, normalized_text: text }), event("task-finished")];
+    const store = new NarrationBundleStorage({ projectId: f.project.id, storageRootDir: f.project.storageRootDir });
+    const bundle = await store.commitInitial({ record: { ...f.record, settingsSha256: await hashNarrationSettings(f.record.settings),
+      status: "generating", providerRequestId: null, confirmedAt: null, confirmedBy: null, acceptedDurationBandSnapshot: null, output: null, spokenTextSha256: null },
+      audio, timingMap, nativeEvents, subtitleSettings: { presetId: null, presetVersion: null, resolvedStyle: DEFAULT_SUBTITLE_STYLE, overrides: {},
+        lineBreak: { strategy: "punctuation_and_length", maxCharactersPerLine: 20, version: "v1" }, resolverVersion: "v1" },
+      subtitleRevisionId: "subtitle", createdAt: f.record.createdAt });
+    f.db.narrationRecords.set(f.record.id, { ...bundle.record, status: "confirmed", confirmedAt: f.record.confirmedAt,
+      confirmedBy: f.record.confirmedBy, acceptedDurationBandSnapshot: f.record.acceptedDurationBandSnapshot });
+    f.db.narrationSubtitleRevisions.set("subtitle", bundle.initialSubtitleRevision);
+    const actual = await vi.importActual<typeof import("../../../backend/src/modules/storyboard/storyboard-generation.service.js")>("../../../backend/src/modules/storyboard/storyboard-generation.service.js");
+    planner.mockImplementation(actual.generateStoryboardPlan);
+    const result = await runStoryboardGeneration({ db: f.db, project: f.project });
+    expect(result.statusCode, JSON.stringify(result.body)).toBe(200); expect(planner).toHaveBeenCalledTimes(1);
+    const snapshot = await getProjectSnapshot(f.db, f.project.id), plan = snapshot!.active_storyboard!.plan;
+    expect(plan.plan_version).toBe("storyboard_v2"); expect((plan as any).narration_reference.audio_hash).toBe(audioHash);
+    const active = f.project.activeStoryboardRecordId;
+    await writeFile(join(f.project.storageRootDir, bundle.record.output!.timingMap.uri), "{}"); planner.mockClear();
+    const rejected = await runStoryboardGeneration({ db: f.db, project: f.project });
+    expect(rejected.statusCode).toBe(500); expect(rejected.body).toMatchObject({ message: "narration_bundle_incomplete" });
+    expect(planner).not.toHaveBeenCalled(); expect(f.project.activeStoryboardRecordId).toBe(active);
   });
 });
