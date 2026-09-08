@@ -88,7 +88,17 @@ export function computeRunPayloadFingerprint(input: {
   selection?: GenerationQuoteSelection;
   enabled_provider_types?: string[];
   narration?: NarrationRunFingerprintInput;
+  storyboard?: { narration_source: unknown; segment_id?: unknown; user_feedback?: unknown };
 }): string {
+  if (input.operation === "storyboard.generate" && input.storyboard) {
+    let source = input.storyboard.narration_source;
+    // 全量动作的直接上游是口播，active分镜仅用于激活CAS；自己完成后的重放不改变请求身份。
+    if (input.storyboard.segment_id == null && source && typeof source === "object" && !Array.isArray(source)) {
+      const { activeStoryboardRecordId, storyboardPlanSha256, ...provenance } = source as Record<string, unknown>;
+      source = provenance;
+    }
+    return deterministicHash(canonicalStringify({ schema_version: "narration_storyboard_payload_v1", operation: input.operation, storyboard: { ...input.storyboard, narration_source: source } }));
+  }
   if (input.operation === "script.narration.generate") {
     return deterministicHash(canonicalStringify({ schema_version: "narration_run_payload_v1", operation: input.operation, narration: input.narration ?? null }));
   }
@@ -128,6 +138,11 @@ export async function createOrRestoreGenerationRun(
     selection: input.selection,
     enabled_provider_types: input.enabledProviderTypes,
     narration: input.narration,
+    ...(input.operation === "storyboard.generate" && input.dispatchPayload.narration_source ? { storyboard: {
+      narration_source: input.dispatchPayload.narration_source,
+      segment_id: input.dispatchPayload.segment_id ?? null,
+      user_feedback: input.dispatchPayload.user_feedback ?? null,
+    } } : {}),
   });
   const existing = await deps.repository.getRunByKey(project.id, input.operation, input.idempotencyKey);
   if (existing) {

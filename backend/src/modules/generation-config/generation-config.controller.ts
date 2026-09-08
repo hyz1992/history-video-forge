@@ -1,4 +1,5 @@
 import { readProjectNarrationMode } from "../narration/narration-execution-compatibility.js";
+import { NarrationSourceError } from "../narration/narration-invalidation.js";
 import type { AppResponse, RouteContext } from "../../app.js";
 import { requireUser } from "../../auth/authorization.js";
 import { guardOwnedRoute, guardUserRoute } from "../../auth/authorization.js";
@@ -123,7 +124,10 @@ export const patchProjectConfigController = guardOwnedRoute(
     const result = await upsertProjectGenerationConfiguration(context.app.db, context.params.projectId, {
       expected_revision: parsed.expected_revision!,
       configuration: parsed.configuration,
-    }, user.userId, user.role);
+    }, user.userId, user.role).catch(error => {
+      if (error instanceof NarrationSourceError) return { ok: false as const, error: { code: "narration_stale" as const, current_revision: current.revision } };
+      throw error;
+    });
     if (!result.ok) {
       if (result.error.code === "narration_selection_required") {
         return { statusCode: 422, body: result.error.body };

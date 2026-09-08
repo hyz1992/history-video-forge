@@ -102,6 +102,7 @@ export function createStoryboardDispatchHandler(): GenerationRunDispatchHandler 
     if (typeof payload.segment_id === "string") {
       // 分段重生入口（同一 storyboard.generate operation）
       response = await runStoryboardSegmentRegeneration({
+        expectedNarrationSource: payload.narration_source,
         db: context.db,
         project: context.project,
         segmentId: payload.segment_id,
@@ -110,6 +111,7 @@ export function createStoryboardDispatchHandler(): GenerationRunDispatchHandler 
       });
     } else {
       response = await runStoryboardGeneration({
+        expectedNarrationSource: payload.narration_source,
         db: context.db,
         project: context.project,
         userFeedback: payload.user_feedback as string | undefined,

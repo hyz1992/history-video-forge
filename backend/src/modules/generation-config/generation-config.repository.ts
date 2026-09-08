@@ -1,4 +1,5 @@
 import { materializeNarrationConfiguration, NarrationPolicyError } from "../narration/narration-model-policy.js";
+import { invalidateMapNarration, NarrationSourceError, projectTtsHash } from "../narration/narration-invalidation.js";
 import type { NarrationSelectionError } from "../../../../shared/src/index.js";
 import type { UserRole } from "../../auth/auth-context.js";
 import { checkNarrationExecutionCompatibility, readProjectNarrationContext } from "../narration/narration-execution-compatibility.js";
@@ -446,7 +447,7 @@ export async function upsertProjectGenerationConfiguration(
     const result = await db.firstAggregateWriter.casUpsertProjectGenerationConfiguration(
       updated,
       current.revision,
-      { actorUserId, projectId, oldRevision: current.revision, newRevision, diff },
+      { actorUserId, projectId, oldRevision: current.revision, newRevision, diff, expectedOwnerId: projectContext.ownerId, expectedNarrationMode: projectContext.mode },
     );
     if (!result.success) {
       // 并发 loser：同步数据库真实记录到内存，返回实际 revision
@@ -457,6 +458,12 @@ export async function upsertProjectGenerationConfiguration(
       };
     }
   } else {
+    // Map 的来源复查、CAS、失效和写入必须处于同一同步段。
+    const latest = findProjectConfigRecord(db, projectId);
+    const project = db.projects.get(projectId);
+    if (!project || project.ownerId !== projectContext.ownerId || (project.narrationTimingMode ?? "legacy_estimated") !== projectContext.mode) throw new NarrationSourceError("narration_stale");
+    if (!latest || latest.revision !== input.expected_revision) return { ok: false, error: { code: "project_generation_configuration_revision_conflict", current_revision: latest?.revision ?? 0 } };
+    if (project.narrationTimingMode === "narration_first_v1" && projectTtsHash(latest.configurationJson) !== projectTtsHash(updated.configurationJson)) invalidateMapNarration(db, project);
     void db.firstAggregateWriter?.saveProjectGenerationConfiguration(updated);
   }
 

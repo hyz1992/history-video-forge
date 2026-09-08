@@ -528,14 +528,14 @@ export interface DbClient {
     casUpsertProjectGenerationConfiguration(
       record: ProjectGenerationConfigurationRecord,
       expectedRevision: number,
-      audit: { actorUserId: string; projectId: string; oldRevision: number; newRevision: number; diff: Record<string, unknown> },
+      audit: { actorUserId: string; projectId: string; oldRevision: number; newRevision: number; diff: Record<string, unknown>; expectedOwnerId?: string; expectedNarrationMode?: string },
     ): Promise<{ success: true } | { success: false; conflict: true; existingRecord: ProjectGenerationConfigurationRecord }>;
   };
   secondAggregateWriter?: {
     saveScript(record: ScriptRecord): Promise<void>;
     saveStoryboard(record: StoryboardRecord): Promise<void>;
     saveAssetPlan(record: AssetPlanRecord): Promise<void>;
-    activateScript(project: ProjectRecord, record: ScriptRecord): Promise<void>;
+    activateScript(project: ProjectRecord, record: ScriptRecord, expectedActiveScriptRecordId?: string | null): Promise<void>;
     activateStoryboard(project: ProjectRecord, record: StoryboardRecord): Promise<void>;
     activateAssetPlan(project: ProjectRecord, record: AssetPlanRecord): Promise<void>;
     saveStoryboardSegmentOverride(record: StoryboardSegmentOverrideRecord): Promise<void>;

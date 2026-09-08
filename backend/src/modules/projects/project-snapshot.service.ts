@@ -194,7 +194,7 @@ export async function getProjectSnapshot(
   topicCandidateStore?: Map<string, any>,
   options?: { demoMode?: boolean },
 ) {
-  const project = db.projects.get(projectId);
+  let project = db.projects.get(projectId);
   if (!project) {
     return null;
   }
@@ -205,6 +205,12 @@ export async function getProjectSnapshot(
   const narrationSubtitle = narrationProject.activeNarrationSubtitleRevisionId ? await narrationRepository.findSubtitleForOwner(projectId, project.ownerId, narrationProject.activeNarrationSubtitleRevisionId) : null;
   const latestNarration = narrationProject.activeScriptRecordId ? await narrationRepository.findLatestForScriptForOwner(projectId, project.ownerId, narrationProject.activeScriptRecordId) : null;
   const narrationSource = await narrationRepository.sourceContext(projectId, project.ownerId);
+  if (narrationSource.project.narrationTimingMode === "narration_first_v1") {
+    // Project 指针从数据库读取；不让旧实例 Map 再展示已失效的下游 active。
+    project = { ...project };
+    const fields = ["status", "activeTopicPackageId", "activeScriptRecordId", "activeNarrationRecordId", "activeNarrationSubtitleRevisionId", "activeStoryboardRecordId", "activeAssetPlanRecordId", "activeAssetManifestRecordId", "activeComposeRecordId", "activeRenderJobRecordId", "activePublishPackageRecordId", "latestStoryboardRunTraceJson", "latestAssetPlanRunTraceJson", "latestAssetsRunTraceJson", "latestComposeRunTraceJson", "latestRenderRunTraceJson"] as const;
+    Object.assign(project, Object.fromEntries(fields.map(key => [key, narrationSource.project[key] ?? null])));
+  }
   const narrationClient = db.narrationPersistence.prismaClient ?? db.firstAggregateWriter?.narrationPrismaClient;
   const latestNarrationRun = latestNarration ? narrationClient ? await narrationClient.generationRun.findUnique({where:{id:latestNarration.generationRunId}}) : db.generationRuns.get(latestNarration.generationRunId) : null;
   let ttsHash: string | null = null, targetBand: ReturnType<typeof durationBandFromSource> | null = null;
@@ -253,7 +259,7 @@ export async function getProjectSnapshot(
     .at(0) ?? null;
   const latestStoryboardTrace =
     (project.latestStoryboardRunTraceJson as Record<string, unknown> | null | undefined) ??
-    (latestProjectStoryboardRecord?.graphTraceSummaryJson as
+    (narrationSource.project.narrationTimingMode === "narration_first_v1" ? null : latestProjectStoryboardRecord?.graphTraceSummaryJson as
       | Record<string, unknown>
       | null
       | undefined) ??

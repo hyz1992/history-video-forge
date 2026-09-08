@@ -110,6 +110,12 @@ describe("F4 既有ADMIN授权与项目owner音色域", () => {
     legacy.ownerId = "stale-owner";
     const findFirst = vi.fn().mockResolvedValue({ ...legacy, ownerId: "owner", narrationTimingMode: "narration_first_v1", archivedAt: null });
     app.db.narrationPersistence.prismaClient = { project: { findFirst } } as never;
+    // 本用例隔离授权/候选层，DB权威读取与保存必须成对提供；真实事务覆盖见Task6隔离SQLite矩阵。
+    const cas = vi.fn(async (_record, _revision, audit) => {
+      expect(audit).toMatchObject({ expectedOwnerId: "owner", expectedNarrationMode: "narration_first_v1" });
+      return { success: true };
+    });
+    app.db.firstAggregateWriter = { casUpsertProjectGenerationConfiguration: cas } as never;
     const models = await app.inject({ method: "GET", url: "/api/generation-capabilities?project_id=" + legacy.id, auth: admin });
     expect(models.statusCode).toBe(200); expect(models.json().capabilities.map((p: any) => p.id)).toEqual(["tts.synthesize.dashscope.cn-beijing.qwen-audio-3.0-tts-plus"]);
     const voices = await app.inject({ method: "GET", url: "/api/me/voice-profiles?project_id=" + legacy.id, auth: admin });
@@ -123,6 +129,7 @@ describe("F4 既有ADMIN授权与项目owner音色域", () => {
     Object.assign(qualified, { kind: "generated", visibility: "private", owner_id: "owner" });
     configuration.creative.voice_profile_id = qualified.voice_profile_id;
     expect((await patchConfiguration(app, legacy.id, admin, configuration)).statusCode).toBe(200);
+    expect(cas).toHaveBeenCalledTimes(1);
     configuration.creative.voice_profile_id = "admin-private-ws";
     expect((await patchConfiguration(app, legacy.id, admin, configuration)).statusCode).toBe(422);
     expect(findFirst).toHaveBeenCalled();

@@ -4,7 +4,9 @@ import {
   type GenerationOperation,
   type GenerationQuoteSelection,
 } from "../../../../shared/src/index.js";
+import { canonicalStringify } from "../../../../shared/src/index.js";
 import { createOrRestoreGenerationRun } from "./generation-run.service.js";
+import { captureStoryboardNarrationSource, NarrationSourceError } from "../narration/narration-invalidation.js";
 
 /**
  * S2-2 生成提交协议（2026-08-23 报价体系移除后简化版）。
@@ -68,6 +70,30 @@ export async function submitGenerationRun(
     enabled_provider_types: enabledProviderTypes,
   };
   const project = context.app.db.projects.get(context.params.projectId)!;
+  if (operation === "storyboard.generate") {
+    try {
+      const existing = submit.idempotency_key && dispatchPayload.segment_id != null
+        ? await context.app.generationRunRepository.getRunByKey(project.id, operation, submit.idempotency_key) : null;
+      const state = await captureStoryboardNarrationSource(context.app.db, project.id, project.ownerId);
+      if (state.identity) {
+        let source = state.identity;
+        const result = (state.storyboard?.executionStateJson as { generation_result?: { run_id?: string; storyboard_record_id?: string; plan_sha256?: string } } | null)?.generation_result;
+        const frozen = existing?.dispatchPayloadJson.narration_source;
+        // 成功动作只允许识别它自己的未改写产物；外部记录、原地编辑和口播来源变化仍冲突。
+        const upstream = (value: Record<string, unknown>) => { const { activeStoryboardRecordId, storyboardPlanSha256, ...rest } = value; return rest; };
+        if (existing?.status === "succeeded" && result?.run_id === existing.id
+          && result.storyboard_record_id === state.storyboard?.id && result.plan_sha256 === source.storyboardPlanSha256
+          && frozen && typeof frozen === "object" && !Array.isArray(frozen)
+          && canonicalStringify(upstream(frozen as Record<string, unknown>)) === canonicalStringify(upstream({ ...source }))) {
+          source = frozen as typeof source;
+        }
+        Object.assign(dispatchPayloadWithFilter, { narration_source: source });
+      }
+    } catch (error) {
+      if (error instanceof NarrationSourceError) return { statusCode: 409, body: { error: error.message } };
+      throw error;
+    }
+  }
   const actorUserId = context.auth.anonymous ? null : context.auth.userId;
   // 客户端不提供幂等键时服务端生成（单次请求语义；客户端幂等重试应自行携带）
   const idempotencyKey = submit.idempotency_key ?? `${operation}-${context.app.db.generateId()}`;

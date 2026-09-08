@@ -6,7 +6,8 @@ import { validateScriptDraft } from "./script-local-validator";
 import { buildScriptInputBundle } from "./script-input-bundle.builder";
 import { patchScriptDraft } from "./script-patch.service";
 import { regenerateScriptDraft } from "./script-regenerate.service";
-import { saveScriptRecord } from "./script-record.repository";
+import { NarrationSourceError } from "../narration/narration-invalidation.js";
+import { activateScriptRecord, saveScriptRecord } from "./script-record.repository";
 import { reviewScriptSemantics } from "./script-semantic-review.service";
 import { planTopicDelivery } from "./topic-delivery-planner";
 import { runScriptRunGraph } from "../../runtime/orchestration/script-run-graph.js";
@@ -153,8 +154,11 @@ export async function runScriptGeneration(input: RunScriptGenerationInput) {
       graphTraceSummaryJson: null,
       runtimeDiagnosticsJson: null,
     });
-    input.project.status = "script_generating";
-    await input.db.firstAggregateWriter?.syncProject(input.project);
+    // 新模式由候选记录呈现生成状态；失败不改变当前可用项目，也不回写旧对象。
+    if (input.project.narrationTimingMode !== "narration_first_v1") {
+      input.project.status = "script_generating";
+      await input.db.firstAggregateWriter?.syncProject(input.project);
+    }
 
     const {
     draft,
@@ -216,22 +220,7 @@ export async function runScriptGeneration(input: RunScriptGenerationInput) {
     runtimeDiagnosticsJson: runtimeDiagnostics as unknown as Record<string, unknown>,
   });
 
-  input.project.activeScriptRecordId = scriptRecord.id;
-  input.project.activeStoryboardRecordId = null;
-  input.project.activeAssetPlanRecordId = null;
-  input.project.activeAssetManifestRecordId = null;
-  input.project.activeComposeRecordId = null;
-  input.project.activeRenderJobRecordId = null;
-  input.project.latestScriptRunTraceJson =
-    graphTraceSummary as unknown as Record<string, unknown>;
-  input.project.latestStoryboardRunTraceJson = null;
-  input.project.latestAssetPlanRunTraceJson = null;
-  input.project.latestAssetsRunTraceJson = null;
-  input.project.latestComposeRunTraceJson = null;
-  input.project.latestRenderRunTraceJson = null;
-  input.project.status = "script_ready";
-  input.project.updatedAt = new Date();
-  await input.db.secondAggregateWriter?.activateScript(input.project, scriptRecord);
+  await activateScriptRecord(input.db, input.project, scriptRecord, previousActiveScriptRecordId);
   persistProjectRunArtifacts({
     project: input.project,
     phase: "script",
@@ -303,11 +292,14 @@ export async function runScriptGeneration(input: RunScriptGenerationInput) {
       }
     }
 
+    if (input.project.narrationTimingMode !== "narration_first_v1") {
     // Clean up generating state — unexpected error
     input.project.activeScriptRecordId = previousActiveScriptRecordId;
     input.project.status = previousActiveScriptRecordId ? "script_ready" : "script_failed";
     input.project.updatedAt = new Date();
     await input.db.firstAggregateWriter?.syncProject(input.project).catch(() => undefined);
+    }
+    if (error instanceof NarrationSourceError) return { statusCode: 409, body: { error: error.message } };
     const message =
       error instanceof Error ? (error.stack ?? error.message) : String(error);
     interactionLogWriter.writeError(message);

@@ -1,5 +1,6 @@
 import type { AssetPlanRecord, ProjectRecord, ScriptRecord, StoryboardRecord, StoryboardSegmentOverrideRecord } from "../client.js";
 import type { AppPrismaClient } from "../prisma-client.types.js";
+import { invalidatePrismaNarration, NarrationSourceError } from "../../modules/narration/narration-invalidation.js";
 
 const scriptData = (record: ScriptRecord) => ({
   projectId: record.projectId, topicPackageId: record.topicPackageId, scriptText: record.scriptText,
@@ -27,7 +28,14 @@ export class PrismaSecondAggregateWriter {
 
   async saveScript(record: ScriptRecord): Promise<void> {
     const data = scriptData(record);
-    await this.client.scriptRecord.upsert({ where: { id: record.id }, create: { id: record.id, ...data, createdAt: record.createdAt }, update: data });
+    await this.client.$transaction(async tx => {
+      const project = await tx.project.findUnique({ where: { id: record.projectId } });
+      const previous = await tx.scriptRecord.findUnique({ where: { id: record.id } });
+      if (project?.activeScriptRecordId === record.id && previous && previous.scriptText !== record.scriptText) {
+        await invalidatePrismaNarration(tx, project);
+      }
+      await tx.scriptRecord.upsert({ where: { id: record.id }, create: { id: record.id, ...data, createdAt: record.createdAt }, update: data });
+    });
   }
   async saveStoryboard(record: StoryboardRecord): Promise<void> {
     const data = storyboardData(record);
@@ -38,18 +46,22 @@ export class PrismaSecondAggregateWriter {
     await this.client.assetPlanRecord.upsert({ where: { id: record.id }, create: { id: record.id, ...data, createdAt: record.createdAt }, update: data });
   }
 
-  async activateScript(project: ProjectRecord, record: ScriptRecord): Promise<void> {
+  async activateScript(project: ProjectRecord, record: ScriptRecord, expectedActiveScriptRecordId?: string | null): Promise<void> {
     await this.client.$transaction(async (tx) => {
       const [scoped, topic, stored] = await Promise.all([
-        tx.project.findFirst({ where: { id: project.id, ownerId: project.ownerId }, select: { id: true } }),
+        tx.project.findFirst({ where: { id: project.id, ownerId: project.ownerId, archivedAt: null } }),
         tx.topicPackage.findUnique({ where: { id: record.topicPackageId }, select: { projectId: true } }),
         tx.scriptRecord.findUnique({ where: { id: record.id }, select: { projectId: true } }),
       ]);
       if (!scoped) throw new Error("project_scope_denied");
       if (topic?.projectId !== project.id || stored?.projectId !== project.id) throw new Error("script_activation_project_mismatch");
+      if (scoped.narrationTimingMode === "narration_first_v1") {
+        if (scoped.activeTopicPackageId !== record.topicPackageId || expectedActiveScriptRecordId === undefined || scoped.activeScriptRecordId !== expectedActiveScriptRecordId) throw new NarrationSourceError("narration_stale");
+        if (scoped.activeScriptRecordId !== record.id) await invalidatePrismaNarration(tx, scoped);
+      }
       await tx.project.update({ where: { id: project.id }, data: {
         status: project.status, activeScriptRecordId: record.id, activeStoryboardRecordId: null, activeAssetPlanRecordId: null,
-        activeAssetManifestRecordId: null, activeComposeRecordId: null, activeRenderJobRecordId: null,
+        activeAssetManifestRecordId: null, activeComposeRecordId: null, activeRenderJobRecordId: null, activePublishPackageRecordId: null,
         latestScriptRunTraceJson: project.latestScriptRunTraceJson as never, latestStoryboardRunTraceJson: project.latestStoryboardRunTraceJson as never,
         latestAssetPlanRunTraceJson: project.latestAssetPlanRunTraceJson as never, latestAssetsRunTraceJson: project.latestAssetsRunTraceJson as never,
         latestComposeRunTraceJson: project.latestComposeRunTraceJson as never, latestRenderRunTraceJson: project.latestRenderRunTraceJson as never,

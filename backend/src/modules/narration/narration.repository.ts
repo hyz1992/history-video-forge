@@ -1,3 +1,4 @@
+import { narrationDownstreamResetData } from "./narration-invalidation.js";
 import { hasPassingNarrationScriptValidation } from "./narration-readiness.js";
 import { DEFAULT_NARRATION_CREATIVE_SETTINGS, QualifiedNarrationSettings, ResolvedGenerationConfigurationV1Schema } from "../../../../shared/src/index.js";
 import { settingsFromResolvedNarration } from "./narration-readiness.js";
@@ -10,7 +11,7 @@ import type { AppPrismaClient } from "../../db/prisma-client.types.js";
 
 type Row = Awaited<ReturnType<AppPrismaClient["narrationRecord"]["findUniqueOrThrow"]>>;
 type SubtitleRow = Awaited<ReturnType<AppPrismaClient["narrationSubtitleRevision"]["findUniqueOrThrow"]>>;
-function decode(row: Row): NarrationRecord {
+export function decodeNarrationRow(row: Row): NarrationRecord {
   const { settingsJson, outputJson, initialSubtitleRevisionId, acceptedDurationBandSnapshotJson, ...rest } = row;
   const record = NarrationRecord.parse({ ...rest, settings: settingsJson, output: outputJson,
     acceptedDurationBandSnapshot: acceptedDurationBandSnapshotJson,
@@ -18,6 +19,7 @@ function decode(row: Row): NarrationRecord {
   if ((record.output?.initialSubtitleRevisionId ?? null) !== initialSubtitleRevisionId) throw new Error("narration_initial_subtitle_mismatch");
   return record;
 }
+const decode = decodeNarrationRow;
 function encode(record: NarrationRecord) {
   const { settings, output, acceptedDurationBandSnapshot, ...rest } = record;
   return { ...rest, settingsJson: settings as never, outputJson: output === null ? Prisma.DbNull : output as never,
@@ -435,7 +437,7 @@ export class NarrationRepository {
           const next = NarrationRecord.parse({ ...record, status: "confirmed", acceptedDurationBandSnapshot: band, confirmedAt: now.toISOString(), confirmedBy: actorId, updatedAt: now.toISOString() });
           const update = {
               activeNarrationRecordId: record.id, activeNarrationSubtitleRevisionId: active === record.id ? source.project.activeNarrationSubtitleRevisionId : record.output!.initialSubtitleRevisionId, updatedAt: now,
-              ...(active !== record.id ? { activeStoryboardRecordId: null, activeAssetPlanRecordId: null, activeAssetManifestRecordId: null, activeComposeRecordId: null, activeRenderJobRecordId: null, activePublishPackageRecordId: null, latestStoryboardRunTraceJson: Prisma.DbNull, latestAssetPlanRunTraceJson: Prisma.DbNull, latestAssetsRunTraceJson: Prisma.DbNull, latestComposeRunTraceJson: Prisma.DbNull, latestRenderRunTraceJson: Prisma.DbNull } : {})
+              ...(active !== record.id ? narrationDownstreamResetData() : {})
           };
           if (client) {
               const changed = await client.project.updateMany({ where: { id: projectId, ownerId, activeNarrationRecordId: active }, data: update });
@@ -487,7 +489,7 @@ function readMapNarrationProject(db: DbClient, projectId: string, ownerId: strin
       ("archivedAt" in project && project.archivedAt != null)) throw new Error("project_scope_denied");
   return project;
 }
-function readMapNarrationSource(db: DbClient, projectId: string, ownerId: string) {
+export function readMapNarrationSource(db: DbClient, projectId: string, ownerId: string) {
   const project = readMapNarrationProject(db, projectId, ownerId);
   const script = project.activeScriptRecordId ? db.scriptRecords.get(project.activeScriptRecordId) : null;
   const configuration = [...db.projectGenerationConfigurations.values()].find(c => c.projectId === projectId);

@@ -1,5 +1,7 @@
+import { z } from "zod";
+import { narrationTextHash } from "../narration/narration-readiness.js";
 import type { ScriptDraftPackage } from "../../../../shared/src/index.js";
-import { ScriptDraftPackage as ScriptDraftPackageSchema, StoryboardPlan } from "../../../../shared/src/index.js";
+import { ScriptDraftPackage as ScriptDraftPackageSchema, canonicalStringify, StoryboardPlan } from "../../../../shared/src/index.js";
 import type { DbClient, ProjectRecord, ScriptRecord, StoryboardRecord, TopicPackageRecord } from "../../db/client";
 import { LlmOutputError } from "../../runtime/llm/llm-output-error.js";
 import { createCompositeInteractionLogWriter, persistProjectRunArtifacts } from "../../runtime/trace/project-storage.js";
@@ -8,8 +10,10 @@ import { generateStoryboardPlan, regenerateSingleSegment } from "./storyboard-ge
 import { validateStoryboardPlan } from "./storyboard-local-validator";
 import { decodeStoredStoryboardPlan } from "./storyboard-plan-compatibility";
 import { saveStoryboardRecord } from "./storyboard-record.repository";
+import { activateNarrationStoryboard, captureStoryboardNarrationSource, NarrationSourceError, withStoryboardNarrationSource } from "../narration/narration-invalidation.js";
 
-function mapScriptDraft(record: ScriptRecord): ScriptDraftPackage {
+type NarrationContext = Awaited<ReturnType<typeof captureStoryboardNarrationSource>>;
+function mapScriptDraft(record: NonNullable<NarrationContext["source"]["script"]>): ScriptDraftPackage {
   return ScriptDraftPackageSchema.parse({
     script_text: record.scriptText,
     estimated_duration_sec: record.estimatedDurationSec,
@@ -20,17 +24,17 @@ function mapScriptDraft(record: ScriptRecord): ScriptDraftPackage {
   });
 }
 
-function mapTopicBoundaryContext(record: TopicPackageRecord) {
+function mapTopicBoundaryContext(record: NonNullable<NarrationContext["source"]["topic"]>) {
   return {
     title: record.title,
     selected_angle: record.selectedAngle,
     core_conflict: record.coreConflict,
     strong_scene: record.strongScene,
-    forbidden_expansions: record.forbiddenExpansionsJson,
-    risk_hints: record.riskHintsJson,
-    source_anchor_refs: record.sourceAnchorRefsJson,
-    canonical_quotes: record.canonicalQuotesJson,
-    narrative_tension_map: record.narrativeTensionMapJson,
+    forbidden_expansions: z.array(z.unknown()).parse(record.forbiddenExpansionsJson),
+    risk_hints: z.array(z.unknown()).parse(record.riskHintsJson),
+    source_anchor_refs: z.array(z.unknown()).parse(record.sourceAnchorRefsJson),
+    canonical_quotes: z.array(z.unknown()).parse(record.canonicalQuotesJson),
+    narrative_tension_map: z.record(z.unknown()).parse(record.narrativeTensionMapJson),
   };
 }
 
@@ -101,6 +105,7 @@ function buildTraceSummary(input: {
 }
 
 export interface RunStoryboardGenerationInput {
+  expectedNarrationSource?: unknown;
   db: DbClient;
   /** S2-2A 任务 9B：付费 quote 绑定 run 的计费上下文（LLM 记账）；免 quote 路径不传。 */
   billingContext?: LlmBillingContext;
@@ -111,6 +116,12 @@ export interface RunStoryboardGenerationInput {
 export async function runStoryboardGeneration(
   input: RunStoryboardGenerationInput,
 ) {
+  let narrationContext: NarrationContext;
+  try { narrationContext = await captureStoryboardNarrationSource(input.db, input.project.id, input.project.ownerId); }
+  catch (error) { if (error instanceof NarrationSourceError) return { statusCode: 409, body: { error: error.message } }; throw error; }
+  const narrationSource = narrationContext.identity;
+  if ((input.expectedNarrationSource !== undefined || (input.billingContext && narrationSource)) && canonicalStringify(input.expectedNarrationSource) !== canonicalStringify(narrationSource)) return { statusCode: 409, body: { error: "narration_stale" } };
+  if (narrationSource) input = { ...input, project: { ...input.project, activeScriptRecordId: narrationContext.source.project.activeScriptRecordId, activeTopicPackageId: narrationContext.source.project.activeTopicPackageId, activeStoryboardRecordId: narrationContext.source.project.activeStoryboardRecordId } };
   if (!input.project.activeScriptRecordId) {
     return {
       statusCode: 409,
@@ -120,7 +131,7 @@ export async function runStoryboardGeneration(
     };
   }
 
-  const scriptRecord = input.db.scriptRecords.get(input.project.activeScriptRecordId);
+  const scriptRecord = narrationSource ? narrationContext.source.script : input.db.scriptRecords.get(input.project.activeScriptRecordId);
   if (!scriptRecord) {
     return {
       statusCode: 404,
@@ -130,7 +141,7 @@ export async function runStoryboardGeneration(
     };
   }
 
-  const topicPackage = input.db.topicPackages.get(scriptRecord.topicPackageId);
+  const topicPackage = narrationSource ? narrationContext.source.topic : input.db.topicPackages.get(scriptRecord.topicPackageId);
   if (!topicPackage) {
     return {
       statusCode: 404,
@@ -175,10 +186,13 @@ export async function runStoryboardGeneration(
       graphTraceSummaryJson: null,
       runtimeDiagnosticsJson: null,
     });
-    input.project.status = "storyboard_generating";
-    await input.db.firstAggregateWriter?.syncProject(input.project);
+    if (!narrationSource) {
+      input.project.status = "storyboard_generating";
+      await input.db.firstAggregateWriter?.syncProject(input.project);
+    }
 
     const generateStart = new Date().toISOString();
+    await withStoryboardNarrationSource(input.db, input.project.id, input.project.ownerId, narrationSource, () => undefined);
     plan = await generateStoryboardPlan({
       sourceScriptRecordId: scriptRecord.id,
       sourceTopicPackageId: topicPackage.id,
@@ -214,6 +228,7 @@ export async function runStoryboardGeneration(
     if (input.userFeedback) {
       regenContext.user_feedback = input.userFeedback;
     }
+    await withStoryboardNarrationSource(input.db, input.project.id, input.project.ownerId, narrationSource, () => undefined);
     plan = await generateStoryboardPlan({
       sourceScriptRecordId: scriptRecord.id,
       sourceTopicPackageId: topicPackage.id,
@@ -232,6 +247,7 @@ export async function runStoryboardGeneration(
 
   executionState = {
     regenerate_used: regenerated,
+    ...(narrationSource ? { narration_source: narrationSource } : {}),
   };
   graphTraceSummary = buildTraceSummary({
     runId,
@@ -275,11 +291,13 @@ export async function runStoryboardGeneration(
       runtimeDiagnosticsJson: runtimeDiagnostics as Record<string, unknown>,
     });
 
+    if (!narrationSource) {
     // Clean up generating state — validation failed
     input.project.activeStoryboardRecordId = previousActiveStoryboardRecordId;
     input.project.status = previousActiveStoryboardRecordId ? "storyboard_ready" : "script_ready";
     input.project.updatedAt = new Date();
     await input.db.firstAggregateWriter?.syncProject(input.project);
+    }
     return {
       statusCode: 422,
       body: {
@@ -297,7 +315,7 @@ export async function runStoryboardGeneration(
     };
   }
 
-  const storyboardRecord = await saveStoryboardRecord(input.db, {
+  const completedRecord = {
     id: generatingRecord.id,
     projectId: input.project.id,
     topicPackageId: topicPackage.id,
@@ -307,8 +325,13 @@ export async function runStoryboardGeneration(
     executionStateJson: executionState,
     graphTraceSummaryJson: graphTraceSummary,
     runtimeDiagnosticsJson: runtimeDiagnostics,
-  });
+    createdAt: generatingRecord.createdAt,
+  };
+  const storyboardRecord = narrationSource
+    ? await activateNarrationStoryboard(input.db, input.project.ownerId, narrationSource, completedRecord)
+    : await saveStoryboardRecord(input.db, completedRecord);
 
+  if (!narrationSource) {
   input.project.activeStoryboardRecordId = storyboardRecord.id;
   input.project.activeAssetPlanRecordId = null;
   input.project.activeAssetManifestRecordId = null;
@@ -322,6 +345,7 @@ export async function runStoryboardGeneration(
   input.project.status = "storyboard_ready";
   input.project.updatedAt = new Date();
   await input.db.secondAggregateWriter?.activateStoryboard(input.project, storyboardRecord);
+  }
   persistProjectRunArtifacts({
     project: input.project,
     phase: "storyboard",
@@ -387,11 +411,14 @@ export async function runStoryboardGeneration(
       }
     }
 
+    if (!narrationSource) {
     // Clean up generating state — unexpected error
     input.project.activeStoryboardRecordId = previousActiveStoryboardRecordId;
     input.project.status = previousActiveStoryboardRecordId ? "storyboard_ready" : "script_ready";
     input.project.updatedAt = new Date();
     await input.db.firstAggregateWriter?.syncProject(input.project).catch(() => undefined);
+    }
+    if (error instanceof NarrationSourceError) return { statusCode: 409, body: { error: error.message } };
     const message =
       error instanceof Error ? (error.stack ?? error.message) : String(error);
     interactionLogWriter.writeError(message);
@@ -409,6 +436,7 @@ export async function runStoryboardGeneration(
 }
 
 export interface RunStoryboardSegmentRegenInput {
+  expectedNarrationSource?: unknown;
   /** S2-2A 任务 9B：付费 quote 绑定 run 的计费上下文（LLM 记账）；免 quote 路径不传。 */
   billingContext?: LlmBillingContext;
   db: DbClient;
@@ -420,6 +448,12 @@ export interface RunStoryboardSegmentRegenInput {
 export async function runStoryboardSegmentRegeneration(
   input: RunStoryboardSegmentRegenInput,
 ) {
+  let narrationContext: NarrationContext;
+  try { narrationContext = await captureStoryboardNarrationSource(input.db, input.project.id, input.project.ownerId); }
+  catch (error) { if (error instanceof NarrationSourceError) return { statusCode: 409, body: { error: error.message } }; throw error; }
+  const narrationSource = narrationContext.identity;
+  if ((input.expectedNarrationSource !== undefined || (input.billingContext && narrationSource)) && canonicalStringify(input.expectedNarrationSource) !== canonicalStringify(narrationSource)) return { statusCode: 409, body: { error: "narration_stale" } };
+  if (narrationSource) input = { ...input, project: { ...input.project, activeScriptRecordId: narrationContext.source.project.activeScriptRecordId, activeTopicPackageId: narrationContext.source.project.activeTopicPackageId, activeStoryboardRecordId: narrationContext.source.project.activeStoryboardRecordId } };
   if (!input.project.activeScriptRecordId) {
     return { statusCode: 409, body: { error: "active_script_record_missing" } };
   }
@@ -428,12 +462,12 @@ export async function runStoryboardSegmentRegeneration(
     return { statusCode: 400, body: { error: "no_active_storyboard" } };
   }
 
-  const scriptRecord = input.db.scriptRecords.get(input.project.activeScriptRecordId);
+  const scriptRecord = narrationSource ? narrationContext.source.script : input.db.scriptRecords.get(input.project.activeScriptRecordId);
   if (!scriptRecord) {
     return { statusCode: 404, body: { error: "script_record_not_found" } };
   }
 
-  const storyboardRecord = input.db.storyboardRecords.get(input.project.activeStoryboardRecordId);
+  const storyboardRecord = narrationSource ? narrationContext.storyboard : input.db.storyboardRecords.get(input.project.activeStoryboardRecordId);
   if (!storyboardRecord) {
     return { statusCode: 404, body: { error: "storyboard_record_not_found" } };
   }
@@ -443,6 +477,11 @@ export async function runStoryboardSegmentRegeneration(
   const decoded = decodeStoredStoryboardPlan(storyboardRecord.planJson);
   if (!decoded.ok) {
     return { statusCode: 500, body: { error: "storyboard_plan_invalid" } };
+  }
+  if (narrationSource) {
+    const storedSource = (storyboardRecord.executionStateJson as { narration_source?: Record<string, unknown> } | null)?.narration_source;
+    const provenance = (value: Record<string, unknown>) => { const { activeStoryboardRecordId, storyboardPlanSha256, durationBand, ...rest } = value; return rest; };
+    if (storyboardRecord.projectId !== input.project.id || storyboardRecord.scriptRecordId !== narrationSource.scriptRecordId || !storedSource || canonicalStringify(provenance(storedSource)) !== canonicalStringify(provenance({ ...narrationSource }))) return { statusCode: 409, body: { error: "narration_stale" } };
   }
   const existingPlan = decoded.value.plan;
   const targetSegment = existingPlan.segments.find(
@@ -466,7 +505,8 @@ export async function runStoryboardSegmentRegeneration(
     : plainWriter2;
 
   try {
-    const newSegment = await regenerateSingleSegment({
+    await withStoryboardNarrationSource(input.db, input.project.id, input.project.ownerId, narrationSource, () => undefined);
+    const generatedSegment = await regenerateSingleSegment({
       snapshotCapabilities: input.billingContext?.resolved.resolved_capabilities,
       plan: existingPlan,
       targetSegmentId: input.segmentId,
@@ -474,6 +514,14 @@ export async function runStoryboardSegmentRegeneration(
       interactionLogWriter,
     });
 
+    // 只采纳视觉字段；任何现在或未来的来源/边界/摘录字段均从原镜头保留。
+    const newSegment = narrationSource ? { ...targetSegment,
+      visual_intent: generatedSegment.visual_intent, scene_description: generatedSegment.scene_description,
+      visual_elements: generatedSegment.visual_elements, framing_hint: generatedSegment.framing_hint,
+      content_type: generatedSegment.content_type, motion_hint: generatedSegment.motion_hint,
+      editing_hint: generatedSegment.editing_hint, on_screen_text: generatedSegment.on_screen_text,
+      api_video_suitability: generatedSegment.api_video_suitability, risk_notes: generatedSegment.risk_notes,
+    } : generatedSegment;
     const newPlan = {
       ...existingPlan,
       segments: existingPlan.segments.map((s) =>
@@ -487,17 +535,26 @@ export async function runStoryboardSegmentRegeneration(
       ? StoryboardPlan.parse(newPlan)
       : existingPlan;
 
-    await saveStoryboardRecord(input.db, {
-      id: storyboardRecord.id,
+    const updatedRecordId = narrationSource ? input.db.generateId() : storyboardRecord.id;
+    const updatedRecord = {
+      id: updatedRecordId,
       projectId: storyboardRecord.projectId,
       topicPackageId: storyboardRecord.topicPackageId,
       scriptRecordId: storyboardRecord.scriptRecordId,
       planJson: validatedPlan,
       validationResultJson: localValidation,
-      executionStateJson: storyboardRecord.executionStateJson as Record<string, unknown> | null,
+      executionStateJson: narrationSource ? {
+        ...(storyboardRecord.executionStateJson as Record<string, unknown> | null),
+        narration_source: narrationSource,
+        generation_result: { run_id: input.billingContext?.runId ?? null, storyboard_record_id: updatedRecordId, plan_sha256: narrationTextHash(canonicalStringify(validatedPlan)) },
+      } : storyboardRecord.executionStateJson as Record<string, unknown> | null,
       graphTraceSummaryJson: storyboardRecord.graphTraceSummaryJson as Record<string, unknown> | null,
       runtimeDiagnosticsJson: storyboardRecord.runtimeDiagnosticsJson as Record<string, unknown> | null,
-    });
+      createdAt: new Date(),
+    };
+    if (narrationSource) {
+      if (localValidation.decision === "pass") await activateNarrationStoryboard(input.db, input.project.ownerId, narrationSource, updatedRecord);
+    } else await saveStoryboardRecord(input.db, updatedRecord);
 
     return {
       statusCode: localValidation.decision === "pass" ? 200 : 422,
@@ -509,6 +566,7 @@ export async function runStoryboardSegmentRegeneration(
       },
     };
   } catch (error) {
+    if (error instanceof NarrationSourceError) return { statusCode: 409, body: { error: error.message } };
     console.error("[storyboard] segment regen failed:", error);
     interactionLogWriter.writeError(
       error instanceof Error ? (error.stack ?? error.message) : String(error),

@@ -10,6 +10,7 @@ import type {
 } from "../client.js";
 import type { AppPrismaClient } from "../prisma-client.types.js";
 import { PrismaRecommendationStore } from "./prisma-recommendation-store.js";
+import { invalidatePrismaNarration, NarrationSourceError, projectTtsHash } from "../../modules/narration/narration-invalidation.js";
 
 export class PrismaFirstAggregateWriter {
   private constructor(private readonly client: AppPrismaClient, readonly ownerId: string) {}
@@ -286,9 +287,12 @@ export class PrismaFirstAggregateWriter {
   async casUpsertProjectGenerationConfiguration(
     record: ProjectGenerationConfigurationRecord,
     expectedRevision: number,
-    audit: { actorUserId: string; projectId: string; oldRevision: number; newRevision: number; diff: Record<string, unknown> },
+    audit: { actorUserId: string; projectId: string; oldRevision: number; newRevision: number; diff: Record<string, unknown>; expectedOwnerId?: string; expectedNarrationMode?: string },
   ): Promise<{ success: true } | { success: false; conflict: true; existingRecord: ProjectGenerationConfigurationRecord }> {
     return this.client.$transaction(async (tx) => {
+      const sourceProject = await tx.project.findUnique({ where: { id: record.projectId } });
+      const sourceConfiguration = await tx.projectGenerationConfiguration.findUnique({ where: { projectId: record.projectId } });
+      if (audit.expectedOwnerId !== undefined && (!sourceProject || sourceProject.archivedAt !== null || sourceProject.ownerId !== audit.expectedOwnerId || sourceProject.narrationTimingMode !== audit.expectedNarrationMode)) throw new NarrationSourceError("narration_stale");
       if (expectedRevision === 0) {
         try {
           await tx.projectGenerationConfiguration.create({
@@ -319,6 +323,9 @@ export class PrismaFirstAggregateWriter {
           const existing = await tx.projectGenerationConfiguration.findUnique({ where: { projectId: record.projectId } });
           return { success: false, conflict: true, existingRecord: existing ? mapProjectConfigRow(existing) : record };
         }
+      }
+      if (sourceProject?.narrationTimingMode === "narration_first_v1" && sourceConfiguration && projectTtsHash(sourceConfiguration.configurationJson) !== projectTtsHash(record.configurationJson)) {
+        await invalidatePrismaNarration(tx, sourceProject);
       }
       await tx.auditLog.create({
         data: {

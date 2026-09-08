@@ -185,6 +185,8 @@ expect(TimingToken.safeParse({
 
 ### 任务 6：上游失效与模型配置变更的统一保护
 
+2026-09-08 实施核对：固定基线为`6dd057774a4acf8b49080d522a7b88b29662b2ac`，状态与原始验收矩阵见[Task6记录](../records/2026-09-08-narration-task6-invalidation.md)。下列原计划路径以实际写入边界校正：纯稿件`script-regenerate.service.ts`/`script-patch.service.ts`不改，接入`script-run.service.ts`；配置失效下沉至repository和Prisma第一聚合writer，正文保存/激活进入第二聚合writer，并调整DbClient签名；排队来源冻结补充`submit-protocol.ts`、`generation-run.service.ts`、`llm-dispatch-handlers.ts`。修改`narration.repository.ts`复用统一reset；授权层旧混合夹具补配对CAS边界。尚未终审，不勾选整项完成。
+
 新增：`backend/src/modules/narration/narration-invalidation.ts`、`tests/backend/narration/narration-invalidation.test.ts`。
 
 修改：`backend/src/modules/script/script-record.repository.ts`、`script-regenerate.service.ts`、`script-patch.service.ts`；`backend/src/modules/generation-config/generation-config.controller.ts`；`backend/src/modules/storyboard/storyboard-run.service.ts`、`backend/src/modules/projects/project-snapshot.service.ts`。
