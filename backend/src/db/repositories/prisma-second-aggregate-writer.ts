@@ -1,6 +1,9 @@
-import type { AssetPlanRecord, ProjectRecord, ScriptRecord, StoryboardRecord, StoryboardSegmentOverrideRecord } from "../client.js";
+import type { ScriptWriteReceipt, AssetPlanRecord, ProjectRecord, ScriptRecord, StoryboardRecord, StoryboardSegmentOverrideRecord } from "../client.js";
 import type { AppPrismaClient } from "../prisma-client.types.js";
 import { invalidatePrismaNarration, NarrationSourceError } from "../../modules/narration/narration-invalidation.js";
+
+// 写锁内取得顺序，事务成功后才返回；失败事务留下的序号空洞没有业务语义。
+let scriptPublicationSequence = 0;
 
 const scriptData = (record: ScriptRecord) => ({
   projectId: record.projectId, topicPackageId: record.topicPackageId, scriptText: record.scriptText,
@@ -26,15 +29,16 @@ const assetPlanData = (record: AssetPlanRecord) => ({
 export class PrismaSecondAggregateWriter {
   constructor(private readonly client: AppPrismaClient, private readonly ownerId: string) {}
 
-  async saveScript(record: ScriptRecord): Promise<void> {
+  async saveScript(record: ScriptRecord): Promise<ScriptWriteReceipt> {
     const data = scriptData(record);
-    await this.client.$transaction(async tx => {
+    return this.client.$transaction(async tx => {
       const project = await tx.project.findUnique({ where: { id: record.projectId } });
       const previous = await tx.scriptRecord.findUnique({ where: { id: record.id } });
       if (project?.activeScriptRecordId === record.id && previous && previous.scriptText !== record.scriptText) {
         await invalidatePrismaNarration(tx, project);
       }
       await tx.scriptRecord.upsert({ where: { id: record.id }, create: { id: record.id, ...data, createdAt: record.createdAt }, update: data });
+      return { publicationSequence: ++scriptPublicationSequence };
     });
   }
   async saveStoryboard(record: StoryboardRecord): Promise<void> {
@@ -46,8 +50,8 @@ export class PrismaSecondAggregateWriter {
     await this.client.assetPlanRecord.upsert({ where: { id: record.id }, create: { id: record.id, ...data, createdAt: record.createdAt }, update: data });
   }
 
-  async activateScript(project: ProjectRecord, record: ScriptRecord, expectedActiveScriptRecordId?: string | null): Promise<void> {
-    await this.client.$transaction(async (tx) => {
+  async activateScript(project: ProjectRecord, record: ScriptRecord, expectedActiveScriptRecordId?: string | null): Promise<ScriptWriteReceipt> {
+    return this.client.$transaction(async (tx) => {
       const [scoped, topic, stored] = await Promise.all([
         tx.project.findFirst({ where: { id: project.id, ownerId: project.ownerId, archivedAt: null } }),
         tx.topicPackage.findUnique({ where: { id: record.topicPackageId }, select: { projectId: true } }),
@@ -66,6 +70,7 @@ export class PrismaSecondAggregateWriter {
         latestAssetPlanRunTraceJson: project.latestAssetPlanRunTraceJson as never, latestAssetsRunTraceJson: project.latestAssetsRunTraceJson as never,
         latestComposeRunTraceJson: project.latestComposeRunTraceJson as never, latestRenderRunTraceJson: project.latestRenderRunTraceJson as never,
       } });
+      return { publicationSequence: ++scriptPublicationSequence };
     });
   }
 

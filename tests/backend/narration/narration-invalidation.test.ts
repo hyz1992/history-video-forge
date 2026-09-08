@@ -27,6 +27,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import Database from "better-sqlite3";
+import { Prisma } from "../../../backend/src/generated/prisma/client.js";
 import { applyAllDatabaseMigrations } from "../db/migration-test-utils.js";
 import { createPrismaClient } from "../../../backend/src/db/prisma-client.js";
 import { PrismaFirstAggregateWriter } from "../../../backend/src/db/repositories/prisma-first-aggregate-writer.js";
@@ -386,5 +387,270 @@ describe("Task6 R2 权威快照模式", () => {
     const snapshot = await getProjectSnapshot(f.db, f.project.id);
     expect(snapshot?.narration_timing_mode).toBe("legacy_estimated");
     expect(snapshot?.trace_summary.latest_storyboard_run?.run_id).toBe("old-run");
+  });
+});
+
+describe("Task6 R3 提交后迟到缓存发布", () => {
+  function deferred() {
+    let resolve!: () => void;
+    const promise = new Promise<void>(done => { resolve = done; });
+    return { promise, resolve };
+  }
+  async function confirmNewFixture(f: Awaited<ReturnType<typeof sqliteFixture>>, script: typeof f.script) {
+    const snapshot = (await f.client.runConfigurationSnapshot.findUnique({ where: { id: "snapshot" } }))!;
+    await f.client.runConfigurationSnapshot.create({ data: { ...snapshot, id: "snapshot-b", runId: "run-b" } });
+    const run = (await f.client.generationRun.findUnique({ where: { id: "run" } }))!;
+    await f.client.generationRun.create({ data: { ...run, id: "run-b", idempotencyKey: "run-b", runConfigurationSnapshotId: "snapshot-b" } });
+    const stored = (await f.client.narrationRecord.findUnique({ where: { id: "narration" } }))!;
+    const sourceTextSha256 = narrationTextHash(script.scriptText);
+    await f.client.narrationRecord.create({ data: { ...stored, id: "nB", scriptRecordId: script.id, generationRunId: "run-b", configurationSnapshotId: "snapshot-b", sourceTextSha256, status: "generating", outputJson: Prisma.DbNull, initialSubtitleRevisionId: null, confirmedAt: null, confirmedBy: null, acceptedDurationBandSnapshotJson: Prisma.DbNull } });
+    const subtitle = (await f.client.narrationSubtitleRevision.findUnique({ where: { id: "subtitle" } }))!;
+    await f.client.narrationSubtitleRevision.create({ data: { ...subtitle, id: "subtitle-b", narrationRecordId: "nB" } });
+    await f.client.narrationRecord.update({ where: { id: "nB" }, data: { status: "confirmed", outputJson: { ...f.record.output!, initialSubtitleRevisionId: "subtitle-b" }, initialSubtitleRevisionId: "subtitle-b", confirmedAt: new Date(f.record.confirmedAt!), confirmedBy: f.project.ownerId, acceptedDurationBandSnapshotJson: f.record.acceptedDurationBandSnapshot! } });
+    await f.client.project.update({ where: { id: f.project.id }, data: { activeNarrationRecordId: "nB" } });
+    f.db.narrationRecords.set("nB", { ...f.record, id: "nB", scriptRecordId: script.id, generationRunId: "run-b", configurationSnapshotId: "snapshot-b", sourceTextSha256, output: { ...f.record.output!, initialSubtitleRevisionId: "subtitle-b" } });
+    f.db.projects.get(f.project.id)!.activeNarrationRecordId = "nB";
+  }
+  it.each(["same_object", "replaced_object"])("SQLite先提交A后提交B，A激活迟到不得覆盖%s的B及新口播", async mode => {
+    const f = await sqliteFixture(), committed = deferred(), release = deferred();
+    const a = await saveScriptRecord(f.db, f.input), b = await saveScriptRecord(f.db, f.input);
+    const original = f.second.activateScript.bind(f.second);
+    vi.spyOn(f.second, "activateScript").mockImplementation(async (...args) => {
+      await original(...args);
+      if (args[1].id === a.id) { committed.resolve(); await release.promise; }
+    });
+    const late = activateScriptRecord(f.db, f.project, a, f.script.id);
+    await committed.promise;
+    expect((await f.client.project.findUnique({ where: { id: f.project.id } }))?.activeScriptRecordId).toBe(a.id);
+    await activateScriptRecord(f.db, { ...f.project, activeScriptRecordId: a.id }, b, a.id);
+    await confirmNewFixture(f, b);
+    if (mode === "replaced_object") f.db.projects.set(f.project.id, { ...f.db.projects.get(f.project.id)! });
+    release.resolve(); await late;
+    expect(await f.client.project.findUnique({ where: { id: f.project.id } })).toMatchObject({ activeScriptRecordId: b.id, activeNarrationRecordId: "nB" });
+    expect(f.db.projects.get(f.project.id)).toMatchObject({ activeScriptRecordId: b.id, activeNarrationRecordId: "nB" });
+    expect(f.db.narrationRecords.get("nB")?.status).toBe("confirmed");
+  });
+  it.each(["same_object", "replaced_object"])("SQLite同ID先写A后写B，A应答迟到不得回写%s正文或失效新口播", async mode => {
+    const f = await sqliteFixture(), committed = deferred(), release = deferred();
+    const original = f.second.saveScript.bind(f.second);
+    vi.spyOn(f.second, "saveScript").mockImplementation(async record => {
+      await original(record);
+      if (record.scriptText === "正文A。") { committed.resolve(); await release.promise; }
+    });
+    const late = saveScriptRecord(f.db, { ...f.input, id: f.script.id, scriptText: "正文A。" });
+    await committed.promise;
+    expect((await f.client.scriptRecord.findUnique({ where: { id: f.script.id } }))?.scriptText).toBe("正文A。");
+    const b = await saveScriptRecord(f.db, { ...f.input, id: f.script.id, scriptText: "正文B。" });
+    await confirmNewFixture(f, b);
+    if (mode === "replaced_object") {
+      f.db.scriptRecords.set(b.id, { ...b });
+      f.db.projects.set(f.project.id, { ...f.db.projects.get(f.project.id)! });
+    }
+    release.resolve(); await late;
+    expect((await f.client.scriptRecord.findUnique({ where: { id: b.id } }))?.scriptText).toBe("正文B。");
+    expect(f.db.scriptRecords.get(b.id)?.scriptText).toBe("正文B。");
+    expect(f.db.projects.get(f.project.id)?.activeNarrationRecordId).toBe("nB");
+    expect(f.db.narrationRecords.get("nB")?.status).toBe("confirmed");
+    expect((await getProjectSnapshot(f.db, f.project.id))?.active_script?.script_text).toBe("正文B。");
+  });
+});
+
+describe("Task6 R3 数据库提交顺序与发布窗口", () => {
+  function deferred() { let resolve!: () => void; const promise = new Promise<void>(done => { resolve = done; }); return { promise, resolve }; }
+  it("较早请求实际最后提交时，缓存反映数据库最后值而非请求先后", async () => {
+    const f = await sqliteFixture(), entered = deferred(), release = deferred();
+    const original = f.second.saveScript.bind(f.second);
+    vi.spyOn(f.second, "saveScript").mockImplementation(async record => {
+      if (record.scriptText === "最后提交A") { entered.resolve(); await release.promise; }
+      await original(record);
+    });
+    const a = saveScriptRecord(f.db, { ...f.input, id: f.script.id, scriptText: "最后提交A" });
+    await entered.promise;
+    await saveScriptRecord(f.db, { ...f.input, id: f.script.id, scriptText: "先提交B" });
+    release.resolve(); await a;
+    expect((await f.client.scriptRecord.findUnique({ where: { id: f.script.id } }))?.scriptText).toBe("最后提交A");
+    expect(f.db.scriptRecords.get(f.script.id)?.scriptText).toBe("最后提交A");
+  });
+  it("权威重读之后应答迟到，最后await后仍不得覆盖已发布新正文", async () => {
+    const f = await sqliteFixture(), readComplete = deferred(), release = deferred();
+    const transaction = f.client.$transaction.bind(f.client);
+    let held = false;
+    vi.spyOn(f.client, "$transaction").mockImplementation(async action => {
+      const result = await transaction(action as never);
+      if (!held && Array.isArray(result) && result.length === 3) {
+        held = true; readComplete.resolve(); await release.promise;
+      }
+      return result;
+    });
+    const a = saveScriptRecord(f.db, { ...f.input, id: f.script.id, scriptText: "旧读取A" });
+    await readComplete.promise;
+    await saveScriptRecord(f.db, { ...f.input, id: f.script.id, scriptText: "新发布B" });
+    release.resolve(); await a;
+    expect(f.db.scriptRecords.get(f.script.id)?.scriptText).toBe("新发布B");
+    expect((await f.client.scriptRecord.findUnique({ where: { id: f.script.id } }))?.scriptText).toBe("新发布B");
+  });
+  it("项目改名不阻止正常发布也不被文案激活覆盖", async () => {
+    const f = await sqliteFixture(), next = await saveScriptRecord(f.db, f.input);
+    const original = f.second.activateScript.bind(f.second);
+    vi.spyOn(f.second, "activateScript").mockImplementation(async (...args) => {
+      await original(...args); f.project.name = "新名称";
+    });
+    await activateScriptRecord(f.db, f.project, next, f.script.id);
+    expect(f.project.name).toBe("新名称");
+    expect(f.project.activeScriptRecordId).toBe(next.id);
+    expect(f.db.scriptRecords.get(next.id)?.scriptText).toBe(next.scriptText);
+  });
+});
+
+describe("Task6 R3 提交成功后的缓存读取故障", () => {
+  it("刷新缓存失败不把已成功激活变成失败，快照从数据库取正文", async () => {
+    const f = await sqliteFixture(), next = await saveScriptRecord(f.db, f.input);
+    f.db.scriptRecords.set(next.id, { ...next, scriptText: "过期占位正文" });
+    const transaction = f.client.$transaction.bind(f.client);
+    let injected = false;
+    vi.spyOn(f.client, "$transaction").mockImplementation(async action => {
+      const result = await transaction(action as never);
+      if (!injected && Array.isArray(result) && result.length === 3) {
+        injected = true; throw new Error("task6_post_commit_cache_read_failed");
+      }
+      return result;
+    });
+    await expect(activateScriptRecord(f.db, f.project, next, f.script.id)).resolves.toBeUndefined();
+    expect(injected).toBe(true);
+    expect((await f.client.project.findUnique({ where: { id: f.project.id } }))?.activeScriptRecordId).toBe(next.id);
+    expect((await getProjectSnapshot(f.db, f.project.id))?.active_script?.script_text).toBe(next.scriptText);
+  });
+});
+
+describe("Task6 R4 已提交后的缓存故障兼容", () => {
+  async function legacyFixture() {
+    const f = await sqliteFixture();
+    await f.client.project.update({ where: { id: f.project.id }, data: { narrationTimingMode: "legacy_estimated", activeNarrationRecordId: null, activeNarrationSubtitleRevisionId: null } });
+    Object.assign(f.project, { narrationTimingMode: "legacy_estimated", activeNarrationRecordId: null, activeNarrationSubtitleRevisionId: null });
+    return f;
+  }
+  function failCacheReads(f: Awaited<ReturnType<typeof sqliteFixture>>) {
+    const transaction = f.client.$transaction.bind(f.client);
+    let failures = 0;
+    vi.spyOn(f.client, "$transaction").mockImplementation(async action => {
+      const result = await transaction(action as never);
+      if (Array.isArray(result) && result.length === 3) { failures++; throw new Error("task6_cache_read_unavailable"); }
+      return result;
+    });
+    return () => failures;
+  }
+  it.each(["save_existing", "save_new_activate"])("legacy %s缓存读取故障后，成功正文在Map和snapshot可见", async action => {
+    const f = await legacyFixture();
+    const failures = failCacheReads(f);
+    const saved = await saveScriptRecord(f.db, { ...f.input, ...(action === "save_existing" ? { id: f.script.id } : {}), scriptText: "已提交的新正文。" });
+    if (action === "save_new_activate") await activateScriptRecord(f.db, f.project, saved, f.script.id);
+    expect(failures()).toBe(action === "save_existing" ? 1 : 2);
+    expect((await f.client.scriptRecord.findUnique({ where: { id: saved.id } }))?.scriptText).toBe(saved.scriptText);
+    expect(f.db.scriptRecords.get(saved.id)?.scriptText).toBe(saved.scriptText);
+    expect(f.project.activeScriptRecordId).toBe(saved.id);
+    expect((await getProjectSnapshot(f.db, f.project.id))?.active_script?.script_text).toBe(saved.scriptText);
+  });
+  it.each([
+    ["legacy", "save"], ["legacy", "activate"],
+    ["new", "save"], ["new", "activate"],
+  ])("%s %s读取故障与迟到应答组合仍保留已发布B", async (mode, action) => {
+    const f = mode === "legacy" ? await legacyFixture() : await sqliteFixture();
+    const a = await saveScriptRecord(f.db, f.input), b = await saveScriptRecord(f.db, f.input);
+    let signal!: () => void, release!: () => void;
+    const committed = new Promise<void>(done => { signal = done; });
+    const gate = new Promise<void>(done => { release = done; });
+    const save = f.second.saveScript.bind(f.second), activate = f.second.activateScript.bind(f.second);
+    if (action === "save") vi.spyOn(f.second, "saveScript").mockImplementation(async record => {
+      const receipt = await save(record); if (record.scriptText === "A正文") { signal(); await gate; } return receipt;
+    });
+    else vi.spyOn(f.second, "activateScript").mockImplementation(async (...args) => {
+      const receipt = await activate(...args); if (args[1].id === a.id) { signal(); await gate; } return receipt;
+    });
+    const failures = failCacheReads(f);
+    const late = action === "save"
+      ? saveScriptRecord(f.db, { ...f.input, id: f.script.id, scriptText: "A正文" })
+      : activateScriptRecord(f.db, f.project, a, f.script.id);
+    await committed;
+    if (action === "save") await saveScriptRecord(f.db, { ...f.input, id: f.script.id, scriptText: "B正文" });
+    else await activateScriptRecord(f.db, { ...f.project, activeScriptRecordId: a.id }, b, a.id);
+    release(); await late;
+    expect(failures()).toBe(2);
+    if (action === "save") {
+      expect((await f.client.scriptRecord.findUnique({ where: { id: f.script.id } }))?.scriptText).toBe("B正文");
+      expect(f.db.scriptRecords.get(f.script.id)?.scriptText).toBe("B正文");
+    } else {
+      expect((await f.client.project.findUnique({ where: { id: f.project.id } }))?.activeScriptRecordId).toBe(b.id);
+      expect(f.project.activeScriptRecordId).toBe(b.id);
+    }
+  });
+});
+
+describe("Task6 R4 读取失败时仍按实际提交顺序发布", () => {
+  it.each(["legacy_estimated", "narration_first_v1"])("%s先发请求最后提交且缓存读取失败，仍可见最后提交值", async mode => {
+    const f = await sqliteFixture();
+    f.project.narrationTimingMode = mode as typeof f.project.narrationTimingMode;
+    await f.client.project.update({ where: { id: f.project.id }, data: { narrationTimingMode: mode } });
+    let signal!: () => void, release!: () => void;
+    const entered = new Promise<void>(done => { signal = done; }), gate = new Promise<void>(done => { release = done; });
+    const save = f.second.saveScript.bind(f.second), transaction = f.client.$transaction.bind(f.client);
+    vi.spyOn(f.second, "saveScript").mockImplementation(async record => {
+      if (record.scriptText === "实际最后的A") { signal(); await gate; }
+      return save(record);
+    });
+    vi.spyOn(f.client, "$transaction").mockImplementation(async action => {
+      const result = await transaction(action as never);
+      if (Array.isArray(result) && result.length === 3) throw new Error("cache unavailable after commit");
+      return result;
+    });
+    const lateCommit = saveScriptRecord(f.db, { ...f.input, id: f.script.id, scriptText: "实际最后的A" });
+    await entered;
+    await saveScriptRecord(f.db, { ...f.input, id: f.script.id, scriptText: "先提交B" });
+    release(); await lateCommit;
+    expect((await f.client.scriptRecord.findUnique({ where: { id: f.script.id } }))?.scriptText).toBe("实际最后的A");
+    expect(f.db.scriptRecords.get(f.script.id)?.scriptText).toBe("实际最后的A");
+  });
+});
+
+describe("Task6 R4 发布顺序与权限缓存变化", () => {
+  it("legacy较早激活请求最后提交且读取失败，最终active保持最后提交", async () => {
+    const f = await sqliteFixture(), a = await saveScriptRecord(f.db, f.input), b = await saveScriptRecord(f.db, f.input);
+    f.project.narrationTimingMode = "legacy_estimated";
+    await f.client.project.update({ where: { id: f.project.id }, data: { narrationTimingMode: "legacy_estimated" } });
+    let signal!: () => void, release!: () => void;
+    const entered = new Promise<void>(done => { signal = done; }), gate = new Promise<void>(done => { release = done; });
+    const activate = f.second.activateScript.bind(f.second), transaction = f.client.$transaction.bind(f.client);
+    vi.spyOn(f.second, "activateScript").mockImplementation(async (...args) => {
+      if (args[1].id === a.id) { signal(); await gate; }
+      return activate(...args);
+    });
+    vi.spyOn(f.client, "$transaction").mockImplementation(async action => {
+      const result = await transaction(action as never);
+      if (Array.isArray(result) && result.length === 3) throw new Error("cache unavailable");
+      return result;
+    });
+    const first = activateScriptRecord(f.db, f.project, a, f.script.id);
+    await entered; await activateScriptRecord(f.db, f.project, b, f.script.id);
+    release(); await first;
+    expect((await f.client.project.findUnique({ where: { id: f.project.id } }))?.activeScriptRecordId).toBe(a.id);
+    expect(f.project.activeScriptRecordId).toBe(a.id);
+  });
+  it.each(["owner_changed", "evicted"])("已提交后%s并且读取失败，不回写缓存也不触发失败清理", async change => {
+    const f = await sqliteFixture(), a = await saveScriptRecord(f.db, f.input);
+    const activate = f.second.activateScript.bind(f.second), transaction = f.client.$transaction.bind(f.client);
+    vi.spyOn(f.second, "activateScript").mockImplementation(async (...args) => {
+      const receipt = await activate(...args);
+      if (change === "owner_changed") f.db.projects.set(f.project.id, { ...f.project, ownerId: "new-owner" });
+      else f.db.projects.delete(f.project.id);
+      return receipt;
+    });
+    vi.spyOn(f.client, "$transaction").mockImplementation(async action => {
+      const result = await transaction(action as never);
+      if (Array.isArray(result) && result.length === 3) throw new Error("cache unavailable");
+      return result;
+    });
+    await expect(activateScriptRecord(f.db, f.project, a, f.script.id)).resolves.toBeUndefined();
+    expect((await f.client.project.findUnique({ where: { id: f.project.id } }))?.activeScriptRecordId).toBe(a.id);
+    if (change === "owner_changed") expect(f.db.projects.get(f.project.id)).toMatchObject({ ownerId: "new-owner", activeScriptRecordId: f.script.id });
+    else expect(f.db.projects.has(f.project.id)).toBe(false);
   });
 });

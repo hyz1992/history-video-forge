@@ -438,6 +438,9 @@ export interface AuditLogRecord {
   createdAt: Date;
 }
 
+/** 仅用于同进程缓存发布排序，不作为数据库权限或来源版本。 */
+export interface ScriptWriteReceipt { publicationSequence: number; }
+
 export interface DbClient {
   scriptConfirmations: Map<string, ScriptConfirmationRecord>;
   narrationRecords: Map<string, NarrationRecord>;
@@ -532,10 +535,10 @@ export interface DbClient {
     ): Promise<{ success: true } | { success: false; conflict: true; existingRecord: ProjectGenerationConfigurationRecord }>;
   };
   secondAggregateWriter?: {
-    saveScript(record: ScriptRecord): Promise<void>;
+    saveScript(record: ScriptRecord): Promise<ScriptWriteReceipt | void>;
     saveStoryboard(record: StoryboardRecord): Promise<void>;
     saveAssetPlan(record: AssetPlanRecord): Promise<void>;
-    activateScript(project: ProjectRecord, record: ScriptRecord, expectedActiveScriptRecordId?: string | null): Promise<void>;
+    activateScript(project: ProjectRecord, record: ScriptRecord, expectedActiveScriptRecordId?: string | null): Promise<ScriptWriteReceipt | void>;
     activateStoryboard(project: ProjectRecord, record: StoryboardRecord): Promise<void>;
     activateAssetPlan(project: ProjectRecord, record: AssetPlanRecord): Promise<void>;
     saveStoryboardSegmentOverride(record: StoryboardSegmentOverrideRecord): Promise<void>;

@@ -223,9 +223,9 @@ export async function getProjectSnapshot(
   const topicRecord = project.activeTopicPackageId
     ? db.topicPackages.get(project.activeTopicPackageId) ?? null
     : null;
-  const scriptRecord = project.activeScriptRecordId
-    ? db.scriptRecords.get(project.activeScriptRecordId) ?? null
-    : null;
+  const scriptRecord = narrationSource.project.narrationTimingMode === "narration_first_v1"
+    ? narrationSource.script as ScriptRecord | null
+    : project.activeScriptRecordId ? db.scriptRecords.get(project.activeScriptRecordId) ?? null : null;
   const storyboardRecord = project.activeStoryboardRecordId
     ? db.storyboardRecords.get(project.activeStoryboardRecordId) ?? null
     : null;
