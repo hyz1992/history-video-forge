@@ -29,3 +29,9 @@
 ## 初审收敛
 
 diff与contract均0 Critical / 0 Important / 0 Minor。10文件hash在审查前后保持一致；初审不计整改，当前整改0、final0、额外授权0。v2单镜runtime尚未传入timing上下文，按Task8完成来源接线及成功路径验证，本次不声明整条生成链路可用。形成候选后执行R5两阶段终审。
+
+## 候选终审结果（机械落盘）
+
+被终审SHA：`9c9b478f16b633ed6dbfec39f472bfd0504addf9`，固定BASE：`86b5a525675b34fe4e77b09c83b57b790b9737d6`。R5两阶段完成：0 Critical / 0 Important / 1 Minor，Task7合同/投影及v1兼容限定范围通过；完整v2生成与单镜运行接线留给Task8。当前最终计数：整改复审0、final1、额外授权0。10文件hash匹配，原始回归8文件211项全部passed、专项19项passed，后端typecheck依据实际exit0。
+
+Minor留档：shared/src/narration/narration-reference.schema.ts:17新增文件末尾空行，累计git diff --check BASE HEAD返回2；此前裸git diff --check通过只代表工作区检查，不能描述为累计检查通过。按协议不修改已终审候选。仅本记录机械落盘，其他候选文件保持hash。终审全程只读，任务文件无未提交差异。真实provider/UI/成品未验证。
