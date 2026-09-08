@@ -72,6 +72,16 @@ R3合同：0 Critical、0 Important、0 Minor；R3 diff：0 Critical、1 Importa
 
 两类完整run序列：首次短split失败→足长恢复；已有成功组→短split失败→足长恢复。红测均在恢复阶段错误blocked，绿测恢复video_clip、无失败组残留、WAV hash保持。
 
-当前计数：整改4、final0、额外授权1。R4待完整累计复审。
+当前计数：整改4、final1、额外授权1。R4累计diff/合同及本次终审均0 Critical、0 Important、0 Minor，Task9B离线范围闭环。
 
 `regression-r4.json`实际9文件289通过0失败，专项38；后端tsc exit 0；`red-r4-recovery.json`保留两项恢复失败证据。仅离线验证，未运行paid/live/UI/成品。
+
+## R5两阶段终审机械落盘
+
+被终审候选：feaf6e81be994f08630d918a0976c4591ecea2ae。固定BASE保持不变。R4 diff/合同均0/0/0；全新终审上下文先只读取原始需求、设计、候选代码与累计diff，形成0/0/0独立结论后，再向同一审查者提供原始报告核验，本次计1次final。
+
+终审确认：9文件289 passed、0 failed，专项38；原始报告SHA256为`950e00930b5b357eb5fbb2ff3c57e0749b2d0c0fb74e0e444c7c687360ff7a48`，与索引一致；19候选文件hash全部一致；累计diffcheck通过。后端tsc依据执行证据exit 0，终审未重复运行。
+
+原始Task9B离线验收项均已修：正式v1/v2、完整bundle/单音轨/range、字幕完整来源、无重复TTS、视频规格与split、短素材fallback及失败恢复、DB来源与最终激活事务、冷缓存重试。paid/live、浏览器可见fallback、真实成品效果均未验证；不扩展为发布验收通过。
+
+本次仅更新本记录，不修改被终审产品/测试候选。后续阶段与真实体验验收保持独立。
