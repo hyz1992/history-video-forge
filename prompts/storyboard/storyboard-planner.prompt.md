@@ -1,11 +1,13 @@
 ---
 id: storyboard.planner
-version: v1.2.0
+version: v1.3.0
 stage: storyboard
 language: zh-CN
 consumes:
   - ScriptDraftPackage
   - TopicPackageBoundaryContext
+  - NarrationTimingMapV1
+  - NarrationReference
 produces:
   - StoryboardPlan
 status: active
@@ -17,15 +19,21 @@ status: active
 
 `script_text` 是唯一口播正文。你不得改写 script_text，不得增删剧情，不得补写史实，不得把 TopicPackage 重新解释成新故事。
 
-每个 `script_excerpt` 必须是 `script_text` 中连续、逐字一致的原文子串。不得用省略号、改写、概括或拼接多个不相邻片段。优先让所有 segment 按脚本顺序覆盖完整正文。
+旧模式未提供 `narration_timing` 时，每个 `script_excerpt` 必须是 `script_text` 中连续、逐字一致的原文子串。不得用省略号、改写、概括或拼接多个不相邻片段。优先让所有 segment 按脚本顺序覆盖完整正文。
 
 只做视觉段落计划，不做镜头级 shot list。不要输出镜头号、素材号、文件名、模型参数、seed、分辨率、重试策略或 compose 时间轴。不得输出素材生成任务。
 
 `topic_boundary_context` 只能用于避免越界和标注风险。它不能替你改写脚本，也不能让你新增脚本没有讲的剧情。
 
-如果输入包含 `regeneration_context`，只允许修复 segment 切分、script_excerpt 对齐、trace 关联、时间提示和空画面描述。不得借机改写 `script_text`，不得扩展剧情。
+如果输入包含 `regeneration_context`，只允许修复合法切分、trace 关联和空画面描述；旧模式可修复摘录及时间提示，新模式只能重新选择合法边界。不得借机改写 `script_text`，不得扩展剧情。
 
-输出必须是合法 JSON 对象，不输出 Markdown，不输出解释文字。JSON 顶层必须是 `StoryboardPlan`，字段包括：
+输出必须是合法 JSON 对象，不输出 Markdown，不输出解释文字。
+
+提供 `narration_timing` 时使用 `storyboard_v2`：原文、原生 tokens、不可拆 sourceSpans、完整 boundaries、真实 durationMs 和冻结 narrationReference 均已给出。结合场景推进与实际发声/停顿选择边界，保留全部合法切点供选择，不按固定字数或毫秒分桶，不猜时间、不改正文。每镜输出 `start_boundary_id` / `end_boundary_id`；相邻镜头共享端点，首尾必须使用全文首尾边界。停顿归前镜，首尾静音归首末镜，不能切入不可拆 span。短于1秒的合法范围可以保留。
+
+v2沿用下方示例的来源ID、视觉、trace和全局说明字段，但将版本改为 `storyboard_v2`，每镜用两项boundary ID替代 `script_excerpt` / `start_hint_sec` / `end_hint_sec`，省略顶层 `estimated_total_duration_sec`。不要独立输出source offsets、visual毫秒或摘录；这些全部由所选同一边界确定性派生。冻结口播身份由运行时附加，不能改选音频。
+
+未提供 `narration_timing` 时沿用 `storyboard_v1`，字段包括：
 
 ```json
 {
@@ -76,7 +84,7 @@ status: active
 
 你只负责判断适配度，不得决定是否付费调用、不得读取或推断任何预算或用户财富状态，不得输出 provider/model 或费用相关内容。适配度到最终视觉路线的映射由后端解析器完成。
 
-# 时间窗说明
+# 旧模式时间窗说明（仅 storyboard_v1）
 
 时间窗（`start_hint_sec` / `end_hint_sec` / `estimated_total_duration_sec`）由运行时按各段正文字符占比以 `draft.estimated_duration_sec` 确定性重算，你输出的时间数值不会被采信，仅供 schema 占位。因此：
 

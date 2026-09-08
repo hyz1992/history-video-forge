@@ -1,3 +1,4 @@
+import { loadStoryboardNarrationTiming } from "./storyboard-narration-context.js";
 import { z } from "zod";
 import { narrationTextHash } from "../narration/narration-readiness.js";
 import type { ScriptDraftPackage } from "../../../../shared/src/index.js";
@@ -191,9 +192,11 @@ export async function runStoryboardGeneration(
       await input.db.firstAggregateWriter?.syncProject(input.project);
     }
 
+    const narrationTiming = await loadStoryboardNarrationTiming(input.db, input.project.id, input.project.ownerId, narrationSource, input.project.storageRootDir);
     const generateStart = new Date().toISOString();
     await withStoryboardNarrationSource(input.db, input.project.id, input.project.ownerId, narrationSource, () => undefined);
     plan = await generateStoryboardPlan({
+      narrationTiming,
       sourceScriptRecordId: scriptRecord.id,
       sourceTopicPackageId: topicPackage.id,
       draft,
@@ -207,6 +210,7 @@ export async function runStoryboardGeneration(
     localValidation = validateStoryboardPlan({
       draft,
       plan,
+      narrationTiming,
     });
     const validateEnd = new Date().toISOString();
     let regenStart: string | undefined;
@@ -230,6 +234,7 @@ export async function runStoryboardGeneration(
     }
     await withStoryboardNarrationSource(input.db, input.project.id, input.project.ownerId, narrationSource, () => undefined);
     plan = await generateStoryboardPlan({
+      narrationTiming,
       sourceScriptRecordId: scriptRecord.id,
       sourceTopicPackageId: topicPackage.id,
       draft,
@@ -242,6 +247,7 @@ export async function runStoryboardGeneration(
     localValidation = validateStoryboardPlan({
       draft,
       plan,
+      narrationTiming,
     });
   }
 
@@ -506,7 +512,10 @@ export async function runStoryboardSegmentRegeneration(
 
   try {
     await withStoryboardNarrationSource(input.db, input.project.id, input.project.ownerId, narrationSource, () => undefined);
+    const narrationTiming = await loadStoryboardNarrationTiming(input.db, input.project.id, input.project.ownerId, narrationSource, input.project.storageRootDir);
+    await withStoryboardNarrationSource(input.db, input.project.id, input.project.ownerId, narrationSource, () => undefined);
     const generatedSegment = await regenerateSingleSegment({
+      narrationTiming,
       snapshotCapabilities: input.billingContext?.resolved.resolved_capabilities,
       plan: existingPlan,
       targetSegmentId: input.segmentId,
@@ -529,7 +538,7 @@ export async function runStoryboardSegmentRegeneration(
       ),
     });
 
-    const localValidation = validateStoryboardPlan({ draft, plan: newPlan });
+    const localValidation = validateStoryboardPlan({ draft, plan: newPlan, narrationTiming });
 
     const validatedPlan = localValidation.decision === "pass"
       ? StoryboardPlan.parse(newPlan)

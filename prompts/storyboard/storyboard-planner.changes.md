@@ -1,5 +1,9 @@
 # storyboard.storyboard-planner 变更记录
 
+## v1.3.0 - 2026-09-08
+- 新增显式v2输入分支：消费完整原生时间图和冻结口播身份，只选择合法boundary范围；摘录与时间由同一边界派生。
+- 旧摘录及字符估时说明限定v1，保留既有视觉与叙事约束，避免新旧时间规则冲突。
+
 ## v1.2.0 - 2026-09-05
 - 时间窗与内容切分解耦：`start_hint_sec` / `end_hint_sec` / `estimated_total_duration_sec`
   改为由运行时按各段正文字符占比以 `draft.estimated_duration_sec` 确定性重算，

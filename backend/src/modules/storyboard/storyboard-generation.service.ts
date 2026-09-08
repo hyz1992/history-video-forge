@@ -4,17 +4,21 @@ import {
   type ResolvedCapabilityMap,
   type ScriptDraftPackage,
 } from "../../../../shared/src/index.js";
+import { StoryboardSegmentV2 } from "../../../../shared/src/storyboard/storyboard-plan-v2.schema.js";
 import { env, getValidatedRuntimeEnv } from "../../config/env.js";
 import { createHash } from "node:crypto";
 import { createLlmGateway, type LlmGateway } from "../../runtime/llm/llm-gateway.js";
 import type { LlmInteractionLogWriter } from "../../runtime/llm/interaction-log.js";
-import { parseLlmOutput } from "../../runtime/llm/llm-output-error.js";
+import { LlmOutputError, parseLlmOutput } from "../../runtime/llm/llm-output-error.js";
 import { createTierAwareProviderFromEnv } from "../../runtime/llm/tier-aware-provider-factory.js";
 import type {
   StructuredPromptInvocation,
   StructuredPromptProvider,
 } from "../../runtime/llm/provider-contract.js";
 import { createPromptRegistry } from "../../runtime/prompts/prompt-registry.js";
+
+import { projectStoryboardTiming, validateStoryboardTiming, type StoryboardTimingContext } from "./storyboard-timing-projector.js";
+import { verifyStoryboardNarrationContext } from "./storyboard-narration-context.js";
 
 export interface TopicBoundaryContext {
   title: string;
@@ -29,6 +33,7 @@ export interface TopicBoundaryContext {
 }
 
 export interface GenerateStoryboardPlanInput {
+  narrationTiming?: StoryboardTimingContext;
   sourceScriptRecordId: string;
   sourceTopicPackageId: string;
   draft: ScriptDraftPackage;
@@ -56,6 +61,7 @@ export function buildStoryboardPlannerPromptInput(
     topic_boundary_context: input.topicBoundaryContext,
     source_script_record_id: input.sourceScriptRecordId,
     source_topic_package_id: input.sourceTopicPackageId,
+    ...(input.narrationTiming ? { narration_timing: verifyStoryboardNarrationContext(input.narrationTiming, input.draft.script_text) } : {}),
   };
 
   if (!input.regenerationContext) {
@@ -69,6 +75,8 @@ export function buildStoryboardPlannerPromptInput(
 }
 
 export async function generateStoryboardPlan(input: GenerateStoryboardPlanInput) {
+  const narrationTiming = input.narrationTiming ? verifyStoryboardNarrationContext(input.narrationTiming, input.draft.script_text) : undefined;
+  input = { ...input, narrationTiming };
   const gateway = input.llmGateway ?? createStoryboardPlannerGateway(input.snapshotCapabilities);
   const rawPlan = await gateway.invokeStructuredPrompt<unknown>({
     promptId: "storyboard.planner",
@@ -76,6 +84,13 @@ export async function generateStoryboardPlan(input: GenerateStoryboardPlanInput)
     interactionLogWriter: input.interactionLogWriter,
   });
 
+  if (narrationTiming) {
+    try {
+      const plan = projectStoryboardTiming({ ...narrationTiming, plan: rawPlan });
+      if (plan.source_script_record_id !== input.sourceScriptRecordId || plan.source_topic_package_id !== input.sourceTopicPackageId) throw new Error("storyboard_source_mismatch");
+      return plan;
+    } catch (cause) { throw new LlmOutputError("storyboard_narration_plan_invalid", { cause }); }
+  }
   const normalized = normalizeStoryboardPlan(rawPlan, input);
   // 2026-09-05（时长校准）：LLM 按人类朗读语速常识排时间窗（本项目实测 3.9 字/秒），
   // 而 TTS 实际语速 5.33 字/秒，导致段预估系统性虚高（118s vs 脚本 82s，+44%）并
@@ -258,6 +273,7 @@ function normalizeLinkedTraceArray(
 }
 
 export interface RegenerateSingleSegmentInput {
+  narrationTiming?: StoryboardTimingContext;
   plan: StoryboardPlan;
   targetSegmentId: string;
   userFeedback: string;
@@ -286,6 +302,9 @@ export async function regenerateSingleSegment(
 ) {
   const gateway = input.llmGateway ?? createStoryboardPlannerGateway(input.snapshotCapabilities);
 
+  const narrationTiming = input.plan.plan_version === "storyboard_v2"
+    ? verifyStoryboardNarrationContext(input.narrationTiming ?? { timingMap: null, narrationReference: null }) : undefined;
+  if (narrationTiming) validateStoryboardTiming(input.plan, narrationTiming);
   const targetSegment = input.plan.segments.find(
     (s) => s.segment_id === input.targetSegmentId,
   );
@@ -298,6 +317,7 @@ export async function regenerateSingleSegment(
     target_segment_id: input.targetSegmentId,
     current_segment: targetSegment,
     user_feedback: input.userFeedback,
+    ...(narrationTiming ? { narration_timing: narrationTiming } : {}),
   };
 
   const rawSegment = await gateway.invokeStructuredPrompt<unknown>({
@@ -306,6 +326,11 @@ export async function regenerateSingleSegment(
     interactionLogWriter: input.interactionLogWriter,
   });
 
+  if (narrationTiming) {
+    const incoming = rawSegment && typeof rawSegment === "object" ? rawSegment as Record<string, unknown> : {};
+    const visual = ["visual_intent", "scene_description", "visual_elements", "framing_hint", "content_type", "motion_hint", "editing_hint", "on_screen_text", "risk_notes", "api_video_suitability"];
+    return parseLlmOutput(StoryboardSegmentV2, { ...targetSegment, ...Object.fromEntries(visual.filter(k => incoming[k] !== undefined).map(k => [k, incoming[k]])) }, "storyboard_segment_schema_invalid");
+  }
   const merged = mergeSegmentWithLocks(targetSegment, rawSegment);
   return parseLlmOutput(
     StoryboardSegment,
@@ -421,6 +446,7 @@ function createStubStoryboardPlannerProvider(): StructuredPromptProvider {
 function buildDeterministicStoryboardPlan(
   input: ReturnType<typeof buildStoryboardPlannerPromptInput>,
 ) {
+  if (input.narration_timing) return buildDeterministicNarrationStoryboard(input);
   const draft = input.draft;
   const excerpts = splitScriptIntoExcerpts(draft.script_text);
   const totalChars = Math.max(
@@ -547,4 +573,19 @@ function buildVisualElements(topicBoundaryContext: TopicBoundaryContext) {
   const title = topicBoundaryContext.title.trim();
   const elements = [title || "历史人物", "场面压力"].filter(Boolean);
   return [...new Set(elements)];
+}
+
+function buildDeterministicNarrationStoryboard(input: ReturnType<typeof buildStoryboardPlannerPromptInput>) {
+  const { timingMap } = input.narration_timing!;
+  const last = timingMap.boundaries.length - 1;
+  const cuts = [...new Set([0, Math.floor(last / 3), Math.floor(last * 2 / 3), last])];
+  return { plan_version: "storyboard_v2", source_script_record_id: input.source_script_record_id,
+    source_topic_package_id: input.source_topic_package_id, global_visual_notes: [],
+    segments: cuts.slice(0, -1).map((cut, index) => ({ segment_id: "sb_" + (index + 1), order: index,
+      start_boundary_id: timingMap.boundaries[cut]!.id, end_boundary_id: timingMap.boundaries[cuts[index + 1]!]!.id,
+      narrative_role: resolveNarrativeRole(index, cuts.length - 1), visual_intent: "呈现当前段落的场景与动作。",
+      scene_description: buildSceneDescription(input.topic_boundary_context, index), visual_elements: buildVisualElements(input.topic_boundary_context),
+      framing_hint: "medium", content_type: "live_action", motion_hint: "static", editing_hint: "single", on_screen_text: [],
+      linked_beats: index === 0 ? input.draft.beat_trace.map(t => t.beat) : [],
+      linked_quotes: index === 0 ? input.draft.quote_trace.map(t => t.quote) : [], risk_notes: [], api_video_suitability: "remotion_sufficient" })) };
 }

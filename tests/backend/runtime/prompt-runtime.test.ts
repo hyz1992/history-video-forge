@@ -316,6 +316,9 @@ describe("prompt runtime", () => {
     expect(prompt.body).toContain("script_excerpt");
     expect(prompt.body).toContain("不得改写 script_text");
     expect(prompt.body).toContain("不得输出素材生成任务");
+    expect(prompt.metadata.version).toBe("v1.3.0");
+    expect(prompt.body).toContain("narration_timing");
+    expect(prompt.body).toContain("start_boundary_id");
   });
 
   it("loads asset-planning.asset-planner from harness prompts with zh-CN metadata", () => {

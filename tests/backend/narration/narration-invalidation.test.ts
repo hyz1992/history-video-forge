@@ -34,6 +34,10 @@ import { PrismaFirstAggregateWriter } from "../../../backend/src/db/repositories
 import { PrismaSecondAggregateWriter } from "../../../backend/src/db/repositories/prisma-second-aggregate-writer.js";
 import { NarrationRepository } from "../../../backend/src/modules/narration/narration.repository.js";
 import { DEFAULT_SUBTITLE_STYLE } from "../../../shared/src/index.js";
+import { canonicalStringify } from "../../../shared/src/index.js";
+import { normalizeNarrationTiming } from "../../../backend/src/modules/narration/narration-timing-normalizer.js";
+import { NarrationBundleStorage } from "../../../backend/src/modules/narration/narration-bundle-storage.js";
+import { projectStoryboardTiming } from "../../../backend/src/modules/storyboard/storyboard-timing-projector.js";
 import { getProjectSnapshot } from "../../../backend/src/modules/projects/project-snapshot.service.js";
 
 async function fixture() {
@@ -64,11 +68,17 @@ async function readyFixture() {
   f.db.topicPackages.set("topic", { id: "topic", projectId: f.project.id, title: "城门", familyLabel: "君臣博弈型", scopeLabel: "城门", packagingSeed: "城门", mustIncludeBeatsJson: ["打开城门"], ambiguityNotesJson: [], selectedAngle: "打开城门", coreConflict: "守城选择", strongScene: "城门", forbiddenExpansionsJson: [], riskHintsJson: [], sourceAnchorRefsJson: ["三国志"], canonicalQuotesJson: [], narrativeTensionMapJson: { hook_claim: "打开城门", pressure_escalation: "敌军逼近", mid_reveal: "空城", peak_payoff: "撤退", ending_residue: "代价" }, durationBandJson: { min_sec: 1, max_sec: 5 } } as never);
   const ref = (file: string) => ({ uri: "narration-runs/run/" + file, sha256: hash });
   const record = NarrationRecord.parse({ schemaVersion: "narration_record_v1", id: "narration", projectId: f.project.id, scriptRecordId: f.script.id, generationRunId: "run", configurationSnapshotId: "snapshot", createdAt: now, updatedAt: now, sourceTextSha256: narrationTextHash(f.script.scriptText), spokenTextSha256: hash, settingsSha256: hash, sourceProjectTtsSettingsSha256: projectTtsHash(config), textMappingVersion: "narration-native-spans/v1", timingSource: "provider_native", providerTaskId: "task", providerRequestId: "request", status: "confirmed", errorCode: null, confirmedAt: now, confirmedBy: f.project.ownerId, acceptedDurationBandSnapshot: { minMs: 1000, maxMs: 5000 }, settings: { model: "qwen-audio-3.0-tts-plus", voice: "qwen-audio-3.0-tts-plus-longyimuling", region: "cn-beijing", protocol: "dashscope_ws", parametersVersion: "neutral-pcm24k-v1", tone: "neutral", rate: 1, pitch: 1, volume: 50, sampleRate: 24000, format: "pcm", textType: "PlainText", wordTimestampEnabled: true, enableSsml: false, seed: 0, inputMode: "natural_paragraphs_single_task" }, output: { audio: { ...ref("audio.wav"), sampleRate: 24000, channels: 1, bitDepth: 16, sampleCount: 48000 }, durationMs: 2000, nativeEvents: ref("native.json"), timingMap: ref("timing.json"), initialSubtitleRevisionId: "subtitle", validationReport: { status: "pass", validatorVersion: "v1", checkedAt: now, nativeTextCoverageComplete: true, nativeTimingValid: true, audioProbeValid: true, issues: [] } } });
+  const timingMap = normalizeNarrationTiming({ sourceText: f.script.scriptText, audioHash: hash, durationMs: 2000, sentences: [{ providerSentenceIndex: 0, originalText: f.script.scriptText, normalizedText: f.script.scriptText, words: [{ text: f.script.scriptText, begin_index: 0, end_index: 1, begin_time: 0, end_time: 2000 }] }] });
+  record.output!.timingMap.sha256 = narrationTextHash(canonicalStringify(timingMap));
+  const narrationTiming = { timingMap, narrationReference: { narration_record_id: record.id, audio_hash: hash, timing_map_hash: record.output!.timingMap.sha256, duration_ms: 2000 } };
+  // Task6来源/并发测试隔离磁盘层；Task8 bundle完整性由独立存储测试及下方故障入口覆盖。
+  const timingRead = vi.spyOn(NarrationBundleStorage.prototype, "readFile").mockResolvedValue(Buffer.from(canonicalStringify(timingMap)));
   f.db.narrationRecords.set(record.id, record);
-  const plan = { plan_version: "storyboard_v1", source_script_record_id: f.script.id, source_topic_package_id: "topic", estimated_total_duration_sec: 2, segments: [{ segment_id: "s", order: 0, script_excerpt: f.script.scriptText, start_hint_sec: 0, end_hint_sec: 2, narrative_role: "opening", visual_intent: "推开城门", scene_description: "守将推开城门", visual_elements: ["城门"], framing_hint: "medium", content_type: "live_action", motion_hint: "push_in", editing_hint: "single", on_screen_text: [], linked_beats: [], linked_quotes: [], risk_notes: [], api_video_suitability: "remotion_sufficient" }], global_visual_notes: [] };
+  const legacyPlan = { plan_version: "storyboard_v1", source_script_record_id: f.script.id, source_topic_package_id: "topic", estimated_total_duration_sec: 2, segments: [{ segment_id: "s", order: 0, script_excerpt: f.script.scriptText, start_hint_sec: 0, end_hint_sec: 2, narrative_role: "opening", visual_intent: "推开城门", scene_description: "守将推开城门", visual_elements: ["城门"], framing_hint: "medium", content_type: "live_action", motion_hint: "push_in", editing_hint: "single", on_screen_text: [], linked_beats: [], linked_quotes: [], risk_notes: [], api_video_suitability: "remotion_sufficient" }], global_visual_notes: [] };
+  const plan = projectStoryboardTiming({ ...narrationTiming, plan: { ...legacyPlan, plan_version: "storyboard_v2", segments: legacyPlan.segments.map(s => ({ ...s, start_boundary_id: timingMap.boundaries[0]!.id, end_boundary_id: timingMap.boundaries.at(-1)!.id })) } });
   const state = await captureStoryboardNarrationSource(f.db, f.project.id, f.project.ownerId);
   f.db.storyboardRecords.set("old", { id: "old", projectId: f.project.id, topicPackageId: "topic", scriptRecordId: f.script.id, planJson: plan, validationResultJson: { decision: "pass" }, executionStateJson: { narration_source: state.identity }, graphTraceSummaryJson: null, runtimeDiagnosticsJson: null, createdAt: new Date() });
-  return { ...f, plan, record };
+  return { ...f, plan, record, narrationTiming, timingRead };
 }
 
 async function sqliteFixture() {
@@ -652,5 +662,46 @@ describe("Task6 R4 发布顺序与权限缓存变化", () => {
     expect((await f.client.project.findUnique({ where: { id: f.project.id } }))?.activeScriptRecordId).toBe(a.id);
     if (change === "owner_changed") expect(f.db.projects.get(f.project.id)).toMatchObject({ ownerId: "new-owner", activeScriptRecordId: f.script.id });
     else expect(f.db.projects.has(f.project.id)).toBe(false);
+  });
+});
+
+describe("Task8 真实生成服务与冻结来源接线", () => {
+  it.each(["map", "sqlite"])("%s完整生成调用真实stub并持久化v2", async mode => {
+    const f = mode === "sqlite" ? await sqliteFixture() : await readyFixture();
+    const actual = await vi.importActual<typeof import("../../../backend/src/modules/storyboard/storyboard-generation.service.js")>("../../../backend/src/modules/storyboard/storyboard-generation.service.js");
+    planner.mockImplementation(actual.generateStoryboardPlan);
+    const result = await runStoryboardGeneration({ db: f.db, project: f.project });
+    expect(result.statusCode, JSON.stringify(result.body)).toBe(200);
+    expect(planner.mock.calls[0]![0].narrationTiming).toEqual(f.narrationTiming);
+    const snapshot = await getProjectSnapshot(f.db, f.project.id);
+    expect(snapshot!.active_storyboard!.plan.plan_version).toBe("storyboard_v2");
+  });
+  it("真实单镜服务保留完整v2来源，只更新视觉", async () => {
+    const f = await readyFixture();
+    const actual = await vi.importActual<typeof import("../../../backend/src/modules/storyboard/storyboard-generation.service.js")>("../../../backend/src/modules/storyboard/storyboard-generation.service.js");
+    segmentPlanner.mockImplementation((input: any) => actual.regenerateSingleSegment({ ...input,
+      llmGateway: { invokeStructuredPrompt: vi.fn().mockResolvedValue({ ...f.plan.segments[0], visual_intent: "新的视觉", source_start: 999, start_boundary_id: "wrong", script_excerpt: "错文", visual_start_ms: 999 }) } as any }));
+    const result = await runStoryboardSegmentRegeneration({ db: f.db, project: f.project, segmentId: "s", userFeedback: "换画面" });
+    expect(result.statusCode, JSON.stringify(result.body)).toBe(200);
+    const record = [...f.db.storyboardRecords.values()].find(r => r.id !== "old")!;
+    expect((record.planJson as any).segments[0]).toEqual({ ...f.plan.segments[0], visual_intent: "新的视觉" });
+  });
+  it("bundle不完整时先拒绝，planner零调用且旧active保留", async () => {
+    const f = await readyFixture(); f.timingRead.mockRestore();
+    const result = await runStoryboardGeneration({ db: f.db, project: f.project });
+    expect(result.statusCode).toBe(500); expect(result.body).toMatchObject({ error: "internal_server_error", message: "narration_bundle_incomplete" }); expect(planner).not.toHaveBeenCalled();
+    expect(f.project.activeStoryboardRecordId).toBe("old");
+  });
+  it.each(["text", "owner"])("磁盘读取await期间%s变化，派发前拒绝", async mode => {
+    const f = await readyFixture(); f.timingRead.mockImplementation(async () => {
+      if (mode === "text") f.db.scriptRecords.set(f.script.id, { ...f.script, scriptText: "已经变化" });
+      else f.db.projects.set(f.project.id, { ...f.project, ownerId: "other" });
+      return Buffer.from(canonicalStringify(f.narrationTiming.timingMap));
+    });
+    const result = await runStoryboardGeneration({ db: f.db, project: f.project });
+    expect(result.statusCode).toBe(mode === "text" ? 409 : 500);
+    expect(result.body).toMatchObject(mode === "text" ? { error: "script_not_confirmed" } : { error: "internal_server_error", message: "project_scope_denied" });
+    expect(planner).not.toHaveBeenCalled();
+    expect(f.db.projects.get(f.project.id)!.activeStoryboardRecordId).toBe("old");
   });
 });
