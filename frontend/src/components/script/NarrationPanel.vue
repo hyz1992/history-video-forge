@@ -6,7 +6,8 @@ const props=defineProps<{store:NarrationStore;estimatedDurationSec:number}>();
 const emit=defineEmits<{(e:'proceed'):void}>();
 const s=computed(()=>props.store.state),d=computed(()=>s.value.detail),c=computed(()=>s.value.context);
 const status=computed(()=>d.value?.effective_status??'empty');
-const polling=computed(()=>status.value==='generating'||s.value.snapshot?.latest_narration_candidate?.effective_status==='generating');
+const sourceGenerating=computed(()=>s.value.snapshot?.latest_narration_candidate?.effective_status==='generating');
+const polling=computed(()=>status.value==='generating'||sourceGenerating.value);
 const labels:Record<string,string>={empty:'尚未生成口播',generating:'口播生成中',ready:'口播已生成，等待试听确认',confirmed:'口播已确认',failed:'口播生成失败',cancelled:'口播已取消',unknown:'供应商结果未知，请先核对费用后再决定重新生成',stale:'口播已过期，请重新生成'};
 const failureLabels:Record<string,string>={narration_timing_invalid:'原生时间校验未通过',narration_provider_unknown:'供应商结果未知，请核对已有费用',narration_text_too_long:'正文超出供应商长度限制',narration_paragraph_too_long:'段落超出供应商长度限制'};
 const needsConfirmation=computed(()=>status.value==='ready'||(status.value==='confirmed'&&s.value.snapshot?.narration_readiness?.reason==='narration_duration_not_accepted'));
@@ -50,8 +51,9 @@ onBeforeUnmount(()=>{disposed=true;if(timer)clearTimeout(timer);});
 <p>仅显示已通过资格验证的参数。</p><button @click="recommend">应用推荐到草稿</button><button :disabled="s.busy||!selected" @click="save">保存项目设置</button><button data-testid="cancel-settings" @click="editing=false">取消编辑</button>
 </div>
 <button v-if="!s.snapshot?.script_confirmation" :disabled="s.busy||!c?.source_script_record_id" @click="store.confirmScript">确认正文</button>
-<button v-if="status!=='generating'" :disabled="s.busy||!s.snapshot?.script_confirmation||editing" @click="store.generate">{{ d?'重新生成口播':'生成口播' }}</button>
-<button v-else :disabled="s.loading||s.busy" @click="store.cancel">取消本次生成</button>
+<button v-if="!sourceGenerating&&status!=='generating'" data-testid="narration-generate" :disabled="s.busy||!s.snapshot?.script_confirmation||editing" @click="store.generate">{{ d?'重新生成口播':'生成口播' }}</button>
+<button v-if="status==='generating'" :disabled="s.loading||s.busy" @click="store.cancel">取消本次生成</button>
+<p v-if="sourceGenerating&&status!=='generating'" data-testid="narration-source-generating-hint">最新口播候选仍在生成中，可切换到“最新生成候选”试听或取消；完成后可重新生成。</p>
 <button :disabled="s.loading" @click="store.refresh()">刷新状态</button>
 <template v-if="d?.files?.audio">
 <audio :key="d.record.id" controls :src="d.files.audio" @timeupdate="time=($event.target as HTMLAudioElement).currentTime" />
