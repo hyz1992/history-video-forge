@@ -38,6 +38,7 @@ export function createFakeTtsProvider(): AssetProviderAdapter {
     download: async () => [],
 
     normalizeResult: async ({ ctx }) => {
+      if (ctx.assetPlan.plan_version !== "asset_plan_v1") throw new Error("narration_v2_tts_task_forbidden");
       const storage = resolveAssetsRunStorage({
         projectStorageRootDir: ctx.projectStorageRootDir,
         runId: ctx.assetRunId,

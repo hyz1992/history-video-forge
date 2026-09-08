@@ -1,3 +1,4 @@
+import { AssetPlanV1 } from "../../../../shared/src/asset-planning/asset-plan-v1.schema.js";
 /**
  * Asset Manifest Builder — builds an initial AssetManifest from an AssetPlan.
  *
@@ -144,7 +145,7 @@ function buildMotionRecipeArtifacts(
 // ─── Build TTS chunk artifacts ────────────────────────────────────────────────
 
 function buildTtsChunkArtifacts(
-  ttsPlan: AssetPlan["tts_plan"],
+  ttsPlan: AssetPlanV1["tts_plan"],
   segmentIds: string[],
   voiceProfileId: string,
   explicitChunkRoutes?: TtsChunkRoute[],
@@ -357,7 +358,7 @@ function buildBgmPlacements(tasks: AssetPlan["tasks"]): BgmPlacement[] {
 // ─── Build audio summary ──────────────────────────────────────────────────────
 
 function buildAudioSummary(
-  plan: AssetPlan,
+  plan: AssetPlanV1,
   chunkRoutes: TtsChunkRoute[],
   bgmPlacements: BgmPlacement[],
   voiceProfileId: string,
@@ -407,7 +408,8 @@ function determineReadiness(
 // ─── Main builder ─────────────────────────────────────────────────────────────
 
 export function buildInitialAssetManifest(input: BuildManifestInput): AssetManifest {
-  const { assetPlanRecordId, assetPlan, segmentIds } = input;
+  const { assetPlanRecordId, segmentIds } = input;
+  const assetPlan = AssetPlanV1.parse(input.assetPlan);
   const executionOptions: AssetExecutionOptions = input.executionOptions ?? {
     execution_mode: "auto_available",
     voice_profile_id: assetPlan.tts_plan.voice_profile_id,

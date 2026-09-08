@@ -70,7 +70,7 @@ export async function submitGenerationRun(
     enabled_provider_types: enabledProviderTypes,
   };
   const project = context.app.db.projects.get(context.params.projectId)!;
-  if (operation === "storyboard.generate") {
+  if (operation === "storyboard.generate" || operation === "asset_plan.generate") {
     try {
       const existing = submit.idempotency_key && dispatchPayload.segment_id != null
         ? await context.app.generationRunRepository.getRunByKey(project.id, operation, submit.idempotency_key) : null;

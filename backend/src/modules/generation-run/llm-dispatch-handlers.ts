@@ -130,6 +130,7 @@ export function createAssetPlanDispatchHandler(): GenerationRunDispatchHandler {
     // 绝不重新读取 preset 注册表当前版本。
     const artStylePreset = extractArtStylePresetFromResolved(billing.resolved);
     const response = await runAssetPlanningGeneration({
+      expectedNarrationSource: run.dispatchPayloadJson.narration_source,
       db: context.db,
       project: context.project,
       demoMode: env.demoMode,

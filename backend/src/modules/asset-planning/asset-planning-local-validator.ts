@@ -6,6 +6,11 @@ import type {
   StoryboardPlan,
 } from "../../../../shared/src/index.js";
 import { AssetPlanningValidationResult as AssetPlanningValidationResultSchema } from "../../../../shared/src/index.js";
+import { AssetPlanV1 } from "../../../../shared/src/asset-planning/asset-plan-v1.schema.js";
+import { AssetPlanV2 } from "../../../../shared/src/asset-planning/asset-plan-v2.schema.js";
+import { isDeepStrictEqual } from "node:util";
+import { verifyStoryboardNarrationContext } from "../storyboard/storyboard-narration-context.js";
+import { validateStoryboardTiming, type StoryboardTimingContext } from "../storyboard/storyboard-timing-projector.js";
 import { locateSubstringFuzzy } from "../../runtime/llm/text-match.js";
 
 interface LocatedExcerpt {
@@ -136,7 +141,7 @@ function hasDependencyCycle(plan: AssetPlan, existingTaskIds: Set<string>) {
   return [...graph.keys()].some((taskId) => visit(taskId));
 }
 
-function getTtsCoverage(scriptText: string, plan: AssetPlan) {
+function getTtsCoverage(scriptText: string, plan: AssetPlanV1) {
   const spans: LocatedExcerpt[] = [];
   const driftedChunkIds: string[] = [];
   for (const chunk of plan.tts_plan.chunks) {
@@ -320,6 +325,7 @@ export function validateAssetPlan(input: {
   storyboard: StoryboardPlan;
   scriptText: string;
   plan: AssetPlan;
+  narrationTiming?: StoryboardTimingContext;
   /**
    * S2-2A 任务 5：resolver 输出的每段最终视觉路线（可选）。
    * 提供时对每段做机械路线核对：API route 缺锚点/video/motion、Remotion route
@@ -331,6 +337,7 @@ export function validateAssetPlan(input: {
   const warnings: string[] = [];
   const repairHints: AssetPlanningRepairHint[] = [];
   const { plan } = input;
+  if (input.storyboard.plan_version === "storyboard_v2" && plan.plan_version !== "asset_plan_v2") pushUnique(errors, "asset_narration_source_invalid");
 
   if (plan.source_storyboard_record_id !== input.storyboardRecordId) {
     pushUnique(errors, "asset_plan_source_storyboard_mismatch");
@@ -404,7 +411,25 @@ export function validateAssetPlan(input: {
     pushUnique(errors, "asset_dependency_cycle_detected");
   }
 
-  const ttsCoverage = getTtsCoverage(input.scriptText, plan);
+  let narrationValid = false;
+  if (plan.plan_version === "asset_plan_v2") {
+    try {
+      AssetPlanV2.parse(plan);
+      if (!input.narrationTiming || input.storyboard.plan_version !== "storyboard_v2") throw new Error("narration_context_missing");
+      const timing = verifyStoryboardNarrationContext(input.narrationTiming, input.scriptText);
+      validateStoryboardTiming(input.storyboard, timing);
+      if (!isDeepStrictEqual(plan.narration_reference, input.storyboard.narration_reference)) throw new Error("narration_reference_mismatch");
+      const expected = input.storyboard.segments.map(s => ({ segment_id: s.segment_id, range: { start_boundary_id: s.start_boundary_id, end_boundary_id: s.end_boundary_id, source_start: s.source_start, source_end: s.source_end, visual_start_ms: s.visual_start_ms, visual_end_ms: s.visual_end_ms } }));
+      if (!isDeepStrictEqual(plan.narration_intervals, expected)) throw new Error("narration_intervals_mismatch");
+      for (const task of plan.tasks) {
+        const segment = input.storyboard.segments.find(s => s.segment_id === task.source_segment_id);
+        if (segment && (task.source_excerpt !== segment.script_excerpt || !isDeepStrictEqual(task.parameters.narration_range, { startMs: segment.visual_start_ms, endMs: segment.visual_end_ms }))) throw new Error("narration_task_range_mismatch");
+        if (segment && task.task_type === "video_clip" && task.parameters.duration_sec !== (segment.visual_end_ms - segment.visual_start_ms) / 1000) throw new Error("narration_task_duration_mismatch");
+      }
+      narrationValid = true;
+    } catch { pushUnique(errors, "asset_narration_source_invalid"); }
+  }
+  const ttsCoverage = plan.plan_version === "asset_plan_v1" ? getTtsCoverage(input.scriptText, plan) : { coveredCharCount: narrationValid ? input.scriptText.length : 0, coverageRatio: narrationValid ? 1 : 0, hasMissingExcerpt: false, driftedChunkIds: [] };
   // TTS 覆盖率：LLM 切 chunk 时会做语义微调（标点、断句），字符级精确匹配
   // 受限于 LLM 固有能力。低于阈值只记 warning，不再报 error 强制 regen
   // （regen 不会显著改善字符级覆盖，反而让整个流程卡死）。
@@ -442,7 +467,7 @@ export function validateAssetPlan(input: {
 
   for (const task of plan.tasks) {
     if (
-      task.task_type === "subtitle_track" &&
+      plan.plan_version === "asset_plan_v1" && task.task_type === "subtitle_track" &&
       !hasSubtitleTtsTimingDependency(task, plan, tasksById)
     ) {
       pushUnique(errors, "asset_subtitle_missing_tts_dependency");

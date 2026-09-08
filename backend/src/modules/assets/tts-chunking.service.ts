@@ -3,7 +3,8 @@ import type {
   TtsChunkRoute,
 } from "../../../../shared/src/index.js";
 
-type TtsPlan = AssetPlan["tts_plan"];
+import type { AssetPlanV1 } from "../../../../shared/src/asset-planning/asset-plan-v1.schema.js";
+type TtsPlan = AssetPlanV1["tts_plan"];
 type TtsPlanChunk = TtsPlan["chunks"][number];
 
 export const DEFAULT_MAX_CHARS_PER_CHUNK = 500;
@@ -45,7 +46,7 @@ export function normalizeAssetPlanTtsForExecution(input: {
   targetCharsPerChunk?: number;
   minDurationSec?: number;
 }): {
-  assetPlan: AssetPlan;
+  assetPlan: AssetPlanV1;
   ttsChunkRoutes: TtsChunkRoute[];
 } {
   const maxCharsPerChunk = Math.max(
@@ -55,6 +56,7 @@ export function normalizeAssetPlanTtsForExecution(input: {
   const minDurationSec =
     input.minDurationSec ?? MIN_TTS_CHUNK_DURATION_SEC;
 
+  if (input.assetPlan.plan_version !== "asset_plan_v1") throw new Error("narration_v2_tts_chunking_forbidden");
   const chunksWithRoutes: Array<{
     chunk: TtsPlanChunk;
     segmentIds: string[];

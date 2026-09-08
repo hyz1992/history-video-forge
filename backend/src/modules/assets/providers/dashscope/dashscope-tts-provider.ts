@@ -1,3 +1,4 @@
+import { AssetPlanV1 } from "../../../../../../shared/src/asset-planning/asset-plan-v1.schema.js";
 import { assertNarrationExecutionCompatibility } from "../../../narration/narration-execution-compatibility.js";
 import { getVoiceProfileById } from "../../voice/voice-profile.repository.js";
 /**
@@ -270,7 +271,7 @@ export function createDashscopeTtsProvider(
         endpoint: endpointFor(options.baseUrl),
         model: options.model,
         format: options.format ?? "wav",
-        chunk_count: ctx.assetPlan.tts_plan.chunks.length,
+        chunk_count: AssetPlanV1.parse(ctx.assetPlan).tts_plan.chunks.length,
       },
     }),
 
@@ -309,7 +310,7 @@ export function createDashscopeTtsProvider(
         actualVoiceTarget: providerVoice.targetModel,
         actualProviderVoiceId: providerVoice.providerVoiceId,
       });
-      const allChunks = ctx.assetPlan.tts_plan.chunks;
+      const allChunks = AssetPlanV1.parse(ctx.assetPlan).tts_plan.chunks;
       const fullText = allChunks.map((c) => c.script_excerpt).join("");
       const totalEstimatedDuration = allChunks.reduce(
         (sum, c) => sum + c.estimated_duration_sec,

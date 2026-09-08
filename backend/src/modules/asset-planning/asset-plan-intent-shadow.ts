@@ -90,6 +90,7 @@ export function buildIntentCompilerShadowReport(input: {
   compilerInput: AssetPlanCompilerInput;
 }): ShadowCompatibilityReport {
   const compiledPlan = compileAssetPlanFromIntents(input.compilerInput).plan;
+  if (input.legacyPlan.plan_version !== "asset_plan_v1" || compiledPlan.plan_version !== "asset_plan_v1") throw new Error("legacy_asset_shadow_requires_v1");
   const differences: ShadowCompatibilityDifference[] = [];
   const compare = (
     code: string,

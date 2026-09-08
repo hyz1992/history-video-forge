@@ -6,6 +6,9 @@ import {
   type ScriptDraftPackage,
   type StoryboardPlan,
 } from "../../../../shared/src/index.js";
+import { AssetPlanV1 } from "../../../../shared/src/asset-planning/asset-plan-v1.schema.js";
+import { verifyStoryboardNarrationContext } from "../storyboard/storyboard-narration-context.js";
+import { validateStoryboardTiming, type StoryboardTimingContext } from "../storyboard/storyboard-timing-projector.js";
 import { isDeepStrictEqual } from "node:util";
 import type { SegmentAssetIntentBatchDraft } from "./segment-asset-intent.js";
 import { enrichAssetVisualPrompt } from "./asset-plan-prompt-enrichment.js";
@@ -20,7 +23,7 @@ export interface GlobalPlanningCompilerDraft {
 }
 
 export interface LocalAudioSkeleton {
-  tts_plan: AssetPlan["tts_plan"];
+  tts_plan: AssetPlanV1["tts_plan"];
   tasks: AssetTask[];
   dependencies: AssetPlan["dependencies"];
 }
@@ -40,7 +43,8 @@ export interface AssetPlanCompilerInput {
   storyboard: StoryboardPlan;
   draft: ScriptDraftPackage;
   globalDraft: GlobalPlanningCompilerDraft;
-  audioSkeleton: LocalAudioSkeleton;
+  audioSkeleton?: LocalAudioSkeleton;
+  narrationTiming?: StoryboardTimingContext;
   chunks: CompiledIntentChunkInput[];
   /**
    * S2-2A 任务 5：resolver 输出的每段最终视觉路线（编排输入，纯机械消费）。
@@ -201,6 +205,16 @@ function validateInput(input: AssetPlanCompilerInput) {
     }
   }
 
+  if (input.storyboard.plan_version === "storyboard_v2") {
+    if (!input.narrationTiming) fail([{ code: "narration_context_missing" }]);
+    const timing = verifyStoryboardNarrationContext(input.narrationTiming, input.draft.script_text);
+    validateStoryboardTiming(input.storyboard, timing);
+    if (input.storyboard.source_script_record_id !== input.sourceIds.scriptRecordId || input.storyboard.source_topic_package_id !== input.sourceIds.topicPackageId) fail([{ code: "narration_source_mismatch" }]);
+    if (input.audioSkeleton) fail([{ code: "narration_audio_skeleton_forbidden" }]);
+    if (issues.length) fail(issues);
+    return orderedSegments;
+  }
+  if (!input.audioSkeleton) fail([{ code: "audio_skeleton_missing" }]);
   const expectedChunkIds = orderedSegments.map((_, index) =>
     `tts_${String(index + 1).padStart(3, "0")}`);
   const expectedTtsPlan: LocalAudioSkeleton["tts_plan"] = {
@@ -377,12 +391,13 @@ export function compileAssetPlanFromIntents(input: AssetPlanCompilerInput): { pl
     if (!anchors.has(segment.segment_id)) fail([{ code: "visual_anchor_missing", segment_id: segment.segment_id }]);
   }
 
-  const tasks = [...structuredClone(input.audioSkeleton.tasks)];
+  const audioSkeleton = input.audioSkeleton ?? { tasks: [], dependencies: [] };
+  const tasks = [...structuredClone(audioSkeleton.tasks)];
   normalized.forEach((item) => tasks.push(createTask(item, anchors.get(item.segment.segment_id), input.globalDraft, tasks.length, input.videoResolution ?? "720P")));
   const ids = new Set(tasks.map((task) => task.task_id));
   if (ids.size !== tasks.length) fail([{ code: "task_id_collision" }]);
 
-  const dependencies = structuredClone(input.audioSkeleton.dependencies);
+  const dependencies: AssetPlan["dependencies"] = structuredClone(audioSkeleton.dependencies);
   const addDependency = (task: string, upstream: string, type: AssetPlan["dependencies"][number]["dependency_type"]) => {
     const dependency_id = dependencyId(task, upstream, type);
     if (!ids.has(task) || !ids.has(upstream) || task === upstream) fail([{ code: "dependency_endpoint_invalid", task_id: task }]);
@@ -390,10 +405,10 @@ export function compileAssetPlanFromIntents(input: AssetPlanCompilerInput): { pl
       dependencies.push({ dependency_id, task_id: task, depends_on_task_id: upstream, dependency_type: type });
     }
   };
-  for (const task of tasks.slice(input.audioSkeleton.tasks.length)) {
+  for (const task of tasks.slice(audioSkeleton.tasks.length)) {
     const anchor = task.source_segment_id ? anchors.get(task.source_segment_id) : undefined;
     if ((task.task_type === "video_clip" || task.task_type === "render_motion_cue") && anchor) addDependency(task.task_id, anchor, "requires_output");
-    if ((task.task_type === "sfx_cue" || task.task_type === "bgm_cue") && task.parameters.timing_basis === "tts") addDependency(task.task_id, "tts_001", "requires_timing");
+    if ((task.task_type === "sfx_cue" || task.task_type === "bgm_cue") && task.parameters.timing_basis === "tts" && input.storyboard.plan_version === "storyboard_v1") addDependency(task.task_id, "tts_001", "requires_timing");
   }
   const dependencyKeys = dependencies.map((dependency) => `${dependency.task_id}\0${dependency.depends_on_task_id}\0${dependency.dependency_type}`);
   if (new Set(dependencyKeys).size !== dependencyKeys.length || new Set(dependencies.map((dependency) => dependency.dependency_id)).size !== dependencies.length) fail([{ code: "dependency_duplicate" }]);
@@ -425,13 +440,29 @@ export function compileAssetPlanFromIntents(input: AssetPlanCompilerInput): { pl
     visual_budget: input.globalDraft.visual_budget,
     downgrade_policy: input.globalDraft.downgrade_policy,
     global_audio_strategy: input.globalDraft.global_audio_strategy,
-    tts_plan: input.audioSkeleton.tts_plan,
+    ...(input.audioSkeleton ? { tts_plan: input.audioSkeleton.tts_plan } : {}),
     tasks,
     dependencies,
     cost_summary: summarizeCost(tasks, budgetNotes),
     global_production_notes: ["TTS 与字幕任务由本地服务确定性创建。", ...input.globalDraft.manual_review_notes],
   };
-  const parsed = AssetPlanSchema.safeParse(candidate);
+  let output: unknown = candidate;
+  if (input.storyboard.plan_version === "storyboard_v2") {
+    const { voice_intent: _voice, ...audioStrategy } = input.globalDraft.global_audio_strategy;
+    for (const task of tasks) {
+      const segment = input.storyboard.segments.find(s => s.segment_id === task.source_segment_id);
+      if (segment) {
+        task.parameters.narration_range = { startMs: segment.visual_start_ms, endMs: segment.visual_end_ms };
+        if (task.task_type === "video_clip") task.parameters.duration_sec = (segment.visual_end_ms - segment.visual_start_ms) / 1000;
+      }
+      if (task.parameters.timing_basis === "tts") task.parameters.narration_record_id = input.storyboard.narration_reference.narration_record_id;
+    }
+    output = { ...candidate, plan_version: "asset_plan_v2", global_audio_strategy: audioStrategy,
+      narration_reference: input.storyboard.narration_reference,
+      narration_intervals: input.storyboard.segments.map(s => ({ segment_id: s.segment_id, range: { start_boundary_id: s.start_boundary_id, end_boundary_id: s.end_boundary_id, source_start: s.source_start, source_end: s.source_end, visual_start_ms: s.visual_start_ms, visual_end_ms: s.visual_end_ms } })),
+      global_production_notes: ["复用已确认整篇口播与原生时间图。", ...input.globalDraft.manual_review_notes] };
+  }
+  const parsed = AssetPlanSchema.safeParse(output);
   if (!parsed.success) {
     fail(parsed.error.issues.map((issue) => ({
       code: "compiled_plan_schema_invalid",
@@ -440,6 +471,7 @@ export function compileAssetPlanFromIntents(input: AssetPlanCompilerInput): { pl
   }
   const validation = validateAssetPlan({
     plan: parsed.data,
+    narrationTiming: input.narrationTiming,
     storyboard: input.storyboard,
     scriptText: input.draft.script_text,
     storyboardRecordId: input.sourceIds.storyboardRecordId,

@@ -1,6 +1,6 @@
 import { isProxy } from "node:util/types";
 
-import type { AssetPlan, ResolvedVisualRoute, StoryboardPlan } from "../../../../shared/src/index.js";
+import type { AssetPlan, NarrationVisualRange, ResolvedVisualRoute, StoryboardPlan } from "../../../../shared/src/index.js";
 import {
   SegmentAssetIntentBatchDraft,
   SegmentAssetIntentKind,
@@ -32,7 +32,7 @@ export type SegmentIntentPromptSegment = Pick<
   | "editing_hint"
   | "on_screen_text"
   | "risk_notes"
-> & {
+> & Partial<NarrationVisualRange> & {
   resolved_visual_route: ResolvedVisualRoute;
 };
 
@@ -50,6 +50,7 @@ export function projectSegmentIntentPromptSegments(
       throw new Error("segment_routes 缺少分段路线");
     }
     return {
+      ...("start_boundary_id" in segment ? { start_boundary_id: segment.start_boundary_id, end_boundary_id: segment.end_boundary_id, source_start: segment.source_start, source_end: segment.source_end, visual_start_ms: segment.visual_start_ms, visual_end_ms: segment.visual_end_ms } : {}),
       segment_id: segment.segment_id,
       order: segment.order,
       script_excerpt: segment.script_excerpt,

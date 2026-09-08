@@ -5,12 +5,16 @@ import { runScriptGeneration } from "../../../backend/src/modules/script/script-
 import { submitGenerationRun } from "../../../backend/src/modules/generation-run/submit-protocol.js";
 import { createGenerationRunRepository } from "../../../backend/src/modules/generation-run/generation-run.repository.js";
 import type { RouteContext } from "../../../backend/src/app.js";
+const assetPlanner = vi.hoisted(() => vi.fn());
+vi.mock("../../../backend/src/modules/asset-planning/asset-planning-generation.service.js", () => ({ generateAssetPlan: assetPlanner }));
+import { runAssetPlanningGeneration } from "../../../backend/src/modules/asset-planning/asset-planning-run.service.js";
+import { compileNarrationAssetPlan } from "../../../backend/src/modules/asset-planning/narration-reference-compiler.js";
 const planner = vi.hoisted(() => vi.fn());
 const segmentPlanner = vi.hoisted(() => vi.fn());
 vi.mock("../../../backend/src/modules/storyboard/storyboard-generation.service.js", () => ({ generateStoryboardPlan: planner, regenerateSingleSegment: segmentPlanner }));
 import { runStoryboardGeneration, runStoryboardSegmentRegeneration } from "../../../backend/src/modules/storyboard/storyboard-run.service.js";
 const cleanup: Array<() => Promise<void> | void> = [];
-afterEach(async () => { vi.restoreAllMocks(); planner.mockReset(); segmentPlanner.mockReset(); scriptGraph.mockReset(); for (const close of cleanup.splice(0).reverse()) await close(); });
+afterEach(async () => { vi.restoreAllMocks(); assetPlanner.mockReset(); planner.mockReset(); segmentPlanner.mockReset(); scriptGraph.mockReset(); for (const close of cleanup.splice(0).reverse()) await close(); });
 import { createDbClient } from "../../../backend/src/db/client.js";
 import { createProject } from "../../../backend/src/modules/projects/project.repository.js";
 import { activateScriptRecord, saveScriptRecord } from "../../../backend/src/modules/script/script-record.repository.js";
@@ -764,5 +768,131 @@ describe("Task8 R1 补齐结构重生与完整磁盘成功序列", () => {
     const rejected = await runStoryboardGeneration({ db: f.db, project: f.project });
     expect(rejected.statusCode).toBe(500); expect(rejected.body).toMatchObject({ message: "narration_bundle_incomplete" });
     expect(planner).not.toHaveBeenCalled(); expect(f.project.activeStoryboardRecordId).toBe(active);
+  });
+});
+
+function task9Plan(f: Awaited<ReturnType<typeof readyFixture>>) {
+  return compileNarrationAssetPlan({ sourceIds: { storyboardRecordId: "old", scriptRecordId: f.script.id, topicPackageId: "topic" }, storyboard: f.plan, narrationTiming: f.narrationTiming,
+    draft: { script_text: f.script.scriptText, estimated_duration_sec: 2, opening_span: f.script.scriptText, ending_span: f.script.scriptText, beat_trace: [], quote_trace: [] },
+    globalDraft: { art_bible: { era_style: "古代", visual_tone: "写实", characters: [], locations: [], props: [], global_prompt_prefix: "古代", global_negative_prompts: [], consistency_notes: [] }, visual_budget: {}, downgrade_policy: {}, global_audio_strategy: {}, manual_review_notes: ["复核"] },
+    segmentVisualRoutes: new Map([["s", { segment_id: "s", segment_override: null, api_video_suitability: "remotion_sufficient", resolved_route: "remotion", reason_code: "test" }]]),
+    chunks: [{ chunkIndex: 0, inputSegmentIds: ["s"], draft: { planning_mode: "segment_intent_batch", budget_notes: [], segments: [{ source_segment_id: "s", intents: [
+      { asset_kind: "image_still", production_intent: "城门", image_prompt: "城门", video_prompt_reserve: "推门", image_role: "anchor", support_reason: null, risk_notes: ["核对"] },
+      { asset_kind: "render_motion_cue", production_intent: "推门", risk_notes: ["缓慢"] },
+      { asset_kind: "bgm_cue", production_intent: "紧张", required_tags: ["弦乐"], mood_tags: ["紧张"], selection_label: "配乐", timing_basis: "tts", scope: "global", segment_ids: [], volume: 0.2, fade_in_sec: 0, fade_out_sec: 1, risk_notes: [] },
+    ] }] } }] }).plan;
+}
+
+describe("Task9A 资产规划来源门禁", () => {
+  it.each(["map", "sqlite"])("%s成功引用v2并以相同冻结上下文派发", async mode => {
+    const f = mode === "map" ? await readyFixture() : await sqliteFixture();
+    for (const row of buildPricingCatalogSeed({ llm: { mode: "stub" }, media: { deploymentScope: "cn-beijing" } })) f.db.providerModelCatalog.set(row.id, row);
+    assetPlanner.mockResolvedValue(task9Plan(f));
+    const result = await runAssetPlanningGeneration({ db: f.db, project: f.project, demoMode: true });
+    expect(result.statusCode, JSON.stringify(result.body)).toBe(200);
+    expect(assetPlanner).toHaveBeenCalledTimes(1);
+    expect(assetPlanner.mock.calls[0]![0].narrationTiming).toEqual(f.narrationTiming);
+    const active = "client" in f ? (await f.client.project.findUniqueOrThrow({ where: { id: f.project.id } })).activeAssetPlanRecordId : f.project.activeAssetPlanRecordId;
+    expect(active).not.toBe("old");
+    expect(f.db.assetPlanRecords.get(active!)!.planJson).toMatchObject({ plan_version: "asset_plan_v2" });
+  });
+  it("冷实例数据库已变更正文确认时零派发", async () => {
+    const f = await sqliteFixture();
+    await f.client.scriptRecord.update({ where: { id: f.script.id }, data: { scriptText: "新正文。" } });
+    const result = await runAssetPlanningGeneration({ db: f.db, project: f.project, demoMode: true });
+    expect(result.statusCode, JSON.stringify(result.body)).toBe(409); expect(assetPlanner).not.toHaveBeenCalled();
+  });
+  it.each(["map", "sqlite"])("%s已派发结果在来源变化后不能激活或回滚active", async mode => {
+    const f = mode === "map" ? await readyFixture() : await sqliteFixture();
+    for (const row of buildPricingCatalogSeed({ llm: { mode: "stub" }, media: { deploymentScope: "cn-beijing" } })) f.db.providerModelCatalog.set(row.id, row);
+    const plan = task9Plan(f);
+    assetPlanner.mockImplementation(async () => {
+      if ("client" in f) await f.client.project.update({ where: { id: f.project.id }, data: { activeNarrationRecordId: null, activeNarrationSubtitleRevisionId: null, activeAssetPlanRecordId: null, status: "script_ready" } });
+      else Object.assign(f.project, { activeNarrationRecordId: null, activeAssetPlanRecordId: null, status: "script_ready" });
+      return plan;
+    });
+    const result = await runAssetPlanningGeneration({ db: f.db, project: f.project, demoMode: true });
+    if (result.statusCode === 500) await assetPlanner.mock.results[0]!.value;
+    expect(result.statusCode, JSON.stringify(result.body)).toBe(409); expect(assetPlanner).toHaveBeenCalledTimes(1);
+    const current = "client" in f ? await f.client.project.findUniqueOrThrow({ where: { id: f.project.id } }) : f.project;
+    expect(current.activeAssetPlanRecordId).toBeNull(); expect(current.status).toBe("script_ready");
+  });
+});
+
+describe("Task9A 排队身份与最后激活窗口", () => {
+  it("资产计划指纹包含活动分镜和口播身份", async () => {
+    const f = await readyFixture(), state = await captureStoryboardNarrationSource(f.db, f.project.id, f.project.ownerId);
+    const fingerprint = (source: unknown) => computeRunPayloadFingerprint({ operation: "asset_plan.generate", storyboard: { narration_source: source } });
+    expect(fingerprint(state.identity)).not.toBe(fingerprint({ ...state.identity, activeStoryboardRecordId: "new" }));
+    expect(fingerprint(state.identity)).not.toBe(fingerprint({ ...state.identity, timingHash: "b".repeat(64) }));
+    assetPlanner.mockResolvedValue(task9Plan(f));
+    const result = await runAssetPlanningGeneration({ db: f.db, project: f.project, demoMode: true, expectedNarrationSource: { ...state.identity, activeStoryboardRecordId: "new" } });
+    expect(result.statusCode).toBe(409); expect(assetPlanner).not.toHaveBeenCalled();
+  });
+  it("冷实例口播已取消，即使缓存仍旧ready也零派发", async () => {
+    const f = await sqliteFixture();
+    await f.client.project.update({ where: { id: f.project.id }, data: { activeNarrationRecordId: null, activeNarrationSubtitleRevisionId: null } });
+    const result = await runAssetPlanningGeneration({ db: f.db, project: f.project, demoMode: true });
+    expect(result.statusCode).toBe(409); expect(assetPlanner).not.toHaveBeenCalled();
+  });
+  it("候选持久化后来源再变化，最终事务仍拒绝激活", async () => {
+    const f = await sqliteFixture();
+    for (const row of buildPricingCatalogSeed({ llm: { mode: "stub" }, media: { deploymentScope: "cn-beijing" } })) f.db.providerModelCatalog.set(row.id, row);
+    assetPlanner.mockResolvedValue(task9Plan(f));
+    const writer = f.db.secondAggregateWriter!, save = writer.saveAssetPlan.bind(writer); let writes = 0;
+    vi.spyOn(writer, "saveAssetPlan").mockImplementation(async record => {
+      await save(record); writes++;
+      if (writes === 2) await f.client.project.update({ where: { id: f.project.id }, data: { activeNarrationRecordId: null, activeNarrationSubtitleRevisionId: null, activeAssetPlanRecordId: null, status: "script_ready" } });
+    });
+    const result = await runAssetPlanningGeneration({ db: f.db, project: f.project, demoMode: true });
+    expect(result.statusCode, JSON.stringify(result.body)).toBe(409); expect(writes).toBeGreaterThanOrEqual(2);
+    expect(assetPlanner).toHaveBeenCalledTimes(1);
+    const current = await f.client.project.findUniqueOrThrow({ where: { id: f.project.id } });
+    expect(current.activeAssetPlanRecordId).toBeNull(); expect(current.status).toBe("script_ready");
+  });
+});
+
+describe("Task9A 真实提交冻结", () => {
+  it.each(["same", "storyboard", "audio"])("同key %s重放按冻结上游判定", async change => {
+    const f = await readyFixture();
+    for (const row of buildPricingCatalogSeed({ llm: { mode: "stub" }, media: { deploymentScope: "cn-beijing" } })) f.db.providerModelCatalog.set(row.id, row);
+    await seedGlobalVoiceProfiles(f.db);
+    const repository = createGenerationRunRepository(f.db);
+    const captured = (await captureStoryboardNarrationSource(f.db, f.project.id, f.project.ownerId)).identity;
+    const dispatch = vi.fn(async (runId: string) => {
+      const run = (await repository.getRunById(runId))!;
+      expect(run.dispatchPayloadJson.narration_source).toEqual(captured);
+      await repository.updateRunStatus(runId, "succeeded", { releaseLease: true, now: new Date() });
+      return { dispatched: true, outcome: { status: "succeeded", response: { statusCode: 200, body: {} } } };
+    });
+    const context = { payload: { idempotency_key: "asset-key" }, params: { projectId: f.project.id }, auth: { anonymous: false, userId: f.project.ownerId }, app: { db: f.db, generationRunRepository: repository, generationRunDispatcher: { dispatch } } } as unknown as RouteContext;
+    expect((await submitGenerationRun(context, "asset_plan.generate", undefined, {})).statusCode).toBe(200);
+    if (change === "storyboard") f.plan.segments[0]!.scene_description = "外部编辑";
+    if (change === "audio") f.db.narrationRecords.set(f.record.id, { ...f.record, output: { ...f.record.output!, audio: { ...f.record.output!.audio, sha256: "b".repeat(64) } } });
+    const replay = await submitGenerationRun(context, "asset_plan.generate", undefined, {});
+    expect(replay.statusCode, JSON.stringify(replay.body)).toBe(change === "same" ? 200 : 409);
+    expect(dispatch).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("Task9A R1 新口播替换冷缓存", () => {
+  it("另一实例已切换到新的confirmed口播，旧排队身份零派发", async () => {
+    const f = await sqliteFixture();
+    const expected = (await captureStoryboardNarrationSource(f.db, f.project.id, f.project.ownerId)).identity;
+    const oldRun = await f.client.generationRun.findUniqueOrThrow({ where: { id: "run" } });
+    const oldSnapshot = await f.client.runConfigurationSnapshot.findUniqueOrThrow({ where: { id: "snapshot" } });
+    await f.client.runConfigurationSnapshot.create({ data: { ...oldSnapshot, id: "snapshot-new", runId: "run-new" } });
+    await f.client.generationRun.create({ data: { ...oldRun, id: "run-new", idempotencyKey: "run-new", runConfigurationSnapshotId: "snapshot-new" } });
+    const oldRow = await f.client.narrationRecord.findUniqueOrThrow({ where: { id: "narration" } });
+    const output = { ...f.record.output!, initialSubtitleRevisionId: "subtitle-new" };
+    await f.client.narrationRecord.create({ data: { ...oldRow, id: "narration-new", generationRunId: "run-new", configurationSnapshotId: "snapshot-new", initialSubtitleRevisionId: null, status: "generating", outputJson: Prisma.DbNull, spokenTextSha256: null, confirmedAt: null, confirmedBy: null, acceptedDurationBandSnapshotJson: Prisma.DbNull } });
+    const oldSubtitle = await f.client.narrationSubtitleRevision.findUniqueOrThrow({ where: { id: "subtitle" } });
+    await f.client.narrationSubtitleRevision.create({ data: { ...oldSubtitle, id: "subtitle-new", narrationRecordId: "narration-new" } });
+    await f.client.narrationRecord.update({ where: { id: "narration-new" }, data: { initialSubtitleRevisionId: "subtitle-new", status: "confirmed", outputJson: output, spokenTextSha256: oldRow.spokenTextSha256, confirmedAt: oldRow.confirmedAt, confirmedBy: oldRow.confirmedBy, acceptedDurationBandSnapshotJson: oldRow.acceptedDurationBandSnapshotJson! } });
+    await f.client.project.update({ where: { id: f.project.id }, data: { activeNarrationRecordId: "narration-new", activeNarrationSubtitleRevisionId: "subtitle-new" } });
+    expect(f.project.activeNarrationRecordId).toBe("narration");
+    expect((await captureStoryboardNarrationSource(f.db, f.project.id, f.project.ownerId)).identity!.narrationRecordId).toBe("narration-new");
+    const result = await runAssetPlanningGeneration({ db: f.db, project: f.project, demoMode: true, expectedNarrationSource: expected });
+    expect(result.statusCode, JSON.stringify(result.body)).toBe(409); expect(assetPlanner).not.toHaveBeenCalled();
   });
 });

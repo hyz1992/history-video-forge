@@ -90,10 +90,10 @@ export function computeRunPayloadFingerprint(input: {
   narration?: NarrationRunFingerprintInput;
   storyboard?: { narration_source: unknown; segment_id?: unknown; user_feedback?: unknown };
 }): string {
-  if (input.operation === "storyboard.generate" && input.storyboard) {
+  if ((input.operation === "storyboard.generate" || input.operation === "asset_plan.generate") && input.storyboard) {
     let source = input.storyboard.narration_source;
     // 全量动作的直接上游是口播，active分镜仅用于激活CAS；自己完成后的重放不改变请求身份。
-    if (input.storyboard.segment_id == null && source && typeof source === "object" && !Array.isArray(source)) {
+    if (input.operation === "storyboard.generate" && input.storyboard.segment_id == null && source && typeof source === "object" && !Array.isArray(source)) {
       const { activeStoryboardRecordId, storyboardPlanSha256, ...provenance } = source as Record<string, unknown>;
       source = provenance;
     }
@@ -138,7 +138,7 @@ export async function createOrRestoreGenerationRun(
     selection: input.selection,
     enabled_provider_types: input.enabledProviderTypes,
     narration: input.narration,
-    ...(input.operation === "storyboard.generate" && input.dispatchPayload.narration_source ? { storyboard: {
+    ...((input.operation === "storyboard.generate" || input.operation === "asset_plan.generate") && input.dispatchPayload.narration_source ? { storyboard: {
       narration_source: input.dispatchPayload.narration_source,
       segment_id: input.dispatchPayload.segment_id ?? null,
       user_feedback: input.dispatchPayload.user_feedback ?? null,

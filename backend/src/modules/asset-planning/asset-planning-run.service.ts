@@ -1,3 +1,4 @@
+import { z } from "zod";
 import {
   ScriptDraftPackage,
   StoryboardPlan,
@@ -7,6 +8,11 @@ import {
   type AssetPlanningValidationResult,
   type ResolvedSegmentVisualRoute,
 } from "../../../../shared/src/index.js";
+import { canonicalStringify } from "../../../../shared/src/index.js";
+import { Prisma } from "../../generated/prisma/client.js";
+import { captureStoryboardNarrationSource, withStoryboardNarrationSource, NarrationSourceError } from "../narration/narration-invalidation.js";
+import { loadStoryboardNarrationTiming } from "../storyboard/storyboard-narration-context.js";
+import type { StoryboardTimingContext } from "../storyboard/storyboard-timing-projector.js";
 import { decodeStoredStoryboardPlan } from "../storyboard/storyboard-plan-compatibility.js";
 import { resolveSystemGenerationConstraints } from "../generation-config/system-constraints.js";
 import { getProjectGenerationConfiguration } from "../generation-config/generation-config.repository.js";
@@ -47,6 +53,7 @@ export interface RunAssetPlanningGenerationInput {
   project: ProjectRecord;
   /** 演示/测试态：与 storyboard 快照一致的真实系统约束来源。 */
   demoMode: boolean;
+  expectedNarrationSource?: unknown;
   /** S2-2A 任务 9B：付费 quote 绑定 run 的计费上下文（LLM 记账）；免 quote 路径不传。 */
   billingContext?: LlmBillingContext;
   /**
@@ -124,7 +131,7 @@ function persistRunDiagnosticsSafely(input: {
   }
 }
 
-function mapScriptDraft(record: ScriptRecord) {
+function mapScriptDraft(record: NonNullable<Awaited<ReturnType<typeof captureStoryboardNarrationSource>>["source"]["script"]>) {
   return ScriptDraftPackage.parse({
     script_text: record.scriptText,
     estimated_duration_sec: record.estimatedDurationSec,
@@ -135,7 +142,7 @@ function mapScriptDraft(record: ScriptRecord) {
   });
 }
 
-function mapTopicBoundaryContext(record: TopicPackageRecord) {
+function mapTopicBoundaryContext(record: NonNullable<Awaited<ReturnType<typeof captureStoryboardNarrationSource>>["source"]["topic"]>) {
   return {
     title: record.title,
     selected_angle: record.selectedAngle,
@@ -143,11 +150,11 @@ function mapTopicBoundaryContext(record: TopicPackageRecord) {
     scope_label: record.scopeLabel,
     core_conflict: record.coreConflict,
     strong_scene: record.strongScene,
-    forbidden_expansions: record.forbiddenExpansionsJson,
-    risk_hints: record.riskHintsJson,
-    source_anchor_refs: record.sourceAnchorRefsJson,
-    canonical_quotes: record.canonicalQuotesJson,
-    narrative_tension_map: record.narrativeTensionMapJson,
+    forbidden_expansions: z.array(z.unknown()).parse(record.forbiddenExpansionsJson),
+    risk_hints: z.array(z.unknown()).parse(record.riskHintsJson),
+    source_anchor_refs: z.array(z.unknown()).parse(record.sourceAnchorRefsJson),
+    canonical_quotes: z.array(z.unknown()).parse(record.canonicalQuotesJson),
+    narrative_tension_map: z.record(z.unknown()).parse(record.narrativeTensionMapJson),
   };
 }
 
@@ -714,14 +721,16 @@ function isStaleSource(input: {
 }
 
 function buildValidationInput(input: {
-  storyboardRecord: StoryboardRecord;
-  scriptRecord: ScriptRecord;
-  topicPackage: TopicPackageRecord;
+  storyboardRecord: { id: string };
+  narrationTiming?: StoryboardTimingContext;
+  scriptRecord: { id: string; scriptText: string };
+  topicPackage: { id: string };
   storyboard: StoryboardPlan;
   plan: AssetPlan;
   segmentVisualRoutes: ReadonlyMap<string, ResolvedSegmentVisualRoute>;
 }) {
   return {
+    narrationTiming: input.narrationTiming,
     storyboardRecordId: input.storyboardRecord.id,
     scriptRecordId: input.scriptRecord.id,
     topicPackageId: input.topicPackage.id,
@@ -735,7 +744,14 @@ function buildValidationInput(input: {
 export async function runAssetPlanningGeneration(
   input: RunAssetPlanningGenerationInput,
 ) {
-  const generationMode = getValidatedRuntimeEnv().assetPlanningGenerationMode;
+  let narrationContext: Awaited<ReturnType<typeof captureStoryboardNarrationSource>>;
+  try { narrationContext = await captureStoryboardNarrationSource(input.db, input.project.id, input.project.ownerId); }
+  catch (error) { if (error instanceof NarrationSourceError) return { statusCode: 409, body: { error: error.message } }; throw error; }
+  const narrationSource = narrationContext.identity;
+  if ((input.expectedNarrationSource !== undefined || (input.billingContext && narrationSource)) && canonicalStringify(input.expectedNarrationSource) !== canonicalStringify(narrationSource)) return { statusCode: 409, body: { error: "narration_stale" } };
+  if (narrationSource) input = { ...input, project: { ...input.project, activeStoryboardRecordId: narrationContext.source.project.activeStoryboardRecordId } };
+  const generationMode = narrationSource ? "intent_compiler" : getValidatedRuntimeEnv().assetPlanningGenerationMode;
+  const beforeDispatch = () => withStoryboardNarrationSource(input.db, input.project.id, input.project.ownerId, narrationSource, () => undefined);
   if (!input.project.activeStoryboardRecordId) {
     return {
       statusCode: 409,
@@ -745,7 +761,7 @@ export async function runAssetPlanningGeneration(
     };
   }
 
-  const storyboardRecord = input.db.storyboardRecords.get(
+  const storyboardRecord = narrationSource ? narrationContext.storyboard : input.db.storyboardRecords.get(
     input.project.activeStoryboardRecordId,
   );
   if (!storyboardRecord) {
@@ -757,8 +773,8 @@ export async function runAssetPlanningGeneration(
     };
   }
 
-  const scriptRecord = input.db.scriptRecords.get(storyboardRecord.scriptRecordId);
-  const topicPackage = input.db.topicPackages.get(storyboardRecord.topicPackageId);
+  const scriptRecord = narrationSource ? narrationContext.source.script : input.db.scriptRecords.get(storyboardRecord.scriptRecordId);
+  const topicPackage = narrationSource ? narrationContext.source.topic : input.db.topicPackages.get(storyboardRecord.topicPackageId);
   if (!scriptRecord || !topicPackage) {
     return {
       statusCode: 404,
@@ -781,6 +797,7 @@ export async function runAssetPlanningGeneration(
     };
   }
   const storyboard = storyboardDecoded.value.plan;
+  if (narrationSource && storyboard.plan_version !== "storyboard_v2") return { statusCode: 409, body: { error: "narration_storyboard_v2_required" } };
   const draft = mapScriptDraft(scriptRecord);
   const topicBoundaryContext = mapTopicBoundaryContext(topicPackage);
 
@@ -919,6 +936,8 @@ export async function runAssetPlanningGeneration(
   let progressWriteChain: Promise<void> = Promise.resolve();
 
   try {
+    const narrationTiming = await loadStoryboardNarrationTiming(input.db, input.project.id, input.project.ownerId, narrationSource, input.project.storageRootDir);
+    await beforeDispatch();
     // Save preliminary record BEFORE plan generation so refresh shows generating state
     generatingRecord = await saveAssetPlanRecord(input.db, {
       projectId: input.project.id,
@@ -931,8 +950,10 @@ export async function runAssetPlanningGeneration(
       graphTraceSummaryJson: null,
       runtimeDiagnosticsJson: null,
     });
-    input.project.status = "asset_plan_generating";
-    await input.db.firstAggregateWriter?.syncProject(input.project);
+    if (!narrationSource) {
+      input.project.status = "asset_plan_generating";
+      await input.db.firstAggregateWriter?.syncProject(input.project);
+    }
 
     const onProgress = (progress: import("./asset-planning-generation.service.js").AssetPlanGenerationProgress) => {
       if (!acceptProgressUpdates || !generatingRecord) return;
@@ -973,7 +994,10 @@ export async function runAssetPlanningGeneration(
       return queuedWrite;
     };
 
+    await beforeDispatch();
     let plan = await generateAssetPlan({
+    narrationTiming,
+    beforeDispatch,
     sourceStoryboardRecordId: storyboardRecord.id,
     sourceScriptRecordId: scriptRecord.id,
     sourceTopicPackageId: topicPackage.id,
@@ -997,8 +1021,10 @@ export async function runAssetPlanningGeneration(
       )?.effective?.video?.api_quality,
     ),
   });
+  await beforeDispatch();
   let localValidation = validateAssetPlan(
     buildValidationInput({
+      narrationTiming,
       storyboardRecord,
       scriptRecord,
       topicPackage,
@@ -1121,7 +1147,7 @@ export async function runAssetPlanningGeneration(
     };
   }
 
-  staleSourceDetected = isStaleSource({
+  staleSourceDetected = !narrationSource && isStaleSource({
     db: input.db,
     projectId: input.project.id,
     capturedStoryboardRecordId: storyboardRecord.id,
@@ -1188,6 +1214,13 @@ export async function runAssetPlanningGeneration(
     runtimeDiagnosticsJson: runtimeDiagnostics,
   });
 
+  if (narrationSource) {
+    await withStoryboardNarrationSource(input.db, input.project.id, input.project.ownerId, narrationSource, async ({ source }, tx) => {
+      const patch = { activeAssetPlanRecordId: assetPlanRecord.id, activeAssetManifestRecordId: null, activeComposeRecordId: null, activeRenderJobRecordId: null, activePublishPackageRecordId: null, latestAssetPlanRunTraceJson: graphTraceSummary, latestAssetsRunTraceJson: null, latestComposeRunTraceJson: null, latestRenderRunTraceJson: null, status: "asset_plan_ready", updatedAt: new Date() };
+      if (tx) await tx.project.update({ where: { id: source.project.id }, data: { ...patch, latestAssetPlanRunTraceJson: graphTraceSummary as unknown as Prisma.InputJsonValue, latestAssetsRunTraceJson: Prisma.DbNull, latestComposeRunTraceJson: Prisma.DbNull, latestRenderRunTraceJson: Prisma.DbNull } });
+      else Object.assign(source.project, patch);
+    });
+  } else {
   activationProjectSnapshot = {
     status: previousProjectStatus,
     activeAssetPlanRecordId: input.project.activeAssetPlanRecordId,
@@ -1220,6 +1253,7 @@ export async function runAssetPlanningGeneration(
     runtimeDiagnostics: runtimeDiagnostics as unknown as Record<string, unknown>,
   });
 
+  }
   return {
     statusCode: 200,
     body: {
@@ -1239,7 +1273,7 @@ export async function runAssetPlanningGeneration(
   } catch (error) {
     acceptProgressUpdates = false;
     await progressWriteChain;
-    const errorCode = classifyAssetPlanningErrorCode(error);
+    const errorCode = error instanceof NarrationSourceError ? error.message : classifyAssetPlanningErrorCode(error);
     const compilerInvariantFailure =
       error instanceof AssetPlanCompilerInvariantError
         ? redactCompilerInvariantIssues(error.issues)
@@ -1319,6 +1353,7 @@ export async function runAssetPlanningGeneration(
     // asset_plan_generating 写回。入口快照存在时恢复它，但其 status 若已是
     // generating（历史失败滚动继承的脏状态）按 active 记录推导回退——
     // 避免一次失败卡住后所有后续失败都继承 generating。
+    if (!narrationSource) {
     const fallbackStatus =
       previousProjectStatus === "asset_plan_generating"
         ? previousActiveAssetPlanRecordId
@@ -1347,6 +1382,7 @@ export async function runAssetPlanningGeneration(
       traceSummary: failureTraceSummary,
       runtimeDiagnostics: failureDiagnostics,
     });
+    }
     const resilienceFailureTracePayload = buildResilienceFailureTracePayload({
       errorCode,
       globalStructure,
@@ -1376,7 +1412,7 @@ export async function runAssetPlanningGeneration(
       );
     }
     return {
-      statusCode: 500,
+      statusCode: error instanceof NarrationSourceError ? 409 : 500,
       body: {
         error: errorCode,
         repair_used: globalStructure.global_structural_repair_used,

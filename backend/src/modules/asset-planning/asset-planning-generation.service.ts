@@ -62,6 +62,10 @@ import {
   type ChunkInteractionAccountingSnapshot,
 } from "./chunk-interaction-accounting.js";
 
+import { AssetPlanV1 } from "../../../../shared/src/asset-planning/asset-plan-v1.schema.js";
+import { verifyStoryboardNarrationContext } from "../storyboard/storyboard-narration-context.js";
+import { validateStoryboardTiming, type StoryboardTimingContext } from "../storyboard/storyboard-timing-projector.js";
+
 const PROMPT_ID = "asset-planning.planner";
 const STRUCTURAL_REPAIR_PROMPT_ID = "asset-planning.asset-structural-repair";
 const GLOBAL_STRUCTURAL_REPAIR_PROMPT_ID =
@@ -287,6 +291,8 @@ export type GlobalDraftStructureEvent = AssetPlanningResilienceEvent;
 
 export interface GenerateAssetPlanInput {
   generationMode?: AssetPlanningGenerationMode;
+  narrationTiming?: StoryboardTimingContext;
+  beforeDispatch?: () => Promise<void>;
   sourceStoryboardRecordId: string;
   sourceScriptRecordId: string;
   sourceTopicPackageId: string;
@@ -455,14 +461,25 @@ export async function generateAssetPlan(
       throw new Error("asset_planning_segment_visual_route_missing");
     }
   }
-  const gateway = input.llmGateway ?? createAssetPlannerGateway(input.snapshotCapabilities);
-  const audioSkeleton = buildLocalAudioSkeleton(input);
+  const narrationMode = input.storyboard.plan_version === "storyboard_v2";
+  if (narrationMode) {
+    if (!input.narrationTiming) throw new Error("narration_context_missing");
+    const timing = verifyStoryboardNarrationContext(input.narrationTiming, input.draft.script_text);
+    validateStoryboardTiming(input.storyboard, timing);
+    input = { ...input, narrationTiming: timing, generationMode: "intent_compiler" };
+  }
+  const underlyingGateway = input.llmGateway ?? createAssetPlannerGateway(input.snapshotCapabilities);
+  const gateway: LlmGateway = {
+    async invokeStructuredPrompt(options) { await input.beforeDispatch?.(); return underlyingGateway.invokeStructuredPrompt(options); },
+    async invokeStrictStructured(options) { await input.beforeDispatch?.(); return underlyingGateway.invokeStrictStructured(options); },
+  };
+  const audioSkeleton = narrationMode ? undefined : buildLocalAudioSkeleton(input);
   const totalSegments = input.storyboard.segments.length;
 
   const rawGlobalDraft = await invokePlanningPromptWithSafetyRetry({
     gateway,
     promptId: PROMPT_ID,
-    promptInput: buildGlobalPromptInput(input, audioSkeleton.tts_plan),
+    promptInput: buildGlobalPromptInput(input, audioSkeleton?.tts_plan),
     interactionLogWriter: input.interactionLogWriter,
   });
   const globalDraft = await parseOrRepairGlobalDraft({
@@ -545,6 +562,7 @@ export async function generateAssetPlan(
           manual_review_notes: globalDraft.manual_review_notes,
         },
         audioSkeleton,
+        narrationTiming: input.narrationTiming,
         chunks: chunkBatch.results,
         segmentVisualRoutes: input.segmentVisualRoutes,
         videoResolution: input.videoResolution,
@@ -590,6 +608,7 @@ export async function generateAssetPlan(
     return compiled.plan;
   }
 
+  if (!audioSkeleton) throw new Error("narration_legacy_compiler_forbidden");
   let completedChunks = 0;
   const chunkDrafts = await mapWithConcurrency(
     chunks,
@@ -1831,7 +1850,7 @@ function visualRouteMap(
 
 function buildGlobalPromptInput(
   input: GenerateAssetPlanInput,
-  ttsPlan: AssetPlan["tts_plan"],
+  ttsPlan?: AssetPlanV1["tts_plan"],
 ) {
   const promptInput = {
     planning_mode: "global",
@@ -1848,7 +1867,7 @@ function buildGlobalPromptInput(
     },
     draft: input.draft,
     topic_boundary_context: input.topicBoundaryContext,
-    local_tts_plan: ttsPlan,
+    ...(input.storyboard.plan_version === "storyboard_v2" ? { narration_reference: input.storyboard.narration_reference } : { local_tts_plan: ttsPlan }),
     // S2-2B：画风 preset 冻结参数（快照 resolved_creative.art_style，只读输入）。
     // 仅在 fixed 模式携带；指令文本在 prompts/，这里只传数据。
     ...(input.artStylePreset
@@ -1923,7 +1942,7 @@ function buildLocalAudioSkeleton(input: GenerateAssetPlanInput): LocalAudioSkele
       segment.end_hint_sec - segment.start_hint_sec,
     ),
   }));
-  const ttsPlan: AssetPlan["tts_plan"] = {
+  const ttsPlan: AssetPlanV1["tts_plan"] = {
     voice_profile_id: "voice_default_male_storyteller",
     estimated_total_duration_sec: Math.max(1, input.draft.estimated_duration_sec),
     chunking_strategy: "segment_boundary",

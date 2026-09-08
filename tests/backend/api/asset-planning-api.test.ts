@@ -1,3 +1,4 @@
+import * as narrationGate from "../../../backend/src/modules/narration/narration-invalidation.js";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
@@ -765,15 +766,17 @@ describe("asset planning api", () => {
       latestRenderRunTraceJson: oldRenderTrace,
       updatedAt: oldUpdatedAt,
     });
+    // 此测试仅注入legacy激活失败；无真实持久化客户端，口播门禁以明确legacy来源隔离。
+    vi.spyOn(narrationGate, "captureStoryboardNarrationSource").mockResolvedValue({ identity: null } as never);
+    vi.spyOn(narrationGate, "withStoryboardNarrationSource").mockResolvedValue(undefined);
+    const rejectActivation = vi.fn(async () => { throw new Error("activation_rejected"); });
     app.db.secondAggregateWriter = {
       async saveScript() {},
       async saveStoryboard() {},
       async saveAssetPlan() {},
       async activateScript() {},
       async activateStoryboard() {},
-      async activateAssetPlan() {
-        throw new Error("activation_rejected");
-      },
+      activateAssetPlan: rejectActivation,
     };
     generateAssetPlanMock.mockResolvedValueOnce(
       makeAssetPlan({
@@ -792,6 +795,7 @@ describe("asset planning api", () => {
     expect(response.statusCode).toBe(500);
     expect(response.json()).toMatchObject({ error: "internal_server_error" });
     expect(response.json()).not.toHaveProperty("message");
+    expect(rejectActivation).toHaveBeenCalledTimes(1);
     // 2026-08-26 合同：失败后项目状态与激活指针全部回滚到入口前快照，
     // 但 latestAssetPlanRunTraceJson 特意记录本次失败 run（含 error_code，
     // 供前端资产页展示失败原因），不再保留旧 trace；updatedAt 反映回写。
