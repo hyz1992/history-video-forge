@@ -6,7 +6,7 @@ import type {
   AssetsValidationResult,
   MediaLibraryItem,
 } from "../../../../shared/src/index.js";
-import { AssetsValidationResult as AssetsValidationResultSchema } from "../../../../shared/src/index.js";
+import { AssetManifestV2, canonicalStringify, AssetsValidationResult as AssetsValidationResultSchema } from "../../../../shared/src/index.js";
 
 /**
  * Segment-bound task types that should have a corresponding segment route
@@ -66,6 +66,37 @@ export async function validateAssetsManifest(input: {
   const errors: string[] = [];
   const warnings: string[] = [];
   const { assetPlan, manifest } = input;
+
+  if (assetPlan.plan_version === "asset_plan_v2" || manifest.manifest_version === "asset_manifest_v2") {
+    const parsed = AssetManifestV2.safeParse(manifest);
+    if (assetPlan.plan_version !== "asset_plan_v2" || !parsed.success) pushUnique(errors, "assets_narration_manifest_invalid");
+    else {
+      for (const route of parsed.data.segment_routes) {
+        if (route.visual_route_type !== "video_clip" || !route.primary_visual_artifact_id) continue;
+        const producer = parsed.data.executions.find(e => e.task_type === "video_clip" && e.output_artifact_ids.includes(route.primary_visual_artifact_id!) && assetPlan.tasks.some(t => t.task_id === e.task_id && t.source_segment_id === route.segment_id));
+        const primary = parsed.data.artifacts.find(a => a.artifact_id === route.primary_visual_artifact_id);
+        const metadata = primary?.metadata as Record<string, unknown> | undefined;
+        let videos = primary?.artifact_type === "video" && producer ? [primary] : [];
+        if (metadata?.video_split_of_task !== undefined || metadata?.video_split_total !== undefined) {
+          const total = metadata.video_split_total, group = metadata.video_split_group_id;
+          const parts = parsed.data.artifacts.filter(a => a.artifact_type === "video").filter(a => (a.metadata as Record<string, unknown>).video_split_of_task === producer?.task_id);
+          const indices = new Set<number>();
+          const valid = producer && metadata.video_split_of_task === producer.task_id && typeof total === "number" && Number.isSafeInteger(total) && total > 1 && metadata.video_split_index === 0 && typeof group === "string" && group.length > 0 && parts.length === total && parts.every(part => {
+            const md = part.metadata as Record<string, unknown>, index = md.video_split_index;
+            if (md.video_split_group_id !== group || md.video_split_total !== total || typeof index !== "number" || !Number.isSafeInteger(index) || index < 0 || index >= total || indices.has(index) || !producer.output_artifact_ids.includes(part.artifact_id)) return false;
+            indices.add(index); return true;
+          });
+          videos = valid ? parts : [];
+        }
+        const durationMs = videos.reduce((sum, artifact) => {
+          const duration = (artifact.metadata as { duration_sec?: number }).duration_sec;
+          return typeof duration === "number" && Number.isFinite(duration) && duration > 0 ? sum + duration * 1000 : NaN;
+        }, 0);
+        if (!Number.isFinite(durationMs) || durationMs < route.narrationRange.endMs - route.narrationRange.startMs) pushUnique(errors, "assets_narration_video_duration_insufficient");
+      }
+      if (canonicalStringify(parsed.data.narration_reference) !== canonicalStringify(assetPlan.narration_reference) || parsed.data.segment_routes.length !== assetPlan.narration_intervals.length || parsed.data.segment_routes.some((route, i) => { const interval = assetPlan.narration_intervals[i]; return !interval || route.segment_id !== interval.segment_id || route.narrationRange.startMs !== interval.range.visual_start_ms || route.narrationRange.endMs !== interval.range.visual_end_ms; })) pushUnique(errors, "assets_narration_range_mismatch");
+    }
+  }
 
   // ── Source ID checks ────────────────────────────────────────────────────
 

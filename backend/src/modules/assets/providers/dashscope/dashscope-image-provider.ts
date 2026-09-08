@@ -181,12 +181,15 @@ export function createDashscopeImageProvider(
       };
     },
 
-    submit: async (_ctx, prepared) => {
+    submit: async (ctx, prepared) => {
       if (!options.apiKey.trim()) {
         throw new Error("dashscope_api_key_missing");
       }
 
-      const response = await fetch(String(prepared.rawRequestJson.endpoint), {
+      await ctx.beforeDispatch?.();
+
+      ctx.onDispatch?.();
+        const response = await fetch(String(prepared.rawRequestJson.endpoint), {
         method: "POST",
         headers: {
           Authorization: `Bearer ${options.apiKey}`,
@@ -214,7 +217,7 @@ export function createDashscopeImageProvider(
       };
     },
 
-    poll: async (_ctx, submitted) => {
+    poll: async (ctx, submitted) => {
       const taskId = getString(submitted.providerJobId);
       if (!taskId) {
         return {
@@ -230,6 +233,7 @@ export function createDashscopeImageProvider(
       const pollIntervalMs = options.pollIntervalMs ?? 3000;
 
       for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+        await ctx.beforeDispatch?.();
         const response = await fetch(taskEndpointFor(baseUrl, taskId), {
           headers: { Authorization: `Bearer ${options.apiKey}` },
         });
@@ -277,6 +281,7 @@ export function createDashscopeImageProvider(
       if (!imageUrl) {
         throw new Error("dashscope_image_output_url_missing");
       }
+      await ctx.beforeDispatch?.();
       const response = await fetch(imageUrl);
       if (!response.ok) {
         throw new Error(`DashScope image download failed: ${response.status}`);

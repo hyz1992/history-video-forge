@@ -1,4 +1,9 @@
-import { checkNarrationExecutionCompatibility } from "../narration/narration-execution-compatibility.js";
+import { captureNarrationAssetsSource, withNarrationAssetsSource } from "./narration-assets-context.js";
+import { importNarrationManifest } from "./narration-manifest-importer.js";
+import { NarrationSourceError } from "../narration/narration-invalidation.js";
+import { Prisma } from "../../generated/prisma/client.js";
+import { AssetManifestV2, AssetPlan as AssetPlanSchema } from "../../../../shared/src/index.js";
+import { checkNarrationExecutionCompatibility, readProjectNarrationContext } from "../narration/narration-execution-compatibility.js";
 import type {
   DbClient,
   ProjectRecord,
@@ -701,7 +706,10 @@ function applyArtifactToManifestRoutes(input: {
 
 export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
   const { db, project } = input;
-  const frozenTts = input.resolvedCapabilities?.["tts.synthesize"];
+  const currentMode = await readProjectNarrationContext(db, project.id, project.ownerId);
+  const narrationContext = currentMode.mode === "narration_first_v1" ? await captureNarrationAssetsSource(db, project.id, project.ownerId) : null;
+  const checkNarrationSource = narrationContext ? () => withNarrationAssetsSource(db, project.id, project.ownerId, narrationContext.identity, () => undefined) : undefined;
+  const frozenTts = narrationContext ? undefined : input.resolvedCapabilities?.["tts.synthesize"];
   const compatibility = checkNarrationExecutionCompatibility({
     catalog: db.providerModelCatalog.values(),
     operation: "assets.generate",
@@ -730,7 +738,7 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
   const capturedAssetPlanRecordId =
     input.boundContext !== undefined
       ? input.boundContext.assetPlanRecordId
-      : project.activeAssetPlanRecordId;
+      : narrationContext?.planRecord.id ?? project.activeAssetPlanRecordId;
   if (!capturedAssetPlanRecordId) {
     return {
       statusCode: 409,
@@ -739,7 +747,8 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
   }
 
   // Step 2: Get the active asset plan record
-  const assetPlanRecord = db.assetPlanRecords.get(capturedAssetPlanRecordId);
+  if (narrationContext && capturedAssetPlanRecordId !== narrationContext.planRecord.id) throw new NarrationSourceError("narration_assets_source_stale");
+  const assetPlanRecord = narrationContext?.planRecord ?? db.assetPlanRecords.get(capturedAssetPlanRecordId);
   if (!assetPlanRecord) {
     return {
       statusCode: 404,
@@ -751,7 +760,7 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
 
   // Step 3: Get storyboard record to extract segment IDs。
   // 绑定 storyboard 优先（授权计价用的同一 storyboard）；未绑定时回退 plan 关联。
-  const storyboardRecord =
+  const storyboardRecord = narrationContext ? { id: narrationContext.planRecord.storyboardRecordId, planJson: narrationContext.storyboardPlan } :
     (input.boundContext?.storyboardRecordId
       ? db.storyboardRecords.get(input.boundContext.storyboardRecordId)
       : undefined) ??
@@ -768,14 +777,14 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
   // Extract segment IDs from storyboard plan
   const storyboardPlan = storyboardRecord.planJson as { segments?: Array<{ segment_id: string }> };
   const segmentIds = storyboardPlan.segments?.map((s) => s.segment_id) ?? [];
-  const normalizedTts = normalizeAssetPlanTtsForExecution({
-    assetPlan: assetPlanRecord.planJson,
+  const normalizedTts = narrationContext ? { assetPlan: narrationContext.assetPlan, ttsChunkRoutes: [] } : normalizeAssetPlanTtsForExecution({
+    assetPlan: AssetPlanSchema.parse(assetPlanRecord.planJson),
     segmentIds,
   });
 
   // Step 4: Resolve local global voice profile before manifest build
   // S2-2B：以项目 owner 限定音色库可见性（公共 + 本人私有，详细设计 §6.4）
-  const voiceResolution = await resolveVoiceProfile({
+  const voiceResolution = narrationContext ? { voiceProfileId: narrationContext.record.settings.voice } : await resolveVoiceProfile({
     db,
     requestedVoiceProfileId: input.voiceProfileId,
     assetPlan: normalizedTts.assetPlan,
@@ -783,7 +792,7 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
   });
 
   // Write resolved voice profile ID back to the asset plan
-  if (voiceResolution.voiceProfileId && voiceResolution.voiceProfileId !== (normalizedTts.assetPlan.tts_plan as Record<string, unknown>)?.voice_profile_id) {
+  if (normalizedTts.assetPlan.plan_version === "asset_plan_v1" && voiceResolution.voiceProfileId && voiceResolution.voiceProfileId !== (normalizedTts.assetPlan.tts_plan as Record<string, unknown>)?.voice_profile_id) {
     (normalizedTts.assetPlan.tts_plan as Record<string, unknown>).voice_profile_id = voiceResolution.voiceProfileId;
   }
 
@@ -802,16 +811,19 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
       },
     };
   }
-  const executionOptions = executionOptionsResult.data;
+  let executionOptions = executionOptionsResult.data;
 
   // Step 6: Build manifest
-  let manifest = buildInitialAssetManifest({
+  let manifest: AssetManifest = narrationContext ? await importNarrationManifest({ assetPlanRecordId: assetPlanRecord.id, assetPlan: narrationContext.assetPlan, storyboard: narrationContext.storyboardPlan, record: narrationContext.record, revision: narrationContext.revision, storageRootDir: project.storageRootDir, executionOptions }) : buildInitialAssetManifest({
     assetPlanRecordId: assetPlanRecord.id,
     assetPlan: normalizedTts.assetPlan,
     segmentIds,
     ttsChunkRoutes: normalizedTts.ttsChunkRoutes,
     executionOptions,
   });
+
+  executionOptions = manifest.execution_options;
+  await checkNarrationSource?.();
 
   // Step 6a-0: S2-2A 任务 6——解析项目视频策略并写入每条 route。
   // 策略是项目冻结配置（客户端不可覆盖），决定 API 视频失败时严格阻塞或自动降级。
@@ -880,10 +892,15 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
   // so we can merge new results into it rather than replacing everything.
   let existingManifest: Record<string, unknown> | null = null;
   if (input.missingOnly || (input.taskIds && input.taskIds.length > 0)) {
-    if (project.activeAssetManifestRecordId) {
-      const existingRecord = db.assetManifestRecords.get(project.activeAssetManifestRecordId);
+    const retryManifestId = narrationContext?.project.activeAssetManifestRecordId ?? project.activeAssetManifestRecordId;
+    if (retryManifestId) {
+      const existingRecord = narrationContext ? narrationContext.activeManifest : db.assetManifestRecords.get(retryManifestId);
       if (existingRecord) {
         existingManifest = existingRecord.manifestJson as Record<string, unknown>;
+        if (narrationContext) {
+          const parsed = AssetManifestV2.safeParse(existingManifest);
+          if (!parsed.success || parsed.data.source_asset_plan_id !== assetPlanRecord.id || canonicalStringify(parsed.data.narration_reference) !== canonicalStringify(narrationContext.assetPlan.narration_reference) || parsed.data.subtitle_revision_id !== narrationContext.revision.id || parsed.data.subtitle_settings_hash !== narrationContext.revision.subtitleSettingsHash) existingManifest = null;
+        }
       }
     }
   }
@@ -1092,11 +1109,13 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
     graphTraceSummaryJson: null,
     runtimeDiagnosticsJson: null,
   });
-  project.status = "assets_generating";
-  await db.firstAggregateWriter?.syncProject(project);
+  if (!narrationContext) {
+    project.status = "assets_generating";
+    await db.firstAggregateWriter?.syncProject(project);
+  }
 
   if (executionOptions.execution_mode === "dry_run") {
-    manifest.artifacts = [];
+    if (!narrationContext) manifest.artifacts = [];
   } else if (executionOptions.execution_mode === "auto_available") {
     const registry = buildProviderRegistry({
       db,
@@ -1119,6 +1138,7 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
     const engineResult = await executeAssetManifest({
       db,
       assetManifestRecordId: tempManifestRecord.id,
+      beforeDispatch: checkNarrationSource,
       assetRunId: runId,
       manifest,
       registry,
@@ -1228,6 +1248,7 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
     }
 
     // ---- executions: old untouched + new touched ----
+    const replacedVideoArtifactIds = new Set<string>();
     const oldExecByTaskId = new Map<string, Record<string, unknown>>();
     for (const e of oldExecs) {
       const tid = e.task_id as string | undefined;
@@ -1241,7 +1262,9 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
       if (oldExec) {
         const oldIds = (Array.isArray(oldExec.output_artifact_ids) ? oldExec.output_artifact_ids : []) as string[];
         const newIds = (Array.isArray(newExec.output_artifact_ids) ? newExec.output_artifact_ids : []) as string[];
-        const mergedIds = [...new Set([...oldIds, ...newIds])];
+        const replacesVideo = !!narrationContext && newExec.task_type === "video_clip" && newIds.length > 0;
+        if (replacesVideo) for (const id of oldIds) if (!newIds.includes(id)) replacedVideoArtifactIds.add(id);
+        const mergedIds = [...new Set(replacesVideo ? newIds : [...oldIds, ...newIds])];
         (newExec as Record<string, unknown>).output_artifact_ids = mergedIds;
       }
       mergedExecs.push(newExec as unknown as Record<string, unknown>);
@@ -1253,9 +1276,10 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
       oldArtById.set(a.artifact_id as string, a);
     }
     const mergedArtifacts = [
-      ...oldArtifacts.filter(a => !newArtifactIds.has(a.artifact_id as string)),
+      ...oldArtifacts.filter(a => !newArtifactIds.has(a.artifact_id as string) && !replacedVideoArtifactIds.has(a.artifact_id as string)),
     ];
     for (const newArt of manifest.artifacts) {
+      if (replacedVideoArtifactIds.has(newArt.artifact_id)) continue;
       const oldArt = oldArtById.get(newArt.artifact_id as string);
       if (oldArt && isRealArtifact(oldArt) && !isRealArtifact(newArt as Record<string, unknown>)) {
         // Old artifact has a real file; new one is a planned placeholder — keep old.
@@ -1289,6 +1313,9 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
     (manifest as Record<string, unknown>).audio_summary = mergedAudio;
   }
 
+  await checkNarrationSource?.();
+  if (narrationContext) AssetManifestV2.parse(manifest);
+
   // Step 7: Validate manifest (after engine execution for auto_available)
   const localValidation = await validateAssetsManifest({
     assetPlanRecordId: assetPlanRecord.id,
@@ -1303,7 +1330,7 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
 
   // Step 8: Stale check — verify activeAssetPlanRecordId hasn't changed
   let staleSourceDetected = false;
-  if (project.activeAssetPlanRecordId !== capturedAssetPlanRecordId) {
+  if (!narrationContext && project.activeAssetPlanRecordId !== capturedAssetPlanRecordId) {
     staleSourceDetected = true;
   }
 
@@ -1347,7 +1374,7 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
     execution_mode: executionOptions.execution_mode,
     voice_profile_id: executionOptions.voice_profile_id,
     run_id: runId,
-    activated: true,
+    activated: !narrationContext,
   };
 
   const traceSummary = buildTraceSummary({
@@ -1393,6 +1420,21 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
     throw error;
   }
 
+  if (narrationContext) {
+    await withNarrationAssetsSource(db, project.id, project.ownerId, narrationContext.identity, async ({ project: current }, tx) => {
+      const patch = { activeAssetManifestRecordId: assetManifestRecord.id, activeComposeRecordId: null, activeRenderJobRecordId: null, activePublishPackageRecordId: null,
+        status: localValidation.decision === "ready_for_compose" ? "assets_ready" : localValidation.decision === "partial" ? "assets_partial" : "assets_blocked",
+        latestAssetsRunTraceJson: traceSummary, latestComposeRunTraceJson: null, latestRenderRunTraceJson: null, updatedAt: new Date() };
+      if (tx) {
+        await tx.assetManifestRecord.update({ where: { id: assetManifestRecord.id }, data: { executionStateJson: { ...executionState, activated: true } } });
+        await tx.project.update({ where: { id: current.id }, data: { ...patch, latestAssetsRunTraceJson: traceSummary as unknown as Prisma.InputJsonValue, latestComposeRunTraceJson: Prisma.DbNull, latestRenderRunTraceJson: Prisma.DbNull } });
+      } else {
+        assetManifestRecord.executionStateJson = { ...executionState, activated: true };
+        Object.assign(current, patch);
+      }
+    });
+    executionState.activated = true;
+  } else {
   // Step 10: Update project status based on validation decision
   if (localValidation.decision === "ready_for_compose") {
     project.status = "assets_ready";
@@ -1420,6 +1462,8 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
   project.activeComposeRecordId = null;
   project.activeRenderJobRecordId = null;
   project.activePublishPackageRecordId = null;
+
+  }
 
   persistProjectRunArtifacts({
     project,

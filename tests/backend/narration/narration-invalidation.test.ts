@@ -896,3 +896,26 @@ describe("Task9A R1 新口播替换冷缓存", () => {
     expect(result.statusCode, JSON.stringify(result.body)).toBe(409); expect(assetPlanner).not.toHaveBeenCalled();
   });
 });
+
+import { captureNarrationAssetsSource, withNarrationAssetsSource } from "../../../backend/src/modules/assets/narration-assets-context.js";
+describe("Task9B 数据库资产来源门禁", () => {
+  it.each(["script", "subtitle", "plan", "narration"])("冷实例%s变化阻止旧来源动作", async change => {
+    const f = await sqliteFixture();
+    for (const row of buildPricingCatalogSeed({ llm: { mode: "stub" }, media: { deploymentScope: "cn-beijing" } })) f.db.providerModelCatalog.set(row.id, row);
+    assetPlanner.mockResolvedValue(task9Plan(f));
+    expect((await runAssetPlanningGeneration({ db: f.db, project: f.project, demoMode: true })).statusCode).toBe(200);
+    const captured = await captureNarrationAssetsSource(f.db, f.project.id, f.project.ownerId);
+    if (change === "script") await f.client.scriptRecord.update({ where: { id: f.script.id }, data: { scriptText: "已变化的正文。" } });
+    if (change === "plan") await f.client.project.update({ where: { id: f.project.id }, data: { activeAssetPlanRecordId: null } });
+    if (change === "narration") await f.client.project.update({ where: { id: f.project.id }, data: { activeNarrationRecordId: null, activeNarrationSubtitleRevisionId: null } });
+    if (change === "subtitle") {
+      const old = await f.client.narrationSubtitleRevision.findUniqueOrThrow({ where: { id: "subtitle" } });
+      await f.client.narrationSubtitleRevision.create({ data: { ...old, id: "subtitle-new", subtitleSettingsHash: "b".repeat(64) } });
+      await f.client.project.update({ where: { id: f.project.id }, data: { activeNarrationSubtitleRevisionId: "subtitle-new" } });
+    }
+    const activate = vi.fn();
+    await expect(withNarrationAssetsSource(f.db, f.project.id, f.project.ownerId, captured.identity, activate)).rejects.toThrow();
+    expect(activate).not.toHaveBeenCalled();
+    expect(f.project.activeNarrationRecordId).toBe("narration");
+  });
+});

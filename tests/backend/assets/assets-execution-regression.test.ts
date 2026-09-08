@@ -10,6 +10,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it } from "vitest";
 
+import { SHARED_VOICE_PROFILE_SEEDS } from "../../../backend/src/modules/assets/voice/voice-presets.js";
 import { createDbClient } from "../../../backend/src/db/client.js";
 import { createProject } from "../../../backend/src/modules/projects/project.repository.js";
 import { runAssetsGeneration } from "../../../backend/src/modules/assets/assets-run.service.js";
@@ -172,6 +173,7 @@ function makeFullAssetPlan(): AssetPlan {
 
 async function prepareFullProject() {
   const db = createDbClient();
+  db.voiceProfiles.set("voice_plan", { ...SHARED_VOICE_PROFILE_SEEDS[0]!, voice_profile_id: "voice_plan", visibility: "public", owner_id: null });
   const project = await createProject(db, { name: "regression test" });
   project.activeAssetPlanRecordId = ASSET_PLAN_RECORD_ID;
   project.status = "asset_plan_ready";

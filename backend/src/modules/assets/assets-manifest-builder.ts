@@ -505,3 +505,15 @@ export function buildInitialAssetManifest(input: BuildManifestInput): AssetManif
       : [],
   };
 }
+
+/** v2复用视觉/SFX/BGM骨架，不创建或规范化TTS分块。 */
+export function buildNarrationVisualSkeleton(assetPlan: AssetPlan, options: AssetExecutionOptions) {
+  const executions = buildExecutions(assetPlan.tasks, options.enabled_provider_types);
+  const { artifacts, executionUpdates } = buildMotionRecipeArtifacts(assetPlan.tasks, executions);
+  for (const execution of executions) {
+    const updates = executionUpdates.get(execution.execution_id);
+    if (updates) { execution.output_artifact_ids.push(...updates); execution.status = "completed"; execution.completed_at = nowISO(); }
+  }
+  const segmentIds = assetPlan.plan_version === "asset_plan_v2" ? assetPlan.narration_intervals.map(i => i.segment_id) : [];
+  return { executions, artifacts, segmentRoutes: buildSegmentRoutes(assetPlan.tasks, segmentIds, artifacts, false, []), bgmPlacements: buildBgmPlacements(assetPlan.tasks) };
+}

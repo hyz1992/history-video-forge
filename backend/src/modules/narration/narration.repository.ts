@@ -27,7 +27,7 @@ function encode(record: NarrationRecord) {
     acceptedDurationBandSnapshotJson: acceptedDurationBandSnapshot === null ? Prisma.DbNull : acceptedDurationBandSnapshot as never,
     createdAt: new Date(record.createdAt), updatedAt: new Date(record.updatedAt), confirmedAt: record.confirmedAt ? new Date(record.confirmedAt) : null };
 }
-function decodeSubtitle(row: SubtitleRow): NarrationSubtitleRevision {
+export function decodeSubtitle(row: SubtitleRow): NarrationSubtitleRevision {
   const { srtJson, vttJson, ...rest } = row;
   return NarrationSubtitleRevision.parse({ ...rest, srt: srtJson, vtt: vttJson, createdAt: row.createdAt.toISOString() });
 }

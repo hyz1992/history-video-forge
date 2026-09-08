@@ -36,6 +36,10 @@ export interface AssetProviderContext {
   assetManifestRecordId: string;
   assetRunId: string;
   projectStorageRootDir: string;
+  /** 新模式每次外部请求前复查被冻结来源。 */
+  beforeDispatch?: () => Promise<void>;
+  /** 真实提交已开始；拆分提交中途失效也必须保留对账依据。 */
+  onDispatch?: () => void;
 }
 
 export interface AssetProviderPreparedJob {

@@ -3,6 +3,8 @@
  * selects registered provider adapters, and produces artifacts.
  */
 
+import { NarrationSourceError } from "../narration/narration-invalidation.js";
+import { AssetManifestV2 } from "../../../../shared/src/index.js";
 import { AssetArtifact, dashscopeResolutionToApiQuality } from "../../../../shared/src/index.js";
 import type {
   AssetManifest,
@@ -54,6 +56,7 @@ export interface ExecuteAssetManifestInput {
   registry: AssetProviderRegistry;
   assetPlan: AssetPlan;
   projectStorageRootDir: string;
+  beforeDispatch?: () => Promise<void>;
 }
 
 export interface ExecuteAssetManifestResult {
@@ -74,6 +77,12 @@ export async function executeAssetManifest(
     assetPlan,
     projectStorageRootDir,
   } = input;
+
+  if (manifest.manifest_version === "asset_manifest_v2") {
+    AssetManifestV2.parse(manifest);
+    if (!input.beforeDispatch) throw new NarrationSourceError("narration_assets_source_gate_missing");
+    await input.beforeDispatch();
+  }
 
   // Work on a deep-enough copy so the original is not mutated.
   const manifestCopy: AssetManifest = structuredClone(manifest);
@@ -161,6 +170,7 @@ export async function executeAssetManifest(
       assetManifestRecordId,
       assetRunId,
       projectStorageRootDir,
+      beforeDispatch: input.beforeDispatch,
     };
 
     // 6. Run the pipeline.
@@ -225,10 +235,13 @@ async function runAdapterPipeline(
   execution.attempts += 1;
 
   // job 记录提升到 try 外：创建失败（FK/连接异常）时 catch 分支不引用未声明变量
+  let dispatched = false;
+  ctx.onDispatch = () => { dispatched = true; };
   let jobRecord: import("../../db/client.js").AssetProviderJobRecord | null = null;
 
   try {
     // prepare
+    await ctx.beforeDispatch?.();
     const prepared = await adapter.prepare(ctx);
 
     // Create job record（付费 job 携带 call-intent 身份三元组；真实 job 记录
@@ -262,9 +275,12 @@ async function runAdapterPipeline(
     });
 
     // submit
+    await ctx.beforeDispatch?.();
     const submitted = await adapter.submit(ctx, prepared);
+    dispatched = true;
 
     // poll
+    await ctx.beforeDispatch?.();
     const pollResult = await adapter.poll(ctx, submitted);
 
     if (pollResult.status === "failed") {
@@ -301,6 +317,7 @@ async function runAdapterPipeline(
     }
 
     // completed — download + normalize
+    await ctx.beforeDispatch?.();
     const downloaded = await adapter.download(ctx, pollResult);
     const normalized = await adapter.normalizeResult({
       ctx,
@@ -308,6 +325,7 @@ async function runAdapterPipeline(
       rawResponseJson: pollResult.rawResponseJson,
     });
 
+    await ctx.beforeDispatch?.();
     // Validate each artifact with Zod
     const validArtifacts = normalized.artifacts.filter((a) => {
       const parsed = AssetArtifact.safeParse(a);
@@ -320,6 +338,16 @@ async function runAdapterPipeline(
       }
       return true;
     });
+
+    // 新视频通过长度检查后才发布到候选，失败产物不能污染后续重试。
+    if (manifest.manifest_version === "asset_manifest_v2" && planTask.task_type === "video_clip") {
+      const range = manifest.segment_routes.find(r => r.segment_id === planTask.source_segment_id)?.narrationRange;
+      const durationMs = validArtifacts.filter(a => a.artifact_type === "video").reduce((sum, artifact) => {
+        const duration = (artifact.metadata as { duration_sec?: number }).duration_sec;
+        return typeof duration === "number" && Number.isFinite(duration) && duration > 0 ? sum + duration * 1000 : NaN;
+      }, 0);
+      if (!range || !Number.isFinite(durationMs) || durationMs < range.endMs - range.startMs) throw new Error("narration_video_duration_insufficient");
+    }
 
     // Append artifacts and update execution. Provider outputs replace any
     // planned placeholders with the same artifact id.
@@ -340,6 +368,10 @@ async function runAdapterPipeline(
     applyArtifactRoutes(manifest, validArtifacts, planTask);
     await recordPaidUsage(db, ctx, paidUsageContext, assetRunId, execution, planTask, jobRecord, "completed", startedAtMs);
   } catch (err) {
+    if (err instanceof NarrationSourceError) {
+      if (dispatched && jobRecord) await recordPaidUsage(db, ctx, paidUsageContext, assetRunId, execution, planTask, jobRecord, "running", startedAtMs);
+      throw err;
+    }
     execution.status = "failed";
     execution.completed_at = new Date().toISOString();
     const message = err instanceof Error ? err.message : String(err);

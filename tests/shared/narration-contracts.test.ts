@@ -556,14 +556,7 @@ const legacyManifest = () => ({
 it('manifest独立v1/v2读取且缺少narration引用拒绝', () => {
   const old = legacyManifest();
   expect(parses('VersionedAssetManifest', old)).toBe(true);
-  const next: any = {
-    ...old,
-    manifest_version: 'asset_manifest_v2',
-    narration_reference: ref(),
-    subtitle_revision_id: 'sub1',
-    subtitle_settings_hash: h,
-    segment_routes: old.segment_routes.map(r => ({ ...r, narrationRange: { startMs: 0, endMs: 4500 } }))
-  };
+  const next: any = manifestWithInterval(0, 4500);
   expect(parses('VersionedAssetManifest', next)).toBe(true);
   delete next.narration_reference;
   expect(parses('VersionedAssetManifest', next)).toBe(false);
@@ -804,15 +797,20 @@ function planWithInterval(startMs: number, endMs: number) {
 }
 function manifestWithInterval(startMs: number, endMs: number) {
   const old = legacyManifest();
+  const provenance = { narration_record_id: ref().narration_record_id, audio_hash: h, timing_map_hash: h, timing_source: 'provider_timestamp' };
+  const route = { ...old.segment_routes[0], tts_artifact_id: 'audio', subtitle_artifact_id: 'subtitle' };
   return {
-    ...old,
-    manifest_version: 'asset_manifest_v2',
-    narration_reference: ref(),
-    subtitle_revision_id: 'sub1',
-    subtitle_settings_hash: h,
-    segment_routes: old.segment_routes.map(r => ({ ...r, narrationRange: { startMs, endMs } })),
+    ...old, manifest_version: 'asset_manifest_v2', narration_reference: ref(), subtitle_revision_id: 'sub1', subtitle_settings_hash: h,
+    execution_options: { ...old.execution_options, subtitle_style: DEFAULT_SUBTITLE_STYLE },
+    artifacts: [
+      { artifact_id: 'audio', artifact_type: 'tts_merged_audio', origin: 'local', file_uri: '/audio.wav', created_at: '2026-09-06T00:00:00.000Z', metadata: { ...provenance, duration_sec: 4.5, duration_source: 'audio_probe', voice_profile_id: 'v1', chunk_artifact_ids: [] } },
+      { artifact_id: 'subtitle', artifact_type: 'subtitle_track', origin: 'local', file_uri: '/captions.srt', created_at: '2026-09-06T00:00:00.000Z', metadata: { ...provenance, format: 'srt', source_tts_artifact_id: 'audio', caption_count: 1, subtitle_revision_id: 'sub1', subtitle_settings_hash: h, subtitle_style: DEFAULT_SUBTITLE_STYLE } },
+    ],
+    audio_summary: { ...old.audio_summary, tts_merged_artifact_id: 'audio', subtitle_artifact_id: 'subtitle' },
+    segment_routes: [ ...(startMs > 0 ? [{ ...route, segment_id: 'leading', narrationRange: { startMs: 0, endMs: startMs } }] : []), { ...route, narrationRange: { startMs, endMs } } ],
   };
 }
+
 describe('R1 F3 v2范围必须位于绑定音频内', () => {
   it.each([[4499, 9000], [9000, 9500]])('资产计划拒绝越界%s', (start, end) => {
     expect(parses('VersionedAssetPlan', planWithInterval(start, end))).toBe(false);

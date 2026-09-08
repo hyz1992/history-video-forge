@@ -1,3 +1,4 @@
+import { probeVideoMetadata } from "../../../../http/video-probe.js";
 /**
  * DashScope image-to-video provider shell.
  *
@@ -258,7 +259,9 @@ export function createDashscopeImageToVideoProvider(
       // duration_sec 是资产规划按脚本节奏的估计值，与真实口播偏差可达数秒，
       // 生成过长视频会被 compose 裁剪、过短会截断口播。TTS 在 manifest 就绪，
       // 优先于估计值；显式值仅在无 TTS 时作兜底。
-      const durationInput =
+      const narrationRange = ctx.manifest.manifest_version === "asset_manifest_v2" ? ctx.manifest.segment_routes.find(r => r.segment_id === ctx.planTask.source_segment_id)?.narrationRange : undefined;
+      if (ctx.manifest.manifest_version === "asset_manifest_v2" && (!narrationRange || !Number.isSafeInteger(narrationRange.startMs) || !Number.isSafeInteger(narrationRange.endMs) || narrationRange.endMs <= narrationRange.startMs || narrationRange.endMs > ctx.manifest.narration_reference.duration_ms)) throw new Error("narration_manifest_range_invalid");
+      const durationInput = narrationRange ? Math.ceil((narrationRange.endMs - narrationRange.startMs) / 1000) :
         (ttsIsMeasured && typeof ttsDurationSec === "number" && ttsDurationSec > 0
           ? Math.ceil(ttsDurationSec)
           : undefined) ??
@@ -348,7 +351,7 @@ export function createDashscopeImageToVideoProvider(
       };
     },
 
-    submit: async (_ctx, prepared) => {
+    submit: async (ctx, prepared) => {
       if (!options.apiKey.trim()) {
         throw new Error("dashscope_api_key_missing");
       }
@@ -356,6 +359,8 @@ export function createDashscopeImageToVideoProvider(
       const submitOne = async (
         prep: AssetProviderPreparedJob,
       ): Promise<AssetProviderSubmittedJob> => {
+        await ctx.beforeDispatch?.();
+        ctx.onDispatch?.();
         const response = await fetch(String(prep.rawRequestJson.endpoint), {
           method: "POST",
           headers: {
@@ -403,7 +408,7 @@ export function createDashscopeImageToVideoProvider(
       return submitOne(prepared);
     },
 
-    poll: async (_ctx, submitted) => {
+    poll: async (ctx, submitted) => {
       const pollOne = async (
         sub: AssetProviderSubmittedJob,
       ): Promise<AssetProviderPollResult> => {
@@ -420,6 +425,7 @@ export function createDashscopeImageToVideoProvider(
         const maxAttempts = options.maxPollAttempts ?? 60;
         const pollIntervalMs = options.pollIntervalMs ?? 15000;
         for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+          await ctx.beforeDispatch?.();
           const response = await fetch(
             taskEndpointFor(options.baseUrl, taskId),
             { headers: { Authorization: `Bearer ${options.apiKey}` } },
@@ -506,6 +512,7 @@ export function createDashscopeImageToVideoProvider(
         if (!videoUrl) {
           throw new Error("dashscope_image_to_video_output_url_missing");
         }
+        await ctx.beforeDispatch?.();
         const response = await fetch(videoUrl);
         if (!response.ok) {
           throw new Error(
@@ -535,10 +542,11 @@ export function createDashscopeImageToVideoProvider(
           pr.rawResponseJson?.resolution ?? options.resolution ?? "720P",
         );
         const dimensions = deriveVideoDimensions(resolution);
-        const durationSec =
+        const measured = ctx.manifest.manifest_version === "asset_manifest_v2" ? await probeVideoMetadata(written.fileUri) : null;
+        const durationSec = measured?.duration_sec ?? (
           typeof pr.rawResponseJson?.duration_sec === "number"
             ? pr.rawResponseJson.duration_sec
-            : clampDashscopeImageToVideoDuration(options.durationSec);
+            : clampDashscopeImageToVideoDuration(options.durationSec));
 
         return {
           artifact_id: `artifact_video_${ctx.execution.task_id}${splitSuffix}_${Date.now().toString(36)}`,
@@ -548,9 +556,9 @@ export function createDashscopeImageToVideoProvider(
           created_at: new Date().toISOString(),
           metadata: {
             duration_sec: durationSec,
-            width: dimensions.width,
-            height: dimensions.height,
-            fps: 24,
+            width: measured?.width ?? dimensions.width,
+            height: measured?.height ?? dimensions.height,
+            fps: measured?.fps ?? 24,
             model: options.model,
             provider_name: "dashscope_image_to_video",
             provider_job_id:
@@ -564,6 +572,8 @@ export function createDashscopeImageToVideoProvider(
             resolution,
             prompt_extend: pr.rawResponseJson?.prompt_extend ?? true,
             watermark: pr.rawResponseJson?.watermark ?? false,
+            video_split_group_id: ctx.manifest.manifest_version === "asset_manifest_v2" && typeof pr.rawResponseJson?.split_total === "number" && pr.rawResponseJson.split_total > 1
+              ? `${ctx.assetRunId}:${ctx.execution.execution_id}:${ctx.execution.attempts}` : undefined,
             video_split_of_task:
               typeof pr.rawResponseJson?.split_total === "number" &&
               (pr.rawResponseJson.split_total as number) > 1
