@@ -43,7 +43,7 @@ const projectStore = useProjectStore();
 const topicStore = useTopicStore();
 
 // 任务11C：统一创建协调（422 资格不合格时原地等待选择，取消/关闭零创建）。
-const { pendingSelection, waiting, createOrAwait, confirmSelection, cancelSelection } = useNarrationProjectCreation((input) => projectStore.createProject(input));
+const { pendingSelection, waiting, inFlight, createOrAwait, confirmSelection, cancelSelection } = useNarrationProjectCreation((input) => projectStore.createProject(input));
 function coordinatedCreate(input?: { name?: string }) {
   return createOrAwait(input);
 }
@@ -258,8 +258,8 @@ async function handleGenerate() {
 }
 
 function close() {
-  // 任务11C：等待选择期间禁止关闭（取消须经选择面板，保证零创建不续发）。
-  if (!isGenerating.value && !waiting.value) emit("update:visible", false);
+  // 任务11C：创建在途或等待选择期间禁止关闭（取消须经选择面板，保证零创建不续发）。
+  if (!isGenerating.value && !waiting.value && !inFlight.value) emit("update:visible", false);
 }
 
 function getFocusableElements() {
@@ -351,8 +351,8 @@ onBeforeUnmount(restorePreviousFocus);
           class="modal-close"
           data-testid="modal-close"
           aria-label="关闭"
-          :disabled="isGenerating"
-          :aria-disabled="isGenerating"
+          :disabled="isGenerating || waiting || inFlight"
+          :aria-disabled="isGenerating || waiting || inFlight"
           @click="close"
         >
           <Close />
@@ -364,8 +364,8 @@ onBeforeUnmount(restorePreviousFocus);
             :key="tab.value"
             class="tab-btn"
             :class="{ 'tab-btn--active': activeTab === tab.value }"
-            :disabled="isGenerating || waiting"
-            :aria-disabled="isGenerating || waiting"
+            :disabled="isGenerating || waiting || inFlight"
+            :aria-disabled="isGenerating || waiting || inFlight"
             :aria-pressed="activeTab === tab.value"
             @click="activeTab = tab.value"
           >{{ tab.label }}</button>

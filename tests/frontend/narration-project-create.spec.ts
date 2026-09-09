@@ -224,6 +224,23 @@ describe("系统推荐入口协调", () => {
     expect((w.get('[data-testid="period-end"]').element as HTMLSelectElement).value).toBe("6");
     w.unmount();
   });
+  it("创建在途期间 Tab 与关闭按钮禁用", async () => {
+    let release: ((v: unknown) => void) | null = null;
+    const stores = SEGMENT_STORES();
+    stores.projectStore.createProject = vi.fn().mockImplementationOnce(() => new Promise((resolve) => { release = resolve; }));
+    const w = mountModal(stores);
+    await flushPromises();
+    await w.get("[data-testid=generate-topic]").trigger("click");
+    await flushPromises();
+    expect(w.get("[data-testid=modal-close]").attributes("disabled")).toBeDefined();
+    release!({ project_id: "p1" });
+    await flushPromises();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await flushPromises();
+    expect(stores.topicStore.generateSystemRecommendations).toHaveBeenCalledTimes(1);
+    expect(w.get("[data-testid=modal-close]").attributes("disabled")).toBeUndefined();
+    w.unmount();
+  });
   it("等待选择期间关闭弹窗：取消待续流程并清空选择面板", async () => {
     const stores = SEGMENT_STORES();
     stores.projectStore.createProject = vi.fn().mockRejectedValueOnce(selectionError());

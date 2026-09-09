@@ -28,6 +28,8 @@ export function useNarrationProjectCreation(
   createProject: (input?: CreateProjectInput) => Promise<unknown>,
 ) {
   const pendingSelection = ref<NarrationCreationPending | null>(null);
+  // 任务11C：创建请求在途（含 422 等待）全程为 true，供宿主禁用其他入口。
+  const inFlight = ref(false);
   const waiting = computed(() => pendingSelection.value !== null);
   let onSelected: ((choice: NarrationSelectionChoice) => void) | null = null;
   let onCancelled: (() => void) | null = null;
@@ -63,8 +65,9 @@ export function useNarrationProjectCreation(
   }
 
   async function createOrAwait(input?: NarrationProjectCreationInput): Promise<unknown> {
-    // 重入守卫：已有流程在等待选择时拒绝再次进入，防止覆盖选择回调使前序流程永久挂起。
-    if (pendingSelection.value !== null) throw new NarrationCreationCancelled();
+    // 重入守卫：在途或等待选择时拒绝再次进入，防止覆盖选择回调使前序流程永久挂起。
+    if (pendingSelection.value !== null || inFlight.value) throw new NarrationCreationCancelled();
+    inFlight.value = true;
     cancelledDuringFlight = false;
     let selection: NarrationSelectionChoice | undefined;
     try {
@@ -78,6 +81,7 @@ export function useNarrationProjectCreation(
         return result.project;
       }
     } finally {
+      inFlight.value = false;
       pendingSelection.value = null;
       onSelected = null;
       onCancelled = null;
@@ -93,5 +97,5 @@ export function useNarrationProjectCreation(
     else cancelledDuringFlight = true;
   }
 
-  return { pendingSelection: computed(() => pendingSelection.value), waiting, createOrAwait, confirmSelection, cancelSelection };
+  return { pendingSelection: computed(() => pendingSelection.value), waiting: computed(() => waiting.value || inFlight.value), inFlight: computed(() => inFlight.value), createOrAwait, confirmSelection, cancelSelection };
 }
