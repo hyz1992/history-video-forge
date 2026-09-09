@@ -5,7 +5,7 @@ import { ElMessage, ElMessageBox } from "element-plus";
 
 import { useStoryboardStore } from "../../stores/storyboard";
 import { useAssetPlanningStore } from "../../stores/asset-planning";
-import { useAssetsStore } from "../../stores/assets";
+import { useAssetsStore, narrationRangesFromManifest } from "../../stores/assets";
 import { useScriptStore } from "../../stores/script";
 import { useProjectStore } from "../../stores/project";
 import { useStagePolling } from "../../composables/useStagePolling";
@@ -120,6 +120,14 @@ const plan = computed(() => activeAssetPlan.value?.plan ?? null);
 const assetTasks = computed(() => plan.value?.tasks ?? []);
 
 const manifest = computed(() => assetsStore.state.snapshot?.active_assets?.manifest ?? null);
+// 任务11B：新路径（v2 manifest）每镜口播发声区间；与画面区间的差额为停顿（句间停顿归前镜、首尾静音归首末镜）。
+const speechRanges = computed(() => narrationRangesFromManifest(manifest.value as Record<string, unknown> | null));
+const hasSpeechRoutes = computed(() => speechRanges.value.size > 0);
+function pauseNoteFor(index: number): string {
+  if (index === 0) return "首部静音与句间停顿归本镜";
+  if (index === segments.length - 1) return "句间停顿与尾部静音归本镜";
+  return "句间停顿归本镜末尾";
+}
 const readiness = computed(() => manifest.value?.readiness ?? null);
 
 const currentStatus = computed(
@@ -1795,6 +1803,10 @@ function handleConfirm() {
           <button v-if="narrationScriptLong" class="asset-narration-script-toggle" @click="narrationScriptExpanded = !narrationScriptExpanded">
             {{ narrationScriptExpanded ? '收起' : '展开全文' }}
           </button>
+          <!-- 任务11B：新路径不再提供重复生口播入口，改回文案修改。 -->
+          <button v-if="hasSpeechRoutes" class="asset-narration-script-toggle" data-testid="asset-back-to-script" @click="router.push(`/projects/${projectId}/script`)">
+            需修改口播或文案？返回文案页
+          </button>
         </div>
       </details>
 
@@ -1810,6 +1822,8 @@ function handleConfirm() {
           :segment="segment"
           :segment-index="index"
           :real-time="realSegmentTimings?.get(segment.segment_id) ?? null"
+          :speech-time="speechRanges.get(segment.segment_id) ?? null"
+          :pause-note="hasSpeechRoutes ? pauseNoteFor(index) : null"
           :image-tasks="imageTasksBySegment.get(segment.segment_id) ?? []"
           :video-tasks="videoTasksBySegment.get(segment.segment_id) ?? []"
           :executions-by-task-id="executionsByTaskId"

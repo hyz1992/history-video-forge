@@ -369,3 +369,22 @@ export function useStoryboardStore(): StoryboardStore {
   }
   return store;
 }
+
+/** 任务11B：分镜时间视图。v2 计划以口播原生时间为唯一权威；缺真实时间时显式缺失，不回落估算。 */
+export type StoryboardTimingView =
+  | { kind: 'none' }
+  | { kind: 'actual'; totalSec: number }
+  | { kind: 'estimated'; totalSec: number | null }
+  | { kind: 'missing_actual' };
+export function storyboardTimingView(plan: { plan_version?: unknown; estimated_total_duration_sec?: unknown; segments?: unknown } | null | undefined): StoryboardTimingView {
+  if (!plan) return { kind: 'none' };
+  if (plan.plan_version === 'storyboard_v2') {
+    const segments = Array.isArray(plan.segments) ? plan.segments as Array<Record<string, unknown>> : [];
+    const complete = segments.length > 0 && segments.every(s => typeof s.visual_start_ms === 'number' && typeof s.visual_end_ms === 'number');
+    if (!complete) return { kind: 'missing_actual' };
+    const totalSec = typeof plan.estimated_total_duration_sec === 'number' ? plan.estimated_total_duration_sec : 0;
+    return { kind: 'actual', totalSec };
+  }
+  const totalSec = typeof plan.estimated_total_duration_sec === 'number' ? plan.estimated_total_duration_sec : null;
+  return { kind: 'estimated', totalSec };
+}

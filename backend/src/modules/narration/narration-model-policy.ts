@@ -43,6 +43,11 @@ export async function narrationPolicyErrorForOwner(db: DbClient, ownerId: string
     const voices = await readPolicyVoices(db, ownerId, policy);
     return narrationPolicyError(code, reason, availableNarrationPolicy(policy, [...db.providerModelCatalog.values()], voices));
 }
+/** 只读：owner 当前可见的合格组合投影（升级预览等只读入口复用同一过滤，不另设真相源）。 */
+export async function availableNarrationOptionsForOwner(db: DbClient, ownerId: string, policy = NARRATION_FIRST_MODEL_POLICY_V1) {
+    const voices = await readPolicyVoices(db, ownerId, policy);
+    return availableNarrationPolicy(policy, [...db.providerModelCatalog.values()], voices);
+}
 /** 纯物化策略，创建、保存及未来显式升级复用；不修改传入配置或偏好。 */
 export function resolveNarrationModelPolicy(input: {
     configuration: GenerationConfigurationV1;

@@ -8,6 +8,9 @@ import {
   requireOwner,
 } from "../../auth/authorization.js";
 import { requireAdmin, requireUser } from "../../auth/authorization.js";
+import { NarrationPolicyError } from "../narration/narration-model-policy.js";
+import { NarrationUpgradeError, previewNarrationModeUpgrade, upgradeProjectToNarrationFirst } from "../narration/narration-mode-upgrade.service.js";
+import { ZodError } from "zod";
 
 export const listProjectsController = guardUserRoute(
   (context: RouteContext): AppResponse => {
@@ -46,6 +49,45 @@ export const getProjectSnapshotController = guardUserRoute(
       statusCode: 200,
       body: snapshot,
     };
+  },
+);
+
+export const previewNarrationModeUpgradeController = guardUserRoute(
+  async (context: RouteContext): Promise<AppResponse> => {
+    const user = requireUser(context.auth);
+    try {
+      const preview = await previewNarrationModeUpgrade(context.app.db, {
+        projectId: context.params.projectId,
+        user: { userId: user.userId, role: user.role },
+        narrationFirstEnabled: context.app.narrationFirstEnabled,
+      });
+      return { statusCode: 200, body: preview };
+    } catch (error) {
+      if (error instanceof NarrationUpgradeError) return { statusCode: error.statusCode, body: error.body };
+      if (error instanceof NarrationPolicyError) return { statusCode: error.statusCode, body: error.body };
+      throw error;
+    }
+  },
+);
+
+export const upgradeNarrationModeController = guardUserRoute(
+  async (context: RouteContext): Promise<AppResponse> => {
+    const user = requireUser(context.auth);
+    try {
+      const result = await upgradeProjectToNarrationFirst(context.app.db, {
+        projectId: context.params.projectId,
+        user: { userId: user.userId, role: user.role },
+        narrationFirstEnabled: context.app.narrationFirstEnabled,
+        actorUserId: user.userId,
+        request: context.payload,
+      });
+      return { statusCode: 200, body: result };
+    } catch (error) {
+      if (error instanceof ZodError) return { statusCode: 422, body: { error: "narration_request_invalid" } };
+      if (error instanceof NarrationUpgradeError) return { statusCode: error.statusCode, body: error.body };
+      if (error instanceof NarrationPolicyError) return { statusCode: error.statusCode, body: error.body };
+      throw error;
+    }
   },
 );
 

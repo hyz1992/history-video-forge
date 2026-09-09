@@ -382,3 +382,16 @@ export function useAssetsStore(): AssetsStore {
   }
   return store;
 }
+
+/** 任务11B：从 v2 manifest 的 segment_routes.narrationRange 派生每镜口播发声区间（秒）。 */
+export function narrationRangesFromManifest(manifest: { segment_routes?: unknown } | null | undefined): Map<string, { startSec: number; endSec: number }> {
+  const map = new Map<string, { startSec: number; endSec: number }>();
+  const routes = Array.isArray(manifest?.segment_routes) ? manifest.segment_routes as Array<Record<string, unknown>> : [];
+  for (const route of routes) {
+    const range = route.narrationRange as { startMs?: unknown; endMs?: unknown } | undefined;
+    if (typeof route.segment_id === 'string' && typeof range?.startMs === 'number' && typeof range?.endMs === 'number') {
+      map.set(route.segment_id, { startSec: range.startMs / 1000, endSec: range.endMs / 1000 });
+    }
+  }
+  return map;
+}

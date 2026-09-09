@@ -2,6 +2,7 @@ import { z } from "zod";
 import { SubtitleStyle } from "../assets/asset-manifest.schema.js";
 import { SubtitleStyleOverrideSet } from "../creative/creative-preset.schema.js";
 import { NarrationInteger, NarrationSha256 } from "./narration-timing.schema.js";
+import { NarrationSelection } from "./narration-model-policy.schema.js";
 
 const id = z.string().min(1).refine(s => s.trim() === s);
 const date = z.string().datetime({ offset: true });
@@ -100,3 +101,17 @@ export const DeriveNarrationSubtitlesRequest = z.object({
   subtitle_settings_hash: NarrationSha256,
 }).strict();
 export type DeriveNarrationSubtitlesRequest = z.infer<typeof DeriveNarrationSubtitlesRequest>;
+/** 任务11B 旧项目显式升级：预期来源/下游版本 + 配置 revision + 目标组合 + 显式确认；全部预期不匹配即 409 整笔不写。 */
+export const NarrationModeUpgradeExpectedDownstream = z.object({
+  storyboard_record_id: id.nullable(), asset_plan_record_id: id.nullable(), asset_manifest_record_id: id.nullable(),
+  compose_record_id: id.nullable(), render_job_record_id: id.nullable(), publish_package_record_id: id.nullable(),
+}).strict();
+export type NarrationModeUpgradeExpectedDownstream = z.infer<typeof NarrationModeUpgradeExpectedDownstream>;
+export const UpgradeNarrationModeRequest = z.object({
+  expected_active_script_record_id: id,
+  expected_configuration_revision: NarrationInteger,
+  expected_downstream: NarrationModeUpgradeExpectedDownstream,
+  narration_selection: NarrationSelection,
+  confirm_invalidation: z.literal(true),
+}).strict();
+export type UpgradeNarrationModeRequest = z.infer<typeof UpgradeNarrationModeRequest>;

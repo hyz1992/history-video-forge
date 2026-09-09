@@ -4,7 +4,7 @@ import { useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
 
 import { useStoryboardStore } from "../../stores/storyboard";
-import { type StoryboardSegment } from "../../stores/storyboard";
+import { type StoryboardSegment, storyboardTimingView } from "../../stores/storyboard";
 import { useProjectStore } from "../../stores/project";
 import { useWorkspaceStore } from "../../stores/workspace";
 import { PIPELINE_STEPS } from "../../stores/workspace";
@@ -136,9 +136,8 @@ const storyboardPhase = computed(() =>
   }),
 );
 
-const estimatedTotalDuration = computed(
-  () => activeStoryboard.value?.plan?.estimated_total_duration_sec ?? null,
-);
+// 任务11B：v2 以口播实测为权威时长；v1 估算仅作旧项目展示并标注非权威。
+const timingView = computed(() => storyboardTimingView((activeStoryboard.value?.plan as Record<string, unknown> | null | undefined) ?? null));
 
 const globalVisualNotes = computed(
   () => activeStoryboard.value?.plan?.global_visual_notes ?? [],
@@ -605,8 +604,14 @@ function scrollToTop() {
         <div class="storyboard-stats-info">
           <span class="storyboard-stats-count">
             共 {{ segments.length }} 个段落
-            <template v-if="estimatedTotalDuration">
-              · 预计总时长约 {{ Math.round(estimatedTotalDuration) }} 秒
+            <template v-if="timingView.kind === 'actual'">
+              · 实际总时长 {{ Math.round(timingView.totalSec) }} 秒（口播实测）
+            </template>
+            <template v-else-if="timingView.kind === 'estimated' && timingView.totalSec !== null">
+              · 预计总时长约 {{ Math.round(timingView.totalSec) }} 秒（估算，非权威）
+            </template>
+            <template v-else-if="timingView.kind === 'missing_actual'">
+              · 口播真实时间缺失，不按估算展示
             </template>
           </span>
         </div>
@@ -655,7 +660,7 @@ function scrollToTop() {
                   {{ narrativeRoleLabels[segment.narrative_role] ?? segment.narrative_role }}
                 </el-tag>
                 <span class="storyboard-segment-time">
-                  {{ formatSeconds(segment.start_hint_sec) }} – {{ formatSeconds(segment.end_hint_sec) }}
+                  {{ timingView.kind === 'actual' ? '画面 ' : '' }}{{ formatSeconds(segment.start_hint_sec) }} – {{ formatSeconds(segment.end_hint_sec) }}
                 </span>
                 <!-- S2-2A：四层信息同时展示：AI 适配度 / 用户覆盖 / 解析路线 / 原因 -->
                 <span
