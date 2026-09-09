@@ -1,4 +1,5 @@
 import { inject, reactive, readonly, type InjectionKey } from "vue";
+import type { NarrationSelection } from '../../../shared/src/narration/narration-model-policy.schema';
 import { apiFetch, ApiError } from "../utils/api";
 
 export interface ProjectSnapshot {
@@ -38,6 +39,65 @@ export interface ProjectSnapshot {
 
 export interface CreateProjectInput {
   name?: string;
+  /** 任务11C：创建不兼容恢复时用户选定的合格口播组合。 */
+  narrationSelection?: NarrationSelection;
+}
+
+/** 任务11C：创建资格/策略/开关错误的类型化承载（不引用 Vue 组件）。 */
+export class NarrationCreationError extends Error {
+  constructor(
+    public readonly status: number,
+    public readonly code: "narration_selection_required" | "narration_creation_context_changed" | "narration_policy_changed" | "narration_mode_unavailable",
+    readonly reason: string,
+    readonly policyVersion: string,
+    readonly options: NarrationSelectionOption[],
+  ) {
+    super(code);
+    this.name = "NarrationCreationError";
+  }
+}
+
+export interface NarrationSelectionOption {
+  provider_model_id: string;
+  voice_profile_id: string;
+  model: string;
+  voice: string;
+  region: string;
+  protocol: string;
+  parameters_version: string;
+}
+
+const NARRATION_CREATION_ERROR_CODES = new Set([
+  "narration_selection_required",
+  "narration_creation_context_changed",
+  "narration_policy_changed",
+  "narration_mode_unavailable",
+]);
+
+function toNarrationCreationError(error: unknown): NarrationCreationError | null {
+  if (!(error instanceof ApiError) || !NARRATION_CREATION_ERROR_CODES.has(error.code)) return null;
+  const body = (error.body ?? {}) as {
+    reason?: unknown;
+    policy_version?: unknown;
+    options?: unknown;
+  };
+  const options = Array.isArray(body.options)
+    ? (body.options as NarrationSelectionOption[]).filter(
+        (option) =>
+          option &&
+          typeof option.provider_model_id === "string" &&
+          typeof option.voice_profile_id === "string" &&
+          typeof option.model === "string" &&
+          typeof option.voice === "string",
+      )
+    : [];
+  return new NarrationCreationError(
+    error.status,
+    error.code as NarrationCreationError["code"],
+    typeof body.reason === "string" ? body.reason : error.code,
+    typeof body.policy_version === "string" ? body.policy_version : "",
+    options,
+  );
 }
 
 export interface ProjectListItem extends ProjectSnapshot {
@@ -115,7 +175,10 @@ export function createFetchProjectApi(baseUrl = ""): ProjectApi {
     async createProject(input) {
       return await apiFetch<ProjectSnapshot>(`${baseUrl}/api/projects`, {
         method: "POST",
-        body: { name: input?.name ?? "未命名项目" },
+        body: {
+          name: input?.name ?? "未命名项目",
+          ...(input?.narrationSelection ? { narration_selection: input.narrationSelection } : {}),
+        },
       });
     },
   };
@@ -224,7 +287,14 @@ export function createProjectStore(api: ProjectApi): ProjectStore {
   }
 
   async function createProject(input?: CreateProjectInput) {
-    const snapshot = await api.createProject(input);
+    let snapshot: ProjectSnapshot;
+    try {
+      snapshot = await api.createProject(input);
+    } catch (error) {
+      const narrationError = toNarrationCreationError(error);
+      if (narrationError) throw narrationError;
+      throw error;
+    }
     syncProject(snapshot);
     return toProjectListItem(snapshot);
   }

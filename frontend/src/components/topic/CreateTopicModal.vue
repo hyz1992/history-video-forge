@@ -29,6 +29,8 @@ import {
 } from "../../stores/topic";
 import { useGenerationCostStore } from "../../stores/generation-cost";
 import CustomTopicInput from "../event-library/CustomTopicInput.vue";
+import NarrationCreationSelection from "./NarrationCreationSelection.vue";
+import { NarrationCreationCancelled, useNarrationProjectCreation } from "../../composables/useNarrationProjectCreation";
 import EventLibraryBrowser from "../event-library/EventLibraryBrowser.vue";
 
 const props = defineProps<{ visible: boolean }>();
@@ -39,6 +41,12 @@ const emit = defineEmits<{
 
 const projectStore = useProjectStore();
 const topicStore = useTopicStore();
+
+// 任务11C：统一创建协调（422 资格不合格时原地等待选择，取消/关闭零创建）。
+const { pendingSelection, createOrAwait, confirmSelection, cancelSelection } = useNarrationProjectCreation((input) => projectStore.createProject(input));
+function coordinatedCreate(input?: { name?: string }) {
+  return createOrAwait(input);
+}
 const costStore = useGenerationCostStore();
 
 const activeTab = ref<TopicTab>("system");
@@ -228,7 +236,8 @@ async function handleGenerate() {
   error.value = null;
   const snapshot = saveDraft();
   try {
-    await projectStore.createProject();
+    // 任务11C：经协调创建（422 时原地等待选择），取消则不触发生成。
+    await coordinatedCreate();
     topicStore.selectTab(activeTab.value);
     // 2026-08-23 修复回归：创建项目后不等待 LLM 生成完成——立即关闭弹窗
     // 进入项目页（topic 阶段显示生成中 loading，由轮询驱动）。S2-2D 报价
@@ -236,6 +245,7 @@ async function handleGenerate() {
     void topicStore.generateSystemRecommendations(snapshot);
     emit("confirmed");
   } catch (caught) {
+    if (caught instanceof NarrationCreationCancelled) return;
     error.value = caught instanceof Error ? caught.message : "创建项目失败，请重试";
   } finally {
     isGenerating.value = false;
@@ -542,10 +552,19 @@ onBeforeUnmount(restorePreviousFocus);
         </section>
 
         <div v-else-if="activeTab === 'library'" class="modal-tab-content">
-          <EventLibraryBrowser @close="onChildClose" />
+          <EventLibraryBrowser :create-project="coordinatedCreate" @close="onChildClose" />
         </div>
         <div v-else-if="activeTab === 'custom'" class="modal-tab-content">
-          <CustomTopicInput @close="onChildClose" />
+          <CustomTopicInput :create-project="coordinatedCreate" @close="onChildClose" />
+        </div>
+
+        <!-- 任务11C：创建资格不合格时原地选择合格口播组合（三入口共用） -->
+        <div v-if="pendingSelection" class="modal-tab-content">
+          <NarrationCreationSelection
+            :pending="pendingSelection"
+            @confirm="confirmSelection"
+            @cancel="cancelSelection"
+          />
         </div>
 
         <div v-if="error" class="modal-error">

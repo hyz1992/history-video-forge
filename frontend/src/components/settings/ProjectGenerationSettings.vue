@@ -20,6 +20,10 @@ import {
   type VoicePreviewResult,
 } from "../../stores/creative-presets";
 import { ApiError } from "../../utils/api";
+import { apiFetch } from "../../utils/api";
+
+// 任务11C：项目适用口播模式（narration_first_v1 时禁用 tts 槽与付费试听，引导到文案页口播面板）。
+const narrationMode = ref<string | null>(null);
 
 /**
  * S2-2A 任务 10：项目生成设置（工作区内对话框）。
@@ -87,6 +91,13 @@ watch(
     loaded.value = false;
     // 重开对话框时清空上次会话残留状态
     saveError.value = null;
+    // 任务11C：读取项目口播适用模式（只读快照，失败按未启用处理）。
+    try {
+      const snapshot = await apiFetch(`/api/projects/${projectId}`);
+      narrationMode.value = (snapshot as { narration_timing_mode?: string } | null)?.narration_timing_mode ?? null;
+    } catch {
+      narrationMode.value = null;
+    }
     await store.loadProjectConfig(projectId);
     await Promise.all([
       creativeStore.loadCreativePresets(),
@@ -249,6 +260,7 @@ function playPreviewAudio(uri: string): void {
             :disabled="configState?.saving"
             :project-id="props.projectId"
             :on-preview="handleVoicePreview"
+            :narration-mode="narrationMode"
           />
           <CreativeArtStyleSettings
             v-model="draft.artStylePresetId"
@@ -268,6 +280,7 @@ function playPreviewAudio(uri: string): void {
             v-model="draft.capabilities"
             :entries="store.state.projectCapabilities[projectId] ?? []"
             :disabled="configState?.saving"
+            :narration-locked="narrationMode === 'narration_first_v1'"
             test-id-prefix="project-"
           />
         </section>

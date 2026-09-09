@@ -22,11 +22,18 @@ const props = defineProps<{
   modelValue: CapabilitySlotSelectionMap;
   disabled?: boolean;
   testIdPrefix?: string;
+  /** 任务11C：narration_first_v1 项目的 tts.synthesize 槽由策略固定，禁用选择。 */
+  narrationLocked?: boolean;
 }>();
 
 const emit = defineEmits<{
   (e: "update:modelValue", value: CapabilitySlotSelectionMap): void;
 }>();
+
+/** 任务11C：口播前置项目的语音合成槽不开放选择（改动会触发口播失效，走文案页口播设置）。 */
+function slotDisabled(slot: string): boolean {
+  return Boolean(props.disabled || (props.narrationLocked && slot === "tts.synthesize"));
+}
 
 const SLOT_LABELS: Record<string, string> = {
   "llm.smart": "文案智脑（LLM 智能档）",
@@ -84,13 +91,14 @@ function tierLabel(entry: PublicCapabilityEntryDto): string {
       :data-testid="testId(`cap-slot-${slot}`)"
     >
       <h4 class="capability-slot-title">{{ label }}</h4>
+      <p v-if="narrationLocked && slot === 'tts.synthesize'" class="capability-narration-note" data-testid="cap-narration-note-tts">口播前置项目由策略固定模型与音色；如需调整请在文案页口播设置中重新生成。</p>
 
       <label class="capability-choice" :class="{ disabled: disabled }">
         <input
           type="radio"
           :name="testId(`cap-radio-${slot}`)"
           :checked="isAuto(slot)"
-          :disabled="disabled"
+          :disabled="slotDisabled(slot)"
           :data-testid="testId(`cap-auto-${slot}`)"
           @change="selectAuto(slot)"
         />
@@ -116,7 +124,7 @@ function tierLabel(entry: PublicCapabilityEntryDto): string {
             type="radio"
             :name="testId(`cap-radio-${slot}`)"
             :checked="isFixedTo(slot, entry.id)"
-            :disabled="disabled"
+            :disabled="slotDisabled(slot)"
             :data-testid="testId(`cap-candidate-${slot}-${entry.id}`)"
             @change="selectCandidate(slot, entry)"
           />

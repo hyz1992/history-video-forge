@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { computed, ref } from "vue";
 
 import type { VoicePreviewResult, VoiceProfileDto } from "../../stores/creative-presets";
 
@@ -17,6 +17,8 @@ const props = defineProps<{
   /** 项目上下文：提供时非 cached 试听走项目级 quote 流程。 */
   projectId?: string | null;
   onPreview?: (voiceProfileId: string) => Promise<VoicePreviewResult | null>;
+  /** 任务11C：narration_first_v1 项目的音色为 WS 口播音色，禁止旧付费试听，引导到文案页口播面板。 */
+  narrationMode?: string | null;
 }>();
 
 const emit = defineEmits<{
@@ -24,6 +26,7 @@ const emit = defineEmits<{
 }>();
 
 const previewError = ref<string | null>(null);
+const narrationActive = computed(() => props.narrationMode === "narration_first_v1");
 const previewingId = ref<string | null>(null);
 
 async function handlePreview(profile: VoiceProfileDto) {
@@ -103,6 +106,7 @@ function traitText(profile: VoiceProfileDto): string {
           <span class="voice-card-traits">{{ traitText(profile) }}</span>
         </button>
         <button
+          v-if="!narrationActive"
           type="button"
           class="voice-preview-btn"
           :disabled="disabled || previewingId === profile.voice_profile_id"
@@ -111,6 +115,9 @@ function traitText(profile: VoiceProfileDto): string {
         >
           {{ previewingId === profile.voice_profile_id ? "试听中…" : "试听" }}
         </button>
+        <p v-if="narrationActive" class="voice-narration-hint" data-testid="voice-narration-hint">
+          该音色为口播前置音色：完整口播请到文案页口播面板生成后试听。
+        </p>
       </div>
     </div>
     <p v-if="previewError" class="creative-error" data-testid="voice-preview-error">{{ previewError }}</p>

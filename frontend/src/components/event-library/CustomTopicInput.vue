@@ -3,9 +3,15 @@ import { computed, ref } from "vue";
 import { apiFetch } from "../../utils/api";
 import { useTopicStore } from "../../stores/topic";
 import { useProjectStore } from "../../stores/project";
+import { NarrationCreationCancelled } from "../../composables/useNarrationProjectCreation";
 
 const emit = defineEmits<{
   (e: "close"): void;
+}>();
+
+// 任务11C：父弹窗注入的统一创建协调函数；缺省时退回直接创建（独立使用场景）。
+const props = defineProps<{
+  createProject?: (input?: { name?: string }) => Promise<unknown>;
 }>();
 
 const topicStore = useTopicStore();
@@ -53,7 +59,9 @@ async function handleSubmit() {
   error.value = null;
   warning.value = null;
   try {
-    await projectStore.createProject();
+    // 任务11C：经父弹窗协调创建（422 时原地等待选择），取消则不触发生成。
+    if (props.createProject) await props.createProject();
+    else await projectStore.createProject();
     const projectId = await projectStore.ensureProject();
     const resp = await apiFetch(`/api/projects/${projectId}/topic/from-custom`, {
       method: "POST",
@@ -70,6 +78,7 @@ async function handleSubmit() {
     topicStore.selectTab("custom");
     emit("close");
   } catch (e) {
+    if (e instanceof NarrationCreationCancelled) return;
     if (e instanceof Error) {
       error.value = e.message;
     } else {
@@ -120,6 +129,7 @@ async function handleSubmit() {
     <div class="custom-actions">
       <button
         class="action-btn action-btn--primary"
+        data-testid="custom-generate"
         :disabled="!canSubmit"
         @click="handleSubmit"
       >

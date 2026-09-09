@@ -10,6 +10,8 @@ export class ApiError extends Error {
     public readonly status: number,
     public readonly code: string,
     message: string,
+    /** 任务11C：保留结构化响应体（如口播创建资格错误的 options/policy_version）。 */
+    public readonly body?: unknown,
   ) {
     super(message);
     this.name = "ApiError";
@@ -80,7 +82,7 @@ export async function apiFetch<T = unknown>(
         : typeof body?.error === "string" && body.error.trim().length > 0
           ? body.error
           : undefined) ?? `http_${response.status}`;
-    throw new ApiError(response.status, code, code);
+    throw new ApiError(response.status, code, code, data);
   }
 
   return data as T;

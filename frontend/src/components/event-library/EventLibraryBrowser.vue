@@ -3,9 +3,15 @@ import { ref, onMounted, watch } from "vue";
 import { apiFetch } from "../../utils/api";
 import { useTopicStore } from "../../stores/topic";
 import { useProjectStore } from "../../stores/project";
+import { NarrationCreationCancelled } from "../../composables/useNarrationProjectCreation";
 
 const emit = defineEmits<{
   (e: "close"): void;
+}>();
+
+// 任务11C：父弹窗注入的统一创建协调函数；缺省时退回直接创建（独立使用场景）。
+const props = defineProps<{
+  createProject?: (input?: { name?: string }) => Promise<unknown>;
 }>();
 
 const topicStore = useTopicStore();
@@ -134,7 +140,9 @@ async function handleGenerate() {
   generating.value = true;
   error.value = null;
   try {
-    await projectStore.createProject();
+    // 任务11C：经父弹窗协调创建（422 时原地等待选择），取消则不触发生成。
+    if (props.createProject) await props.createProject();
+    else await projectStore.createProject();
     await projectStore.ensureProject();
     topicStore.selectTab("library");
     // fire-and-forget：store 立即设 isGenerating=true，组件立即跳转到 loading 页
@@ -144,6 +152,7 @@ async function handleGenerate() {
     );
     emit("close");
   } catch (e) {
+    if (e instanceof NarrationCreationCancelled) return;
     error.value = e instanceof Error ? e.message : "生成选题失败";
   } finally {
     generating.value = false;
@@ -318,6 +327,7 @@ onMounted(() => {
           <div class="detail-actions">
             <button
               class="action-btn action-btn--primary"
+              data-testid="library-generate"
               :disabled="generating"
               @click="handleGenerate"
             >
