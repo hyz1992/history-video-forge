@@ -293,14 +293,16 @@ export async function runNarrationFirstRuntimeSmoke(input: { outputDir?: string 
   if ((fullManifest.audio_summary?.tts_chunk_artifact_ids ?? []).length !== 0) throw new Error("unexpected_chunk_artifacts");
   const mergedId = fullManifest.audio_summary?.tts_merged_artifact_id;
   if (!mergedId || (fullManifest.segment_routes ?? []).some((route) => route.tts_artifact_id !== mergedId)) throw new Error("segment_route_not_global_narration");
-  const asrTask = (assetPlan.tasks as Array<{ task_type?: string }>).some((task) => (task.task_type ?? "").includes("asr"));
-  const asrJob = [...app.db.assetProviderJobRecords.values()].some((job) => String(job.providerName ?? "").includes("asr"));
-  const asrArtifact = (fullManifest as unknown as { artifacts?: Array<{ artifact_type?: string }> }).artifacts?.some((artifact) => (artifact.artifact_type ?? "").includes("asr")) ?? false;
+  // ASR 零参与的可失败信号：字幕 artifact 的 timing 来源不得为 forced_alignment
+  //（local-subtitle-provider 仅在真实 ASR 对齐成功时才写入该值；narration_first 字幕来自 revision 派生，永不为 ASR 对齐）。
+  const asrAligned = ((fullManifest as unknown as { artifacts?: Array<{ artifact_type?: string; metadata?: Record<string, unknown> }> }).artifacts ?? [])
+    .filter((artifact) => artifact.artifact_type === "subtitle_track")
+    .some((artifact) => artifact.metadata?.subtitle_timing_source === "forced_alignment");
+  if (asrAligned) throw new Error("asr_unexpected_in_narration_first");
   const nonFakeJobs = [...app.db.assetProviderJobRecords.values()].filter((job) => job.providerName !== "fake_image");
   if (nonFakeJobs.length > 0) throw new Error(`non_fake_provider_jobs:${nonFakeJobs.map((job) => job.providerName).join(",")}`);
   checks["assets_provider"] = "fake_image_only";
-  if (asrTask || asrJob || asrArtifact) throw new Error("asr_unexpected_in_narration_first");
-  checks["asr_zero"] = "plan_job_artifact_clean";
+  checks["asr_zero"] = "subtitle_timing_not_forced_alignment";
   checks["manifest_narration_reference"] = "matched";
   const manifestDecision = String(manifestRecord.validationResultJson?.decision ?? "");
   if (manifestDecision === "partial") {

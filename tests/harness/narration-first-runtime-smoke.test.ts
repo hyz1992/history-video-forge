@@ -14,8 +14,8 @@ describe("口播前置 fake runtime 冒烟", () => {
     expect(result.assetManifestRecordId).toBeTruthy();
     expect(result.composeRecordId).toBeTruthy();
     expect(result.renderJobRecordId).toBeTruthy();
-    // ASR 零参与：plan 任务/job/artifact 三层可失败断言（timingSource 为 schema 恒真值仅作旁证）
-    expect(result.checks["asr_zero"]).toBe("plan_job_artifact_clean");
+    // ASR 零参与：字幕 timing 来源非 forced_alignment 的可失败断言（timingSource 为 schema 恒真值仅作旁证）
+    expect(result.checks["asr_zero"]).toBe("subtitle_timing_not_forced_alignment");
     expect(result.checks["assets_provider"]).toBe("fake_image_only");
     expect(result.checks["narration_timing_source"]).toBe("provider_native");
     // 每镜/总长同源：2 秒整篇由段区间无缝覆盖
