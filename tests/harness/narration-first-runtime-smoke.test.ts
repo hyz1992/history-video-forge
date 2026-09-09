@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi, afterEach } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { runNarrationFirstRuntimeSmoke } from "../../harness/scripts/runtime/narration-first-runtime-smoke.js";
@@ -14,7 +14,9 @@ describe("口播前置 fake runtime 冒烟", () => {
     expect(result.assetManifestRecordId).toBeTruthy();
     expect(result.composeRecordId).toBeTruthy();
     expect(result.renderJobRecordId).toBeTruthy();
-    // 原生时间来源（ASR 零参与）
+    // ASR 零参与：plan 任务/job/artifact 三层可失败断言（timingSource 为 schema 恒真值仅作旁证）
+    expect(result.checks["asr_zero"]).toBe("plan_job_artifact_clean");
+    expect(result.checks["assets_provider"]).toBe("fake_image_only");
     expect(result.checks["narration_timing_source"]).toBe("provider_native");
     // 每镜/总长同源：2 秒整篇由段区间无缝覆盖
     expect(result.checks["narration_duration_ms"]).toBe("2000");
@@ -31,4 +33,13 @@ describe("口播前置 fake runtime 冒烟", () => {
     expect(existsSync(reportPath)).toBe(true);
     expect(JSON.parse(readFileSync(reportPath, "utf8")).passed).toBe(true);
   }, 120000);
+
+  it("带真实供应商凭据的环境拒绝运行（fail-closed）", async () => {
+    vi.stubEnv("ALIYUN_DASHSCOPE_API_KEY", "test-key");
+    await expect(runNarrationFirstRuntimeSmoke()).rejects.toThrow("narration_smoke_refuses_real_dashscope_credentials");
+    vi.unstubAllEnvs();
+    vi.stubEnv("LLM_PROVIDER", "openai");
+    await expect(runNarrationFirstRuntimeSmoke()).rejects.toThrow("narration_smoke_refuses_real_llm_credentials");
+    vi.unstubAllEnvs();
+  });
 });

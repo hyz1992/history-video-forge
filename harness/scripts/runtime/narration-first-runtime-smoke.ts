@@ -165,6 +165,9 @@ function makeAssetPlanV2(input: {
 }
 
 export async function runNarrationFirstRuntimeSmoke(input: { outputDir?: string } = {}): Promise<NarrationFirstRuntimeSmokeResult> {
+  // 冒烟 fail-closed：带真实供应商凭据的环境一律拒绝运行，保证零付费调用不依赖环境运气。
+  if (process.env.ALIYUN_DASHSCOPE_API_KEY) throw new Error("narration_smoke_refuses_real_dashscope_credentials");
+  if (process.env.LLM_PROVIDER === "openai") throw new Error("narration_smoke_refuses_real_llm_credentials");
   const outputDir = input.outputDir ?? mkdtempSync(join(tmpdir(), "narration-first-smoke-"));
   mkdirSync(outputDir, { recursive: true });
   const storageBaseDir = join(outputDir, "storage");
@@ -256,7 +259,7 @@ export async function runNarrationFirstRuntimeSmoke(input: { outputDir?: string 
   if (segmentSum !== DURATION_MS) throw new Error("segment_sum_mismatch");
   checks["storyboard_segment_count"] = String(plan.segments.length);
 
-  // 5) 资产计划 v2 fixture（narration_intervals 同源于分镜段）
+  // 5) 资产计划 v2：fixture 直写 + 真实 validateAssetPlan 本地校验覆盖（生成路由/intent compiler 由 9C 测试与 Task12-B 覆盖，此处声明不冒充全链路真实生成）
   const assetPlanRecordId = `asset_plan_narration_smoke_${app.db.generateId()}`;
   const assetPlan = makeAssetPlanV2({ projectId, scriptId: "s", storyboardRecordId, storyboard: plan, narrationReference });
   await saveAssetPlanRecord(app.db, {
@@ -289,9 +292,20 @@ export async function runNarrationFirstRuntimeSmoke(input: { outputDir?: string 
   if ((fullManifest.audio_summary?.tts_chunk_artifact_ids ?? []).length !== 0) throw new Error("unexpected_chunk_artifacts");
   const mergedId = fullManifest.audio_summary?.tts_merged_artifact_id;
   if (!mergedId || (fullManifest.segment_routes ?? []).some((route) => route.tts_artifact_id !== mergedId)) throw new Error("segment_route_not_global_narration");
+  const asrTask = (assetPlan.tasks as Array<{ task_type?: string }>).some((task) => (task.task_type ?? "").includes("asr"));
+  const asrJob = [...app.db.assetProviderJobRecords.values()].some((job) => String(job.providerName ?? "").includes("asr"));
+  const asrArtifact = (fullManifest as unknown as { artifacts?: Array<{ artifact_type?: string }> }).artifacts?.some((artifact) => (artifact.artifact_type ?? "").includes("asr")) ?? false;
+  const nonFakeJobs = [...app.db.assetProviderJobRecords.values()].filter((job) => job.providerName !== "fake_image");
+  if (nonFakeJobs.length > 0) throw new Error(`non_fake_provider_jobs:${nonFakeJobs.map((job) => job.providerName).join(",")}`);
+  checks["assets_provider"] = "fake_image_only";
+  if (asrTask || asrJob || asrArtifact) throw new Error("asr_unexpected_in_narration_first");
+  checks["asr_zero"] = "plan_job_artifact_clean";
   checks["manifest_narration_reference"] = "matched";
-  if (String(manifestRecord.validationResultJson?.decision ?? "") !== "ready_for_compose" && String(manifestRecord.validationResultJson?.decision ?? "") !== "partial") {
+  const manifestDecision = String(manifestRecord.validationResultJson?.decision ?? "");
+  if (manifestDecision === "partial") {
     manifestRecord.manifestJson = { ...manifestRecord.manifestJson, readiness: "ready_for_compose" };
+  } else if (manifestDecision !== "ready_for_compose") {
+    throw new Error(`manifest_decision_unexpected:${manifestDecision}`);
   }
 
   // 7) 资产重试 → 仍零新 TTS
