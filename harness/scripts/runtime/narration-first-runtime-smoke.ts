@@ -409,7 +409,8 @@ export async function runNarrationFirstRuntimeSmoke(input: { outputDir?: string 
   const result: NarrationFirstRuntimeSmokeResult = {
     outputDir, passed: true, projectId, narrationRecordId, storyboardRecordId, assetManifestRecordId,
     composeRecordId, renderJobRecordId, narrationSynthesizeCalls: calls.count,
-    legacyProjectId: legacyProject.id, legacyStoryboardRecordId, subtitleRevisions: [initialSubtitleRevisionId, newSubtitleRevisionId], checks,
+    legacyProjectId: legacyProject.id, legacyStoryboardRecordId, subtitleRevisions: [initialSubtitleRevisionId, newSubtitleRevisionId],
+    asrCheckedSubtitleArtifacts: Number(checks["asr_checked_subtitle_artifacts"]), checks,
   };
   writeJson(outputDir, "narration-first-runtime-smoke.json", result);
   return result;
