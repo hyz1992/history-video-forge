@@ -14,6 +14,7 @@ import { resolvePipelineStagePhase } from "../../composables/usePipelineStagePha
 import StageGenerating from "../workspace/StageGenerating.vue";
 import StageLoadingBar from "../workspace/StageLoadingBar.vue";
 import StoryboardSegmentRegenModal from "./StoryboardSegmentRegenModal.vue";
+import NarrationModeUpgradeEntry from "./NarrationModeUpgradeEntry.vue";
 import { useCompetitionGuard } from "../../composables/useCompetitionGuard";
 
 const narrativeRoleLabels: Record<string, string> = {
@@ -280,6 +281,13 @@ const ASSET_STEP_INDEX = PIPELINE_STEPS.findIndex(
   (s) => s.key === "asset",
 );
 const router = useRouter();
+
+// 任务11B：升级成功后刷新快照并回文案页准备口播。
+async function onNarrationModeUpgraded() {
+  await storyboardStore.loadActiveStoryboardSnapshot();
+  const pid = projectStore.state.projectId;
+  if (pid) router.push(`/projects/${pid}/script`);
+}
 const { checkStageRollback } = useCompetitionGuard();
 
 /* -------------------------------------------------------------------------- */
@@ -517,6 +525,12 @@ function scrollToTop() {
 
 <template>
   <div class="storyboard-panel">
+    <!-- 任务11B：legacy 项目显式升级入口（升级后回文案页准备口播） -->
+    <NarrationModeUpgradeEntry
+      :project-id="projectStore.state.projectId"
+      :snapshot-narration-mode="storyboardStore.state.snapshot?.narration_timing_mode ?? null"
+      @upgraded="onNarrationModeUpgraded"
+    />
     <!-- Generating state (must be before loading skeleton — survives refresh) -->
     <StageGenerating
       v-if="storyboardPhase.kind === 'generating'"

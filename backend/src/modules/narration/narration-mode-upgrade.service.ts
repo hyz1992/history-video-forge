@@ -1,7 +1,7 @@
 import { requireOwner } from "../../auth/authorization.js";
 import type { DbClient, ProjectRecord } from "../../db/client.js";
 import { Prisma } from "../../generated/prisma/client.js";
-import { GenerationConfigurationV1, UpgradeNarrationModeRequest } from "../../../../shared/src/index.js";
+import { DEFAULT_GENERATION_CONFIGURATION, GenerationConfigurationV1, UpgradeNarrationModeRequest } from "../../../../shared/src/index.js";
 import { NarrationModeUpgradePreviewV1, type NarrationModeUpgradePreviewV1 as Preview } from "../../../../shared/src/narration/narration-ui.schema.js";
 import { findProjectConfigRecord, getProjectGenerationConfiguration } from "../generation-config/generation-config.repository.js";
 import { narrationDownstreamReset, narrationDownstreamResetData } from "./narration-invalidation.js";
@@ -64,13 +64,14 @@ async function loadLegacyProject(db: DbClient, projectId: string, user: ServiceU
     return project;
 }
 
-/** 升级预览：只读；展示将失效的下游产物、当前配置与合格组合，不修改任何状态。 */
+/** 升级预览：只读；展示将失效的下游产物、当前配置与合格组合，不修改任何状态。缺冻结配置的老项目按默认配置 revision 0 展示，不回填。 */
 export async function previewNarrationModeUpgrade(db: DbClient, input: { projectId: string; user: ServiceUser; narrationFirstEnabled: boolean }): Promise<Preview> {
     const project = await loadLegacyProject(db, input.projectId, input.user);
-    const config = await getProjectGenerationConfiguration(db, input.projectId);
+    const stored = await readProjectConfig(db, input.projectId);
+    const config = stored?.configurationJson ?? DEFAULT_GENERATION_CONFIGURATION;
     const available = await availableNarrationOptionsForOwner(db, project.ownerId);
     const recommendedOption = available.qualified_options.find(o => o.provider_model_id === available.default_provider_model_id) ?? available.qualified_options[0] ?? null;
-    const tts = config.configuration.capabilities["tts.synthesize"];
+    const tts = config.capabilities["tts.synthesize"];
     const scriptRecord = project.activeScriptRecordId ? db.scriptRecords.get(project.activeScriptRecordId) : null;
     return NarrationModeUpgradePreviewV1.parse({
         narration_timing_mode: "legacy_estimated",
@@ -79,10 +80,10 @@ export async function previewNarrationModeUpgrade(db: DbClient, input: { project
         recommended: recommendedOption ? { provider_model_id: recommendedOption.provider_model_id, voice_profile_id: recommendedOption.voice_profile_id } : null,
         options: available.qualified_options,
         current_configuration: {
-            revision: config.revision,
+            revision: stored?.revision ?? 0,
             tts_mode: tts.mode,
             provider_model_id: tts.mode === "fixed" ? tts.provider_model_id : null,
-            voice_profile_id: config.configuration.creative.voice_profile_id ?? null,
+            voice_profile_id: config.creative.voice_profile_id ?? null,
         },
         script: {
             active_script_record_id: project.activeScriptRecordId ?? null,
@@ -92,27 +93,44 @@ export async function previewNarrationModeUpgrade(db: DbClient, input: { project
     });
 }
 
+/** 来源/下游预期比较；升级写前快照比较与 Map 写前同步复查共用。 */
+function collectUpgradeConflicts(project: Pick<ProjectRecord, "activeScriptRecordId" | "activeStoryboardRecordId" | "activeAssetPlanRecordId" | "activeAssetManifestRecordId" | "activeComposeRecordId" | "activeRenderJobRecordId" | "activePublishPackageRecordId">, request: UpgradeNarrationModeRequest): string[] {
+    const conflicts: string[] = [];
+    if (project.activeScriptRecordId !== request.expected_active_script_record_id) conflicts.push("active_script_record_id");
+    const actualDownstream = downgradePointers(project as ProjectRecord);
+    for (const [key, actual] of Object.entries(actualDownstream)) {
+        if (actual !== request.expected_downstream[key as keyof typeof request.expected_downstream]) conflicts.push(key);
+    }
+    return conflicts;
+}
+
 /** 旧项目显式升级：模式、固定配置、策略依据、下游失效与升级事件在同一事务；任何预期不匹配整笔不写。 */
 export async function upgradeProjectToNarrationFirst(db: DbClient, input: { projectId: string; user: ServiceUser; narrationFirstEnabled: boolean; actorUserId?: string | null; request: unknown }): Promise<{ upgraded: true; configuration_revision: number }> {
     if (!input.narrationFirstEnabled) throw new NarrationUpgradeError(409, { error: "narration_mode_unavailable", reason: "口播前置模式尚未开放，不能升级" });
     const project = await loadLegacyProject(db, input.projectId, input.user);
     // 鉴权与来源核对先于请求体解析：跨 owner/来源冲突不应被 422 掩盖。
     const request = UpgradeNarrationModeRequest.parse(input.request);
-    const current = await readProjectConfig(db, input.projectId);
-    if (!current) throw new NarrationUpgradeError(409, { error: "project_generation_configuration_revision_conflict", current_revision: null });
-    const conflicts: string[] = [];
-    if (project.activeScriptRecordId !== request.expected_active_script_record_id) conflicts.push("active_script_record_id");
-    const actualDownstream = downgradePointers(project);
-    for (const [key, actual] of Object.entries(actualDownstream)) {
-        if (actual !== request.expected_downstream[key as keyof typeof request.expected_downstream]) conflicts.push(key);
+    let stored = await readProjectConfig(db, input.projectId);
+    let casRevision: number;
+    // 预览把缺冻结配置的老项目展示为 revision 0；确认动作内才显式补建默认配置（该写属于用户已确认的升级动作）。
+    if (request.expected_configuration_revision === 0) {
+        if (stored) throw new NarrationUpgradeError(409, { error: "project_generation_configuration_revision_conflict", current_revision: stored.revision });
+        const created = await getProjectGenerationConfiguration(db, input.projectId, input.actorUserId ?? undefined);
+        stored = { revision: created.revision, configurationJson: created.configuration };
+        casRevision = created.revision;
+    } else {
+        if (!stored) throw new NarrationUpgradeError(409, { error: "project_generation_configuration_revision_conflict", current_revision: null });
+        if (stored.revision !== request.expected_configuration_revision) {
+            throw new NarrationUpgradeError(409, { error: "project_generation_configuration_revision_conflict", current_revision: stored.revision });
+        }
+        casRevision = stored.revision;
     }
+    const current = stored;
+    const conflicts = collectUpgradeConflicts(project, request);
     if (conflicts.length > 0) throw new NarrationUpgradeError(409, { error: "narration_upgrade_conflict", conflicts });
-    if (current.revision !== request.expected_configuration_revision) {
-        throw new NarrationUpgradeError(409, { error: "project_generation_configuration_revision_conflict", current_revision: current.revision });
-    }
     // 任何拒绝都发生在写入之前；策略拒绝不落任何项目/配置状态。
     const materialized = await materializeNarrationConfiguration(db, project.ownerId, current.configurationJson, request.narration_selection);
-    const newRevision = request.expected_configuration_revision + 1;
+    const newRevision = casRevision + 1;
     const auditMetadata = {
         from_mode: "legacy_estimated",
         to_mode: "narration_first_v1",
@@ -144,7 +162,7 @@ export async function upgradeProjectToNarrationFirst(db: DbClient, input: { proj
             });
             if (changed.count !== 1) throw new NarrationUpgradeError(409, { error: "narration_upgrade_conflict", reason: "项目来源或下游在确认前发生变化" });
             const cfg = await tx.projectGenerationConfiguration.updateMany({
-                where: { projectId: project.id, revision: request.expected_configuration_revision },
+                where: { projectId: project.id, revision: casRevision },
                 data: { revision: newRevision, configurationJson: materialized as Prisma.InputJsonValue, updatedAt: new Date() },
             });
             if (cfg.count !== 1) throw new NarrationUpgradeError(409, { error: "project_generation_configuration_revision_conflict", current_revision: null, reason: "配置在确认前发生变化" });
@@ -153,12 +171,20 @@ export async function upgradeProjectToNarrationFirst(db: DbClient, input: { proj
         const mirror = db.projects.get(project.id);
         if (mirror) Object.assign(mirror, { narrationTimingMode: "narration_first_v1", activeNarrationRecordId: null, activeNarrationSubtitleRevisionId: null, ...narrationDownstreamReset() });
     } else {
-        Object.assign(project, { narrationTimingMode: "narration_first_v1", activeNarrationRecordId: null, activeNarrationSubtitleRevisionId: null, ...narrationDownstreamReset() });
-        const record = findProjectConfigRecord(db, project.id)!;
-        record.revision = newRevision;
-        record.configurationJson = materialized;
-        record.updatedAt = new Date();
-        db.auditLogs.set(db.generateId(), { id: db.generateId(), actorUserId: input.actorUserId ?? null, projectId: project.id, action: "narration_mode_upgraded", targetType: "project", targetId: project.id, metadataJson: auditMetadata, createdAt: new Date() });
+        // Map 分支：写前同步复查（复查与写入之间无 await，消除 TOCTOU 窗口），语义对齐 Prisma 分支 CAS。
+        const latestProject = db.projects.get(project.id);
+        const latestRecord = findProjectConfigRecord(db, project.id);
+        if (!latestProject || !latestRecord) throw new NarrationUpgradeError(409, { error: "narration_upgrade_conflict", reason: "项目在确认前发生变化" });
+        if ((latestProject.narrationTimingMode ?? "legacy_estimated") !== "legacy_estimated" || collectUpgradeConflicts(latestProject, request).length > 0) {
+            throw new NarrationUpgradeError(409, { error: "narration_upgrade_conflict", reason: "项目来源或下游在确认前发生变化" });
+        }
+        if (latestRecord.revision !== current.revision) throw new NarrationUpgradeError(409, { error: "project_generation_configuration_revision_conflict", current_revision: latestRecord.revision });
+        Object.assign(latestProject, { narrationTimingMode: "narration_first_v1", activeNarrationRecordId: null, activeNarrationSubtitleRevisionId: null, ...narrationDownstreamReset() });
+        latestRecord.revision = newRevision;
+        latestRecord.configurationJson = materialized;
+        latestRecord.updatedAt = new Date();
+        const auditId = db.generateId();
+        db.auditLogs.set(auditId, { id: auditId, actorUserId: input.actorUserId ?? null, projectId: project.id, action: "narration_mode_upgraded", targetType: "project", targetId: project.id, metadataJson: auditMetadata, createdAt: new Date() });
     }
     return { upgraded: true, configuration_revision: newRevision };
 }

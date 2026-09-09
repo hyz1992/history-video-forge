@@ -58,7 +58,7 @@ async function confirm() {
 <label>目标模型与音色 <select data-testid="narration-upgrade-option" v-model="optionIndex"><option v-for="(o, i) in preview.options" :key="o.voice_profile_id" :value="i">{{ o.model }} · {{ o.voice }}</option></select></label>
 <p>升级完成后回到文案页生成并确认口播，才能重新进入分镜。</p>
 </template>
-<button :disabled="busy || !preview.upgrade_available || !preview.script.active_script_record_id" data-testid="narration-upgrade-confirm" @click="confirm">确认升级</button>
+<button :disabled="busy || !preview.upgrade_available || !preview.script.active_script_record_id || preview.options.length === 0" data-testid="narration-upgrade-confirm" @click="confirm">确认升级</button>
 <button :disabled="busy" data-testid="narration-upgrade-cancel" @click="emit('cancel')">取消</button>
 </template>
 </section>

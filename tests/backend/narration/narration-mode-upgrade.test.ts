@@ -29,14 +29,15 @@ afterEach(() => { for (const c of cleanups.splice(0)) c(); });
 const selection = () => ({ provider_model_id: policy.default_provider_model_id, voice_profile_id: policy.default_voice_profile_id, policy_version: policy.policy_version });
 const legacyV1Plan = (scriptRecordId: string) => ({ plan_version: "storyboard_v1", source_script_record_id: scriptRecordId, source_topic_package_id: "topic", estimated_total_duration_sec: 2, segments: [], global_visual_notes: [] });
 
-async function seedLegacyProject(db: DbClient) {
+async function seedLegacyProject(db: DbClient, options?: { withConfig?: boolean }) {
   const project = await prepareQuoteProject(db, "u");
   const script = await saveScriptRecord(db, { projectId: project.id, topicPackageId: "topic", scriptText: "他打开城门。", openingSpan: "他打开城门。", endingSpan: "他打开城门。", estimatedDurationSec: 2, beatTraceJson: [], quoteTraceJson: [], reviewStatus: "pass", validationResultJson: null, semanticReviewResultJson: null, executionStateJson: null });
   project.activeScriptRecordId = script.id;
   for (const key of downstreamPointers) project[key] = "old";
   for (const key of traces) project[key] = { run: "old" };
   db.storyboardRecords.set("old", { id: "old", projectId: project.id, topicPackageId: "topic", scriptRecordId: script.id, planJson: legacyV1Plan(script.id), validationResultJson: { decision: "pass" }, executionStateJson: null, graphTraceSummaryJson: null, runtimeDiagnosticsJson: null, createdAt: new Date() });
-  await getProjectGenerationConfiguration(db, project.id);
+  db.publishPackageRecords.set("old", { id: "old", projectId: project.id, createdAt: new Date() } as never);
+  if (options?.withConfig !== false) await getProjectGenerationConfiguration(db, project.id);
   return { project, script };
 }
 
@@ -116,6 +117,7 @@ describe("Task11B 旧项目升级事务（Map）", () => {
     expect(record.configurationJson.creative.voice_profile_id).toBe(policy.default_voice_profile_id);
     expect(record.configurationJson.narration_policy).toMatchObject({ policy_version: policy.policy_version, selection_reason: "explicit_selection" });
     expect(db.storyboardRecords.get("old")?.planJson).toBeTruthy();
+    expect(db.publishPackageRecords.get("old")).toBeTruthy();
     const audit = [...db.auditLogs.values()].find(l => l.action === "narration_mode_upgraded");
     expect(audit).toBeTruthy();
     expect(audit!.metadataJson).toMatchObject({ from_mode: "legacy_estimated", to_mode: "narration_first_v1", policy_version: policy.policy_version });
@@ -289,6 +291,46 @@ describe("Task11B SQLite 单事务", () => {
       expect(row).toMatchObject({ narrationTimingMode: "legacy_estimated", activeStoryboardRecordId: "old" });
       expect(await f.client.auditLog.count({ where: { projectId: f.project.id, action: "narration_mode_upgraded" } })).toBe(0);
     } finally { await f.close(); }
+  });
+});
+
+describe("Task11B 无冻结配置的老项目", () => {
+  it("预览按 revision 0 展示且严格零写入（不回填配置）", async () => {
+    const { app, db } = mapFixture();
+    await seedGlobalVoiceProfiles(db);
+    const { project } = await seedLegacyProject(db, { withConfig: false });
+    const seeded = findProjectConfigRecord(db, project.id);
+    if (seeded) db.projectGenerationConfigurations.delete(seeded.id);
+    const preview = await previewNarrationModeUpgrade(db, { projectId: project.id, user: { userId: "u", role: "USER" }, narrationFirstEnabled: true });
+    expect(preview.current_configuration).toMatchObject({ revision: 0, tts_mode: "auto", provider_model_id: null, voice_profile_id: null });
+    expect(findProjectConfigRecord(db, project.id)).toBeNull();
+    expect(db.auditLogs.size).toBe(0);
+  });
+  it("确认升级先补建默认配置再升级，最终 revision 2 且为固定合格配置", async () => {
+    const { app, db } = mapFixture();
+    await seedGlobalVoiceProfiles(db);
+    const { project } = await seedLegacyProject(db, { withConfig: false });
+    const seeded = findProjectConfigRecord(db, project.id);
+    if (seeded) db.projectGenerationConfigurations.delete(seeded.id);
+    const result = await upgradeProjectToNarrationFirst(db, { projectId: project.id, user: { userId: "u", role: "USER" }, narrationFirstEnabled: true, request: { expected_active_script_record_id: project.activeScriptRecordId!, expected_configuration_revision: 0, expected_downstream: { storyboard_record_id: "old", asset_plan_record_id: "old", asset_manifest_record_id: "old", compose_record_id: "old", render_job_record_id: "old", publish_package_record_id: "old" }, narration_selection: selection(), confirm_invalidation: true } });
+    expect(result).toMatchObject({ upgraded: true, configuration_revision: 2 });
+    const record = findProjectConfigRecord(db, project.id)!;
+    expect(record.revision).toBe(2);
+    expect(record.configurationJson.capabilities["tts.synthesize"]).toEqual({ mode: "fixed", provider_model_id: policy.default_provider_model_id });
+    expect(project.narrationTimingMode).toBe("narration_first_v1");
+    expect(db.publishPackageRecords.get("old")).toBeTruthy();
+  });
+  it("预期 revision 0 但配置已存在时冲突零写入", async () => {
+    const { app, db } = mapFixture();
+    await seedGlobalVoiceProfiles(db);
+    const { project } = await seedLegacyProject(db);
+    try {
+      await upgradeProjectToNarrationFirst(db, { projectId: project.id, user: { userId: "u", role: "USER" }, narrationFirstEnabled: true, request: { expected_active_script_record_id: project.activeScriptRecordId!, expected_configuration_revision: 0, expected_downstream: { storyboard_record_id: "old", asset_plan_record_id: "old", asset_manifest_record_id: "old", compose_record_id: "old", render_job_record_id: "old", publish_package_record_id: "old" }, narration_selection: selection(), confirm_invalidation: true } });
+      throw new Error("should_reject");
+    } catch (error) {
+      const before = captureState({ db, project });
+      await expectZeroWrite({ db, project }, before, error, "project_generation_configuration_revision_conflict", 409);
+    }
   });
 });
 

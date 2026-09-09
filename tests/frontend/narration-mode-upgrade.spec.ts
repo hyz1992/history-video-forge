@@ -8,6 +8,7 @@ import { narrationRangesFromManifest } from "../../frontend/src/stores/assets";
 import { assetsStoreKey } from "../../frontend/src/stores/assets";
 import { assetPlanningStoreKey } from "../../frontend/src/stores/asset-planning";
 import NarrationModeUpgradeDialog from "../../frontend/src/components/storyboard/NarrationModeUpgradeDialog.vue";
+import NarrationModeUpgradeEntry from "../../frontend/src/components/storyboard/NarrationModeUpgradeEntry.vue";
 import SegmentAssetCard from "../../frontend/src/components/asset/SegmentAssetCard.vue";
 
 describe("分镜真实时长视图", () => {
@@ -168,6 +169,40 @@ describe("资产卡片发声区间与停顿归属", () => {
     const w = mountCard({});
     expect(w.get(".segment-header-time").text()).toContain("0s - 8s");
     expect(w.get(".segment-header-time").text()).not.toContain("发声");
+    w.unmount();
+  });
+});
+
+describe("旧项目升级入口", () => {
+  it("legacy 项目显示入口，展开对话框并外传 upgraded", async () => {
+    const api = fakeApi();
+    const w = mount(NarrationModeUpgradeEntry, { props: { projectId: "p1", snapshotNarrationMode: "legacy_estimated", api }, global: { plugins: [ElementPlus] } });
+    expect(w.get("[data-testid=narration-upgrade-entry]").text()).toContain("升级到口播前置模式");
+    await w.get("[data-testid=narration-upgrade-entry]").trigger("click");
+    await flushPromises();
+    expect(api.preview).toHaveBeenCalledWith("p1");
+    await w.get("[data-testid=narration-upgrade-confirm]").trigger("click");
+    await flushPromises();
+    expect(api.upgrade).toHaveBeenCalledTimes(1);
+    expect(w.emitted("upgraded")).toHaveLength(1);
+    // 升级成功后入口按钮重现，由宿主页面负责跳转文案页
+    expect(w.find("[data-testid=narration-upgrade-entry]").exists()).toBe(true);
+    w.unmount();
+  });
+  it("取消回到入口按钮且零请求", async () => {
+    const api = fakeApi();
+    const w = mount(NarrationModeUpgradeEntry, { props: { projectId: "p1", snapshotNarrationMode: "legacy_estimated", api }, global: { plugins: [ElementPlus] } });
+    await w.get("[data-testid=narration-upgrade-entry]").trigger("click");
+    await flushPromises();
+    await w.get("[data-testid=narration-upgrade-cancel]").trigger("click");
+    expect(api.upgrade).not.toHaveBeenCalled();
+    expect(w.get("[data-testid=narration-upgrade-entry]").exists()).toBe(true);
+    w.unmount();
+  });
+  it("新模式项目不显示升级入口", () => {
+    const api = fakeApi();
+    const w = mount(NarrationModeUpgradeEntry, { props: { projectId: "p1", snapshotNarrationMode: "narration_first_v1", api }, global: { plugins: [ElementPlus] } });
+    expect(w.find("[data-testid=narration-upgrade-entry]").exists()).toBe(false);
     w.unmount();
   });
 });

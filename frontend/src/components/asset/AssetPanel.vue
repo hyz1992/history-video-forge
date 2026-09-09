@@ -124,6 +124,7 @@ const manifest = computed(() => assetsStore.state.snapshot?.active_assets?.manif
 const speechRanges = computed(() => narrationRangesFromManifest(manifest.value as Record<string, unknown> | null));
 const hasSpeechRoutes = computed(() => speechRanges.value.size > 0);
 function pauseNoteFor(index: number): string {
+  if (segments.length === 1) return "首尾静音与停顿归本镜";
   if (index === 0) return "首部静音与句间停顿归本镜";
   if (index === segments.length - 1) return "句间停顿与尾部静音归本镜";
   return "句间停顿归本镜末尾";
