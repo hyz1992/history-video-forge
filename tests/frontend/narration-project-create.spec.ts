@@ -257,6 +257,73 @@ function mountModal(stores: { projectStore: ProjectStore; topicStore: TopicStore
   });
 }
 
+describe("三入口集成：真实子组件（未 stub）", () => {
+  const DETAIL = { id: "ev1", canonical_title: "晏子使楚", summary: "s", credibility_level: "high", dynasty: "春秋", era: "春秋", event_type_tags: [], angles: [{ id: "a1", title: "主线", angle_label: "主线", family_label: "使楚" }] };
+  function mountModalReal(stores: { projectStore: ProjectStore; topicStore: TopicStore }) {
+    return mount(CreateTopicModal, {
+      props: { visible: true },
+      global: {
+        provide: {
+          [projectStoreKey as symbol]: stores.projectStore,
+          [topicStoreKey as symbol]: stores.topicStore,
+        },
+        stubs: { Teleport: true },
+      },
+    });
+  }
+  async function switchTab(w: ReturnType<typeof mount>, label: string) {
+    const tab = w.findAll(".tab-btn").find((item) => item.text() === label)!;
+    await tab.trigger("click");
+    await flushPromises();
+  }
+  it("事件库入口：422→面板→确认→带 selection 重试→generateFromLibrary 恰好一次", async () => {
+    apiFetchMock.mockImplementation(async (url: string) => {
+      if (String(url).includes("/api/event-library/entries/ev1")) return DETAIL;
+      if (String(url).includes("/api/event-library/entries")) return { entries: [{ id: "ev1", canonical_title: "晏子使楚" }], total: 1 };
+      return {};
+    });
+    const stores = SEGMENT_STORES();
+    stores.projectStore.createProject = vi.fn().mockRejectedValueOnce(selectionError()).mockResolvedValueOnce({ project_id: "p1" });
+    const w = mountModalReal(stores);
+    await switchTab(w, "事件库");
+    await w.get(".entry-card").trigger("click");
+    await flushPromises();
+    await w.findAll(".detail-angles input[type=radio]")[0]!.setValue();
+    await w.get("[data-testid=library-generate]").trigger("click");
+    await flushPromises();
+    expect(w.find("[data-testid=narration-creation-option]").exists()).toBe(true);
+    await w.get("[data-testid=narration-creation-option]").setValue("0");
+    await w.get("[data-testid=narration-creation-confirm]").trigger("click");
+    await flushPromises();
+    expect(stores.projectStore.createProject).toHaveBeenCalledTimes(2);
+    expect(stores.projectStore.createProject.mock.calls[1][0]).toMatchObject({ narrationSelection: { provider_model_id: OPTION.provider_model_id } });
+    expect(stores.topicStore.generateFromLibrary).toHaveBeenCalledTimes(1);
+    expect(stores.topicStore.generateFromLibrary).toHaveBeenCalledWith("ev1", "a1");
+    w.unmount();
+  });
+  it("自定义入口：422→面板→确认→带 selection 重试→from-custom 恰好一次", async () => {
+    apiFetchMock.mockImplementation(async (url: string) => {
+      if (String(url).includes("/topic/from-custom")) return { candidates: [] };
+      return {};
+    });
+    const stores = SEGMENT_STORES();
+    stores.projectStore.createProject = vi.fn().mockRejectedValueOnce(selectionError()).mockResolvedValueOnce({ project_id: "p1" });
+    const w = mountModalReal(stores);
+    await switchTab(w, "自定义选题");
+    await w.get("textarea").setValue("晏子使楚");
+    await w.get("[data-testid=custom-generate]").trigger("click");
+    await flushPromises();
+    expect(w.find("[data-testid=narration-creation-option]").exists()).toBe(true);
+    await w.get("[data-testid=narration-creation-option]").setValue("0");
+    await w.get("[data-testid=narration-creation-confirm]").trigger("click");
+    await flushPromises();
+    expect(stores.projectStore.createProject).toHaveBeenCalledTimes(2);
+    const fromCustom = apiFetchMock.mock.calls.filter(([url]) => String(url).includes("/topic/from-custom"));
+    expect(fromCustom).toHaveLength(1);
+    w.unmount();
+  });
+});
+
 describe("系统推荐入口协调", () => {
   it("422 后原地展示选择，确认后重试并只生成一次", async () => {
     const stores = SEGMENT_STORES();
