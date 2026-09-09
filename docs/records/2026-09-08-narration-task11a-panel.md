@@ -2,7 +2,7 @@
 
 ## 当前结论
 
-Task11A 未收敛。正常三轮及额外授权三轮已用完。额外第3轮双角色复审收敛，形成第三候选 25c52c05；第三次终审仍有 Important（I-1：字幕 bundle 读取失败使 record 详情整体失败、面板死端），按授权停止条件停止，未进入 Task11B，未自主追加循环。原"切回 active 重复生成"Important 已闭环，有红灯转绿与浏览器零新增生成证据。产品候选已提交，不能将该提交表述为整体验收通过。
+Task11A 已收敛。正常三轮及额外授权四轮已用完。额外第3轮闭环"切回 active 重复生成"缺口；第三次终审发现 I-1（字幕 bundle 读取失败致详情整体失败）判候选 25c52c05 失败；用户批准额外第4轮后修复 I-1，形成第四候选 54a09c1f；第四次终审（2026-09-09）0 Critical/0 Important，10 项验收 9 项已修、第4项含一个书面留档的低风险未验证子项（F5 后 sessionStorage 幂等 key 复用），**候选通过终审**。6 项终审 Minor 及历轮 Minor 全部留档不改候选。用户终审闸门保留；未进入 Task11B/C/12。
 
 | 事实 | 值 |
 |---|---|
@@ -11,10 +11,11 @@ Task11A 未收敛。正常三轮及额外授权三轮已用完。额外第3轮�
 | 首次终审候选 | 477b5ab60377b335206dc5ff6f8dd75399597113 |
 | 第二次终审候选 | 2770b9908af0288ebf3e8be28e74ca7def2fe2e3 |
 | 第三次终审候选 | 25c52c0564c8d74611c30806f27811b256da3fbb |
-| 累计任务范围 | 16 文件，另有本机械记录 |
-| 整改复审轮数 | 6（正常3轮 + 额外3轮） |
-| 额外循环授权次数 | 3 |
-| 已执行 final 次数 | 3，每次均含两个阶段 |
+| 第四次终审候选（通过） | 54a09c1f |
+| 累计任务范围 | 17 文件（第4轮授权新增 tests/backend/api/narration-api.test.ts），另有本机械记录 |
+| 整改复审轮数 | 7（正常3轮 + 额外4轮） |
+| 额外循环授权次数 | 4 |
+| 已执行 final 次数 | 4，每次均含两个阶段 |
 
 ## 审查过程
 
@@ -31,6 +32,8 @@ Task11A 未收敛。正常三轮及额外授权三轮已用完。额外第3轮�
 | 第二次终审 | — | — | 0/1/0 | 切回active音频可绕过最新候选生成中状态，可能重复付费生成，候选失败 |
 | 额外第3轮整改复审 | 0/0/0 | 0/1/0 | — | 生成门禁缺口已修；contract唯一Important为"修复未提交、记录未更新"流程项，随候选提交与本记录落盘闭合；Minor留档 |
 | 第三次终审 | — | — | 0/1/0 | 字幕bundle读取失败使record详情整体409、面板死端，违反"失败明确不可预览"，候选失败 |
+| 额外第4轮整改复审 | 0/0/4M | 0/0/6M | — | I-1降级路径已修（路由try/catch+store保留快照+双向测试）；双角色均无Critical/Important，Minor留档；范围16→17文件即授权新增测试文件 |
+| 第四次终审 | — | — | 0/0/6 | 10项验收9项已修、第4项含留档未验证子项，候选54a09c1f通过，Task11A收敛；6项Minor留档 |
 
 各复审覆盖固定 BASE 至工作区的完整累计差异。终审第一阶段仅原始要求/设计/代码，第二阶段核对原始证据。初始 contract 审查曾因 cmd 中 JS 箭头产生零字节文件“{j”；主代理确认尺寸后仅删除该文件，审查者重新核对全范围及哈希，后续只读。保护文件未暂存或修改。
 
@@ -46,7 +49,7 @@ Task11A 未收敛。正常三轮及额外授权三轮已用完。额外第3轮�
 | 切换版本待加载时禁止错误身份确认 | 已修 | selectedDetail核对loading/error/project/ID；双向延迟自动化与真实浏览器禁用验证 |
 | 服务端候选或active更替后的可操作性恢复 | 已修 | refresh有效epoch同步selectedRecordId与detail，三类序列和浏览器恢复通过 |
 | 进行中候选存在时切回active仍禁止重复生成 | 已修 | 面板sourceGenerating门禁+store守卫；extra3红灯3失败转绿；浏览器28条调用零新增生成、B ready后恰一次带key请求 |
-| 字幕bundle读取失败时详情降级（失败明确不可预览） | 未修 | narration.routes.ts:65-69无降级，readSubtitleRevision抛错经包装器映射409；store刷新catch同时清空snapshot致面板死端（第三次终审I-1） |
+| 字幕bundle读取失败时详情降级（失败明确不可预览） | 已修 | 第4轮：narration.routes.ts:65-69 try/catch降级subtitle:null；store刷新catch保留已成功snapshot；extra4红灯2失败转绿、回归164/164、浏览器HEAD复演零回归（第四次终审闭环I-1） |
 | F5后sessionStorage幂等key复用 | 未验证 | store单测无jsdom，sessionStorage被try/catch吞掉；已存浏览器脚本均无reload；失效后果仅为极窄窗口换新key且生成中守卫仍拦截（第三次终审判断，低风险） |
 | 深链保留历史输出真实页面浏览 | 已修 | 路由测试3/3；历史下游真实页面浏览属用户声明留待Task12边界 |
 | 历史预设变化后的字幕浏览器专项 | 未验证 | 尚无专项浏览器证据 |
@@ -58,7 +61,9 @@ Task11A 未收敛。正常三轮及额外授权三轮已用完。额外第3轮�
 
 已闭环不变量（额外第3轮）：只要当前来源存在进行中候选（latest_narration_candidate.effective_status==='generating'），无论试听选择哪个版本，都不得派发新生成请求；候选到达终态（ready/failed/unknown已测）后门禁自动解除。证据：extra3红灯3失败转绿（store守卫+面板门禁+解释文案）、浏览器B生成中切回A零新增生成、B ready后恰一次带幂等key请求。
 
-当前未闭环不变量（第三次终审I-1）：字幕bundle读取失败时，record详情须降级为"记录与音频可用、字幕明确不可预览"，不得使详情整体失败。现narration.routes.ts:65-69对readSubtitleRevision无降级，bundle缺失/损坏/哈希不一致抛错被包装器映射为409；store刷新catch同时清空已成功获取的snapshot，面板陷入无法通过UI恢复的死端，"字幕预览暂不可用"回退分支不可达。
+当前未闭环不变量：无。第四次终审后全部验收不变量闭环。
+
+历轮留档 Minor（不阻塞、未改候选）：context复用错误载体查询、NarrationPanel类型收窄松散、cancelled终态无专项解除测试、F5幂等key复用无覆盖、编辑期轮询与草稿组合边缘UX、storageDisplayName兜底一致性、降级catch无注释、损坏注入广度（hash不一致/文件缺失分支）、首载失败无直接断言、error期间取消按钮静默no-op、回退文案"请刷新状态"对真损坏无修复作用等。
 
 ## 原始验证
 
@@ -82,6 +87,10 @@ Task11A 未收敛。正常三轮及额外授权三轮已用完。额外第3轮�
 | narration-task11a-extra3-targeted.json | 2文件33通过 |
 | narration-task11a-extra3-regression.json | 9文件、162通过、0失败（HEAD重跑；终审独立复跑亦162/162） |
 | narration-task11a-extra3-browser.json | B生成中切回A零新增generate请求且有解释文案；B ready后恰一次带幂等key请求；pageerrors为空 |
+| narration-task11a-extra4-red.json | 2文件100项，2失败/98通过，失败项即I-1降级测试（409≠200、snapshot被清空） |
+| narration-task11a-extra4-targeted.json | 2文件100通过 |
+| narration-task11a-extra4-regression.json | 9文件、164通过、0失败（HEAD重跑；第4轮双角色与第四次终审各自独立复跑亦164/164） |
+| narration-task11a-extra4-browser.json | HEAD上复演第3轮场景：B生成中切回A零新增生成、B ready后恰一次带key请求、A音频保持可用；pageerrors为空 |
 
 R3 frontend Vite build、store严格独立tsc、git diff --check均exit0；构建仅既有PURE注释及chunk大小警告。R3累计16文件摘要见narration-task11a-r3-hashes.json。额外轮同样执行frontend build与store严格tsc，exit0；16文件摘要见narration-task11a-extra1-hashes.json。额外第2轮frontend build、store strict tsc、backend tsc、diff-check均exit0；终审核对extra2-hashes的16文件一致，核对158项报告与浏览器原始请求。终审未独立重跑构建/typecheck，主代理输出摘要不冒充独立原始日志。158测试未覆盖生成中B切回A再次生成，不能据此宣称整体通过。
 
@@ -96,5 +105,7 @@ R3 frontend Vite build、store严格独立tsc、git diff --check均exit0；构�
 2026-09-08用户回复"同意授权"，单独批准额外第3轮，限定上述范围。该授权已使用：第6轮双角色复审收敛（diff 0C/0I/4M；contract 0C/1I/4M，其Important为"修复未提交、记录未更新"流程项，随候选提交与本记录落盘闭合，Minor全部留档未改候选），形成第三候选25c52c05；第三次终审两阶段（阶段一去叙事化独立审查0C/1I/8M，阶段二核对全部证据并独立复跑9文件回归162/162）维持1项Important（I-1），判候选失败。按停止条件停止，未自主追加第4轮。frontend build、store严格tsc、backend tsc、diff-check在HEAD上均exit0。
 
 第三次终审后两个待用户决策选项：(a)就I-1出具书面理由，按"带已知Important的候选"收口；(b)单独授权额外第4轮，限定I-1降级路径（路由对readSubtitleRevision加try/catch返回subtitle:null、store刷新失败不清空已成功snapshot、补1个降级API测试）、累计复审与新候选终审；仍有Critical/Important则停止。
+
+2026-09-09用户回复"你的建议是什么，按你的建议继续"，主代理建议并获批准选项(b)：额外第4轮限定上述I-1处方（补降级API测试位置点名narration-api.test.ts，累计任务范围16→17文件），仍有Critical/Important则停止。该授权已使用：第7轮双角色复审收敛（diff 0C/0I/4M、contract 0C/0I/6M，Minor全部留档未改候选），形成第四候选54a09c1f；第四次终审两阶段（阶段一去叙事化独立审查0C/0I/6M并独立复跑双tsc与136项测试，阶段二核对全部证据并独立复跑vite build与git diff --check）0 Critical/0 Important，10项验收9项已修、第4项含书面留档未验证子项（F5后sessionStorage幂等key复用，服务端派发即建记录且generating守卫兜底、低风险），候选通过。Task11A收敛，用户终审闸门保留，未进入Task11B/C/12。
 
 发布开关保持false，全局TTS默认不变；未启动Task11B/C/12。
