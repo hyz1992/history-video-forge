@@ -50,6 +50,7 @@
     "harness:seed-second-aggregate-browser-fixture": "tsx harness/scripts/runtime/seed-second-aggregate-browser-fixture.ts",
     "harness:backfill-missing-usage": "tsx harness/scripts/maintenance/backfill-missing-usage-records.ts",
     "harness:render-runtime-smoke": "tsx harness/scripts/runtime/render-runtime-smoke.ts",
+    "harness:narration-first-runtime-smoke": "vitest run --configLoader runner tests/harness/narration-first-runtime-smoke.test.ts",
     "render:remotion:smoke": "tsx harness/scripts/runtime/render-runtime-smoke.ts --adapter=remotion",
     "harness:ui-acceptance:smoke": "tsx harness/scripts/ui-acceptance/ui-acceptance-smoke.ts",
     "harness:ui-acceptance:full": "tsx harness/scripts/ui-acceptance/ui-acceptance-full.ts",
