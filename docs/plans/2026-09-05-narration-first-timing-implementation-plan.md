@@ -326,7 +326,7 @@ expect(projectVisualIntervals(boundaries, [
 
 修改：`frontend/src/components/topic/CreateTopicModal.vue`、`frontend/src/components/event-library/EventLibraryBrowser.vue`、`CustomTopicInput.vue`、`frontend/src/stores/project.ts`、`frontend/src/components/settings/CapabilitySlotSettings.vue`、`ProjectGenerationSettings.vue`、`CreativeVoiceSettings.vue`；复用任务 2B 的创建 selection/error DTO，不在前端自行维护另一份资格表。
 
-2026-09-09 Task11C 实施补记：ApiError 增加可选 body 透传结构化创建错误体（utils/api.ts，计划外最小配套）；composable 在途/等待全程锁定（inFlight + cancelledDuringFlight 语义），子入口等待期提交时快照选题目标；等待期与在途均禁用弹窗 Tab/关闭（取消须经选择面板，宿主强制关闭由 watch 兜底取消）。三入口 422 原地选择、selection 重试单项目单选题、409 更新选项续等、开关关闭解释不创建 legacy、narration 项目设置禁用 tts 槽与付费试听并引导文案页，均以组件测试覆盖（27 用例）；浏览器验收归任务 12。
+2026-09-09 Task11C 实施补记：ApiError 增加可选 body 透传结构化创建错误体（utils/api.ts，计划外最小配套）；composable 在途/等待全程锁定（inFlight + cancelledDuringFlight 语义），子入口等待期提交时快照选题目标；等待期与在途均禁用弹窗 Tab/关闭（取消须经选择面板，宿主强制关闭由 watch 兜底取消）。三入口 422 原地选择、selection 重试单项目单选题、409 更新选项续等、开关关闭解释不创建 legacy、narration 项目设置禁用 tts 槽与付费试听并引导文案页，均以组件测试覆盖（28 用例）；浏览器验收归任务 12。
 
 - [ ] 写三入口测试：系统推荐、事件库、自定义选题继承旧 fixed/旧音色被拒绝后，分别保留筛选条件、事件 ID/角度、rawDigest；用户选定后发送 selection 重试而非重复同一 name。取消/关闭零创建且不续发选题；成功后只创建一个项目、对应选题请求一次，ensureProject 复用 ID，用户全局偏好不变。
 - [ ] 运行 `npx vitest run --configLoader runner tests/frontend/narration-project-create.spec.ts`，观察 FAIL。
