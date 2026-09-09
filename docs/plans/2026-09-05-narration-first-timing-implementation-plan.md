@@ -318,6 +318,8 @@ expect(projectVisualIntervals(boundaries, [
 - [ ] 分镜和资产页把新路径“预估时长”改为实际画面区间/口播发声区间，二者差额注明停顿归属；展示旧 estimate 时明确其非权威。资产页不再提供新路径重复生口播按钮，而是回文案修改入口。
 - [ ] 回跑上述测试与 `tests/frontend/stores/assets.test.ts`、`tests/frontend/stores/storyboard.test.ts`、前端构建；PASS 后提交 `补齐真实时长展示与旧项目受控升级`。
 
+2026-09-09 Task11B 实施补记：升级 UI 以独立组件承载——新增 backend/src/modules/narration/narration-mode-upgrade.service.ts（预览与单事务升级）、frontend/src/components/storyboard/NarrationModeUpgradeDialog.vue 与 NarrationModeUpgradeEntry.vue（入口宿主，挂在 StoryboardPanel 顶部，升级成功刷新快照并回文案页）；真实发声区间与停顿差额由活动口播 timing tokens 派生，无 token 镜头不显示停顿数字。
+
 ### 任务 11C：创建不兼容时的项目级选择与原地恢复
 
 新增：`frontend/src/composables/useNarrationProjectCreation.ts`、`frontend/src/components/topic/NarrationCreationSelection.vue`、`tests/frontend/narration-project-create.spec.ts`。

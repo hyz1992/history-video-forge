@@ -395,3 +395,36 @@ export function narrationRangesFromManifest(manifest: { segment_routes?: unknown
   }
   return map;
 }
+
+/** 任务11B：结合口播 timing tokens 与分镜 source 区间，派生每镜真实发声区间与画面-发声差额（停顿秒）。
+ *  只为能匹配到 token 的镜头给出结果；无法判定时不产出，避免以 0 冒充真实停顿。 */
+export function narrationSpeechRanges(input: {
+  segments: Array<Record<string, unknown>>;
+  ranges: Map<string, { startSec: number; endSec: number }>;
+  timing: { tokens?: unknown } | null | undefined;
+}): Map<string, { startSec: number; endSec: number; pauseSec: number }> {
+  const result = new Map<string, { startSec: number; endSec: number; pauseSec: number }>();
+  const tokens = Array.isArray(input.timing?.tokens) ? input.timing.tokens as Array<Record<string, unknown>> : [];
+  for (const segment of input.segments) {
+    const segmentId = typeof segment.segment_id === 'string' ? segment.segment_id : null;
+    const range = segmentId ? input.ranges.get(segmentId) : undefined;
+    const sourceStart = typeof segment.source_start === 'number' ? segment.source_start : null;
+    const sourceEnd = typeof segment.source_end === 'number' ? segment.source_end : null;
+    const hintStart = typeof segment.start_hint_sec === 'number' ? segment.start_hint_sec : null;
+    const hintEnd = typeof segment.end_hint_sec === 'number' ? segment.end_hint_sec : null;
+    if (!segmentId || !range || sourceStart === null || sourceEnd === null || hintStart === null || hintEnd === null) continue;
+    const inside = tokens.filter(token => {
+      const ts = typeof token.sourceStart === 'number' ? token.sourceStart : null;
+      const te = typeof token.sourceEnd === 'number' ? token.sourceEnd : null;
+      const b = typeof token.startMs === 'number' ? token.startMs : null;
+      const e = typeof token.endMs === 'number' ? token.endMs : null;
+      return ts !== null && te !== null && b !== null && e !== null && ts >= sourceStart && te <= sourceEnd && e > b;
+    });
+    if (inside.length === 0) continue;
+    const startSec = Math.min(...inside.map(token => token.startMs as number)) / 1000;
+    const endSec = Math.max(...inside.map(token => token.endMs as number)) / 1000;
+    const pauseSec = Math.round(Math.max(0, hintEnd - hintStart - (endSec - startSec)) * 10) / 10;
+    result.set(segmentId, { startSec, endSec, pauseSec });
+  }
+  return result;
+}

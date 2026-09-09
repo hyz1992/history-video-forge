@@ -62,6 +62,8 @@ export interface StoryboardSnapshot {
   current_status: string | null;
   active_storyboard: ActiveStoryboardSnapshot | null;
   active_storyboard_record_id: string | null;
+  /** 任务11B：项目口播时间模式（legacy_estimated / narration_first_v1），升级入口判定依据。 */
+  narration_timing_mode?: string | null;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -93,6 +95,7 @@ export function createFetchStoryboardApi(baseUrl = ""): StoryboardApi {
         current_status: data.current_status ?? null,
         active_storyboard: data.active_storyboard ?? null,
         active_storyboard_record_id: data.active_storyboard_record_id ?? null,
+        narration_timing_mode: (data.narration_timing_mode as string | null | undefined) ?? null,
       };
     },
     async generateStoryboard(projectId) {

@@ -3,13 +3,15 @@ import { flushPromises, mount } from "@vue/test-utils";
 import ElementPlus from "element-plus";
 import { reactive } from "vue";
 import { describe, expect, it, vi } from "vitest";
-import { storyboardTimingView } from "../../frontend/src/stores/storyboard";
-import { narrationRangesFromManifest } from "../../frontend/src/stores/assets";
+import { storyboardTimingView, createFetchStoryboardApi } from "../../frontend/src/stores/storyboard";
+import { narrationRangesFromManifest, narrationSpeechRanges } from "../../frontend/src/stores/assets";
 import { assetsStoreKey } from "../../frontend/src/stores/assets";
 import { assetPlanningStoreKey } from "../../frontend/src/stores/asset-planning";
 import NarrationModeUpgradeDialog from "../../frontend/src/components/storyboard/NarrationModeUpgradeDialog.vue";
 import NarrationModeUpgradeEntry from "../../frontend/src/components/storyboard/NarrationModeUpgradeEntry.vue";
 import SegmentAssetCard from "../../frontend/src/components/asset/SegmentAssetCard.vue";
+
+vi.mock("../../frontend/src/utils/api", () => ({ apiFetch: vi.fn(async () => ({ current_status: "storyboard_ready", narration_timing_mode: "narration_first_v1", active_storyboard: { plan: {} }, active_storyboard_record_id: "sb" })) }));
 
 describe("分镜真实时长视图", () => {
   it("v2 计划显示实际时长（口播实测）", () => {
@@ -42,6 +44,25 @@ describe("资产 manifest v2 发声区间", () => {
   it("空 manifest 返回空表", () => {
     expect(narrationRangesFromManifest(null).size).toBe(0);
     expect(narrationRangesFromManifest({ segment_routes: [] }).size).toBe(0);
+  });
+  it("结合 timing tokens 派生真实发声区间与停顿秒，无 token 镜头不产出", () => {
+    const segments = [
+      { segment_id: "s1", source_start: 0, source_end: 10, start_hint_sec: 0, end_hint_sec: 8 },
+      { segment_id: "s2", source_start: 10, source_end: 20, start_hint_sec: 8, end_hint_sec: 12 },
+    ];
+    const ranges = new Map([["s1", { startSec: 0, endSec: 8 }], ["s2", { startSec: 8, endSec: 12 }]]);
+    const timing = { tokens: [
+      { sourceStart: 0, sourceEnd: 4, startMs: 200, endMs: 3400 },
+      { sourceStart: 4, sourceEnd: 10, startMs: 3500, endMs: 6500 },
+    ] };
+    const map = narrationSpeechRanges({ segments, ranges, timing });
+    expect(map.get("s1")).toEqual({ startSec: 0.2, endSec: 6.5, pauseSec: 1.7 });
+    expect(map.has("s2")).toBe(false);
+  });
+  it("storyboard 快照映射保留 narration_timing_mode", async () => {
+    const api = createFetchStoryboardApi();
+    const snap = await api.loadSnapshot("p1");
+    expect(snap.narration_timing_mode).toBe("narration_first_v1");
   });
 });
 
@@ -156,8 +177,8 @@ function mountCard(props: Record<string, unknown>) {
 }
 
 describe("资产卡片发声区间与停顿归属", () => {
-  it("传入 speechTime 时显示发声区间与停顿归属", () => {
-    const w = mountCard({ speechTime: { startSec: 0, endSec: 6.5 }, pauseNote: "句间停顿归前镜" });
+  it("传入带 pauseSec 的 speechTime 时显示发声区间与真实停顿", () => {
+    const w = mountCard({ speechTime: { startSec: 0, endSec: 6.5, pauseSec: 1.5 }, pauseNote: "句间停顿归前镜" });
     const text = w.get(".segment-header-time").text();
     expect(text).toContain("发声 0s - 6.5s");
     expect(text).toContain("画面 0s - 8s");
@@ -165,10 +186,31 @@ describe("资产卡片发声区间与停顿归属", () => {
     expect(text).toContain("句间停顿归前镜");
     w.unmount();
   });
+  it("无 pauseSec 时不以数字冒充停顿，仅显示归属", () => {
+    const w = mountCard({ speechTime: { startSec: 0, endSec: 6.5 }, pauseNote: "句间停顿归前镜" });
+    const text = w.get(".segment-header-time").text();
+    expect(text).toContain("发声 0s - 6.5s");
+    expect(text).toContain("停顿归属：句间停顿归前镜");
+    expect(text).not.toContain("停顿 0.0 秒");
+    w.unmount();
+  });
   it("未传入 speechTime 保持既有展示", () => {
     const w = mountCard({});
     expect(w.get(".segment-header-time").text()).toContain("0s - 8s");
     expect(w.get(".segment-header-time").text()).not.toContain("发声");
+    w.unmount();
+  });
+});
+
+describe("升级对话框加载失败路径", () => {
+  it("预览加载失败仍显示取消并可关闭", async () => {
+    const api = fakeApi();
+    api.preview = vi.fn(async () => { throw Error("network down"); });
+    const w = mountDialog(api);
+    await flushPromises();
+    expect(w.text()).toContain("network down");
+    await w.get("[data-testid=narration-upgrade-cancel]").trigger("click");
+    expect(w.emitted("cancel")).toHaveLength(1);
     w.unmount();
   });
 });

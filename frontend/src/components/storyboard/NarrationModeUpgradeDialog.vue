@@ -59,8 +59,9 @@ async function confirm() {
 <p>升级完成后回到文案页生成并确认口播，才能重新进入分镜。</p>
 </template>
 <button :disabled="busy || !preview.upgrade_available || !preview.script.active_script_record_id || preview.options.length === 0" data-testid="narration-upgrade-confirm" @click="confirm">确认升级</button>
-<button :disabled="busy" data-testid="narration-upgrade-cancel" @click="emit('cancel')">取消</button>
 </template>
+<!-- 预览加载失败时仍可取消关闭，不把用户困在错误态。 -->
+<button :disabled="busy" data-testid="narration-upgrade-cancel" @click="emit('cancel')">取消</button>
 </section>
 </template>
 <style scoped>

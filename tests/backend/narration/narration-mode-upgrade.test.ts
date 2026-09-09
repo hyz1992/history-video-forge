@@ -306,19 +306,37 @@ describe("Task11B 无冻结配置的老项目", () => {
     expect(findProjectConfigRecord(db, project.id)).toBeNull();
     expect(db.auditLogs.size).toBe(0);
   });
-  it("确认升级先补建默认配置再升级，最终 revision 2 且为固定合格配置", async () => {
+  it("缺配置项目确认升级在事务内创建 revision 1 固定配置", async () => {
     const { app, db } = mapFixture();
     await seedGlobalVoiceProfiles(db);
     const { project } = await seedLegacyProject(db, { withConfig: false });
     const seeded = findProjectConfigRecord(db, project.id);
     if (seeded) db.projectGenerationConfigurations.delete(seeded.id);
     const result = await upgradeProjectToNarrationFirst(db, { projectId: project.id, user: { userId: "u", role: "USER" }, narrationFirstEnabled: true, request: { expected_active_script_record_id: project.activeScriptRecordId!, expected_configuration_revision: 0, expected_downstream: { storyboard_record_id: "old", asset_plan_record_id: "old", asset_manifest_record_id: "old", compose_record_id: "old", render_job_record_id: "old", publish_package_record_id: "old" }, narration_selection: selection(), confirm_invalidation: true } });
-    expect(result).toMatchObject({ upgraded: true, configuration_revision: 2 });
+    expect(result).toMatchObject({ upgraded: true, configuration_revision: 1 });
     const record = findProjectConfigRecord(db, project.id)!;
-    expect(record.revision).toBe(2);
+    expect(record.revision).toBe(1);
     expect(record.configurationJson.capabilities["tts.synthesize"]).toEqual({ mode: "fixed", provider_model_id: policy.default_provider_model_id });
     expect(project.narrationTimingMode).toBe("narration_first_v1");
     expect(db.publishPackageRecords.get("old")).toBeTruthy();
+  });
+  it("rev-0 且来源并发冲突时拒绝且配置仍缺失（零写入）", async () => {
+    const { app, db } = mapFixture();
+    await seedGlobalVoiceProfiles(db);
+    const { project } = await seedLegacyProject(db, { withConfig: false });
+    const seeded = findProjectConfigRecord(db, project.id);
+    if (seeded) db.projectGenerationConfigurations.delete(seeded.id);
+    const originalScriptId = project.activeScriptRecordId!;
+    project.activeScriptRecordId = "concurrent";
+    try {
+      await upgradeProjectToNarrationFirst(db, { projectId: project.id, user: { userId: "u", role: "USER" }, narrationFirstEnabled: true, request: { expected_active_script_record_id: originalScriptId, expected_configuration_revision: 0, expected_downstream: { storyboard_record_id: "old", asset_plan_record_id: "old", asset_manifest_record_id: "old", compose_record_id: "old", render_job_record_id: "old", publish_package_record_id: "old" }, narration_selection: selection(), confirm_invalidation: true } });
+      throw new Error("should_reject");
+    } catch (error) {
+      expect((error as { body?: { error?: string } }).body?.error).toBe("narration_upgrade_conflict");
+    }
+    expect(findProjectConfigRecord(db, project.id)).toBeNull();
+    expect(project.narrationTimingMode ?? "legacy_estimated").toBe("legacy_estimated");
+    expect(db.auditLogs.size).toBe(0);
   });
   it("预期 revision 0 但配置已存在时冲突零写入", async () => {
     const { app, db } = mapFixture();

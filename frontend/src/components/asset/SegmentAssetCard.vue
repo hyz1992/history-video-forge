@@ -38,8 +38,8 @@ const props = defineProps<{
   segmentIndex: number;
   /** 该段在成片中的真实时序（口播 chunk 累计）；null/缺省时展示规划预估窗。 */
   realTime?: { startSec: number; endSec: number } | null;
-  /** 任务11B：新路径（v2）该镜的口播发声区间；null/缺省时保持既有展示。 */
-  speechTime?: { startSec: number; endSec: number } | null;
+  /** 任务11B：新路径（v2）该镜的口播发声区间；pauseSec 为画面-发声差额（真实停顿秒），缺省时不显示停顿数字。 */
+  speechTime?: { startSec: number; endSec: number; pauseSec?: number } | null;
   /** 任务11B：画面区间与发声区间差额的停顿归属说明。 */
   pauseNote?: string | null;
   imageTasks: AssetTask[];
@@ -481,10 +481,8 @@ function artifactUrl(artifactId: string): string {
 
 /** 任务11B：画面区间与发声区间之差即停顿（句间停顿归前镜、首尾静音归首末镜），负值按 0 展示。 */
 const pauseSeconds = computed(() => {
-  if (!props.speechTime) return "0";
-  const visual = Number(props.segment.end_hint_sec) - Number(props.segment.start_hint_sec);
-  const speech = props.speechTime.endSec - props.speechTime.startSec;
-  return Math.max(0, visual - speech).toFixed(1);
+  if (!props.speechTime || typeof props.speechTime.pauseSec !== "number") return "0";
+  return props.speechTime.pauseSec.toFixed(1);
 });
 
 function formatSeconds(seconds: number): string {
@@ -689,7 +687,7 @@ function nextMedia() {
       <div class="segment-header-row">
         <span class="segment-header-number">#{{ segmentIndex + 1 }}</span>
         <span class="segment-header-time">
-          <template v-if="speechTime">发声 {{ formatSeconds(speechTime.startSec) }} - {{ formatSeconds(speechTime.endSec) }} · 画面 {{ formatSeconds(segment.start_hint_sec) }} - {{ formatSeconds(segment.end_hint_sec) }}<template v-if="pauseNote"> · 停顿 {{ pauseSeconds }} 秒（{{ pauseNote }}）</template></template>
+          <template v-if="speechTime">发声 {{ formatSeconds(speechTime.startSec) }} - {{ formatSeconds(speechTime.endSec) }} · 画面 {{ formatSeconds(segment.start_hint_sec) }} - {{ formatSeconds(segment.end_hint_sec) }}<template v-if="typeof speechTime?.pauseSec === 'number' && pauseNote"> · 停顿 {{ pauseSeconds }} 秒（{{ pauseNote }}）</template><template v-else-if="pauseNote"> · 停顿归属：{{ pauseNote }}</template></template>
           <template v-else>{{ realTime
             ? `${formatSeconds(realTime.startSec)} - ${formatSeconds(realTime.endSec)}`
             : `${formatSeconds(segment.start_hint_sec)} - ${formatSeconds(segment.end_hint_sec)}` }}</template>

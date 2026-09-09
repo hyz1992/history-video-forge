@@ -5,7 +5,8 @@ import { ElMessage, ElMessageBox } from "element-plus";
 
 import { useStoryboardStore } from "../../stores/storyboard";
 import { useAssetPlanningStore } from "../../stores/asset-planning";
-import { useAssetsStore, narrationRangesFromManifest } from "../../stores/assets";
+import { useAssetsStore, narrationRangesFromManifest, narrationSpeechRanges } from "../../stores/assets";
+import { apiFetch } from "../../utils/api";
 import { useScriptStore } from "../../stores/script";
 import { useProjectStore } from "../../stores/project";
 import { useStagePolling } from "../../composables/useStagePolling";
@@ -123,6 +124,19 @@ const manifest = computed(() => assetsStore.state.snapshot?.active_assets?.manif
 // 任务11B：新路径（v2 manifest）每镜口播发声区间；与画面区间的差额为停顿（句间停顿归前镜、首尾静音归首末镜）。
 const speechRanges = computed(() => narrationRangesFromManifest(manifest.value as Record<string, unknown> | null));
 const hasSpeechRoutes = computed(() => speechRanges.value.size > 0);
+// 任务11B：从活动口播的 timing tokens 派生每镜真实发声区间与停顿秒；拉取失败时不以 0 冒充。
+const timingSpeech = ref<Map<string, { startSec: number; endSec: number; pauseSec: number }>>(new Map());
+watch([hasSpeechRoutes, () => segments.value.length], async ([present, segmentCount]) => {
+  if (!present || segmentCount === 0 || timingSpeech.value.size > 0) return;
+  try {
+    const recordId = (assetsStore.state.snapshot?.active_narration as { narration_record_id?: string } | null | undefined)?.narration_record_id;
+    if (!recordId || !projectId.value) return;
+    const timing = await apiFetch<{ tokens?: unknown }>(`/api/projects/${projectId.value}/script/narrations/${encodeURIComponent(recordId)}/files/timing`);
+    timingSpeech.value = narrationSpeechRanges({ segments: segments.value as Array<Record<string, unknown>>, ranges: speechRanges.value, timing });
+  } catch {
+    timingSpeech.value = new Map();
+  }
+}, { immediate: true });
 function pauseNoteFor(index: number): string {
   if (segments.length === 1) return "首尾静音与停顿归本镜";
   if (index === 0) return "首部静音与句间停顿归本镜";
@@ -1823,7 +1837,7 @@ function handleConfirm() {
           :segment="segment"
           :segment-index="index"
           :real-time="realSegmentTimings?.get(segment.segment_id) ?? null"
-          :speech-time="speechRanges.get(segment.segment_id) ?? null"
+          :speech-time="timingSpeech.get(segment.segment_id) ?? null"
           :pause-note="hasSpeechRoutes ? pauseNoteFor(index) : null"
           :image-tasks="imageTasksBySegment.get(segment.segment_id) ?? []"
           :video-tasks="videoTasksBySegment.get(segment.segment_id) ?? []"
