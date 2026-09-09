@@ -34,6 +34,7 @@ export interface NarrationFirstRuntimeSmokeResult {
   composeRecordId: string | null;
   renderJobRecordId: string | null;
   narrationSynthesizeCalls: number;
+  asrCheckedSubtitleArtifacts: number;
   legacyProjectId: string | null;
   legacyStoryboardRecordId: string | null;
   subtitleRevisions: string[];
@@ -301,8 +302,9 @@ export async function runNarrationFirstRuntimeSmoke(input: { outputDir?: string 
   const mergedId = fullManifest.audio_summary?.tts_merged_artifact_id;
   if (!mergedId || (fullManifest.segment_routes ?? []).some((route) => route.tts_artifact_id !== mergedId)) throw new Error("segment_route_not_global_narration");
   const manifestArtifacts = (fullManifest as unknown as { artifacts?: Array<{ artifact_id: string; artifact_type?: string; metadata?: Record<string, unknown> }> }).artifacts ?? [];
-  const importedSubtitle = manifestArtifacts.find((artifact) => artifact.artifact_id === "narration_subtitle_" + narrationRecordId);
-  if (importedSubtitle && !assertNoAsrAlignment([importedSubtitle])) throw new Error("asr_unexpected_in_narration_first");
+  const subtitleArtifacts = manifestArtifacts.filter((artifact) => artifact.artifact_type === "subtitle_track");
+  if (!assertNoAsrAlignment(subtitleArtifacts)) throw new Error("asr_unexpected_in_narration_first");
+  checks["asr_checked_subtitle_artifacts"] = String(subtitleArtifacts.length);
   const nonFakeJobs = [...app.db.assetProviderJobRecords.values()].filter((job) => job.providerName !== "fake_image");
   if (nonFakeJobs.length > 0) throw new Error(`non_fake_provider_jobs:${nonFakeJobs.map((job) => job.providerName).join(",")}`);
   checks["assets_provider"] = "fake_image_only";
