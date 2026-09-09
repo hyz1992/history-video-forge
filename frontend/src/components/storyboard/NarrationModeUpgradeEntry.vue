@@ -5,7 +5,7 @@ import NarrationModeUpgradeDialog from "./NarrationModeUpgradeDialog.vue";
 const props = defineProps<{ projectId: string | null | undefined; snapshotNarrationMode: string | null | undefined; api?: { preview: (projectId: string) => Promise<NarrationModeUpgradePreviewV1>; upgrade: (projectId: string, body: unknown) => Promise<unknown> } }>();
 const emit = defineEmits<{ (e: "upgraded"): void }>();
 const open = ref(false);
-const isLegacy = computed(() => (props.snapshotNarrationMode ?? "legacy_estimated") !== "narration_first_v1");
+const isLegacy = computed(() => props.snapshotNarrationMode === "legacy_estimated");
 function onUpgraded() {
   open.value = false;
   emit("upgraded");

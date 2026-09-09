@@ -5,7 +5,7 @@ import { ElMessage, ElMessageBox } from "element-plus";
 
 import { useStoryboardStore } from "../../stores/storyboard";
 import { useAssetPlanningStore } from "../../stores/asset-planning";
-import { useAssetsStore, narrationRangesFromManifest, narrationSpeechRanges } from "../../stores/assets";
+import { useAssetsStore, narrationRangesFromManifest, narrationSpeechRanges, narrationRecordIdFromManifest, narrationPauseNote } from "../../stores/assets";
 import { apiFetch } from "../../utils/api";
 import { useScriptStore } from "../../stores/script";
 import { useProjectStore } from "../../stores/project";
@@ -129,7 +129,7 @@ const timingSpeech = ref<Map<string, { startSec: number; endSec: number; pauseSe
 watch([hasSpeechRoutes, () => segments.value.length], async ([present, segmentCount]) => {
   if (!present || segmentCount === 0 || timingSpeech.value.size > 0) return;
   try {
-    const recordId = (assetsStore.state.snapshot?.active_narration as { narration_record_id?: string } | null | undefined)?.narration_record_id;
+    const recordId = narrationRecordIdFromManifest(manifest.value as Record<string, unknown> | null);
     if (!recordId || !projectId.value) return;
     const timing = await apiFetch<{ tokens?: unknown }>(`/api/projects/${projectId.value}/script/narrations/${encodeURIComponent(recordId)}/files/timing`);
     timingSpeech.value = narrationSpeechRanges({ segments: segments.value as Array<Record<string, unknown>>, ranges: speechRanges.value, timing });
@@ -138,10 +138,7 @@ watch([hasSpeechRoutes, () => segments.value.length], async ([present, segmentCo
   }
 }, { immediate: true });
 function pauseNoteFor(index: number): string {
-  if (segments.length === 1) return "首尾静音与停顿归本镜";
-  if (index === 0) return "首部静音与句间停顿归本镜";
-  if (index === segments.length - 1) return "句间停顿与尾部静音归本镜";
-  return "句间停顿归本镜末尾";
+  return narrationPauseNote(index, segments.value.length);
 }
 const readiness = computed(() => manifest.value?.readiness ?? null);
 

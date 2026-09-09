@@ -4,7 +4,7 @@ import ElementPlus from "element-plus";
 import { reactive } from "vue";
 import { describe, expect, it, vi } from "vitest";
 import { storyboardTimingView, createFetchStoryboardApi } from "../../frontend/src/stores/storyboard";
-import { narrationRangesFromManifest, narrationSpeechRanges } from "../../frontend/src/stores/assets";
+import { narrationRangesFromManifest, narrationSpeechRanges, narrationRecordIdFromManifest, narrationPauseNote } from "../../frontend/src/stores/assets";
 import { assetsStoreKey } from "../../frontend/src/stores/assets";
 import { assetPlanningStoreKey } from "../../frontend/src/stores/asset-planning";
 import NarrationModeUpgradeDialog from "../../frontend/src/components/storyboard/NarrationModeUpgradeDialog.vue";
@@ -245,6 +245,42 @@ describe("旧项目升级入口", () => {
     const api = fakeApi();
     const w = mount(NarrationModeUpgradeEntry, { props: { projectId: "p1", snapshotNarrationMode: "narration_first_v1", api }, global: { plugins: [ElementPlus] } });
     expect(w.find("[data-testid=narration-upgrade-entry]").exists()).toBe(false);
+    w.unmount();
+  });
+});
+
+describe("manifest 口播引用与停顿归属文案", () => {
+  it("从 v2 manifest 取口播记录 id，缺失/非法返回 null", () => {
+    expect(narrationRecordIdFromManifest({ narration_reference: { narration_record_id: "n1" } })).toBe("n1");
+    expect(narrationRecordIdFromManifest({ narration_reference: {} })).toBeNull();
+    expect(narrationRecordIdFromManifest(null)).toBeNull();
+  });
+  it("停顿归属按首镜/中段/末镜/单镜区分", () => {
+    expect(narrationPauseNote(0, 3)).toBe("首部静音与句间停顿归本镜");
+    expect(narrationPauseNote(1, 3)).toBe("句间停顿归本镜末尾");
+    expect(narrationPauseNote(2, 3)).toBe("句间停顿与尾部静音归本镜");
+    expect(narrationPauseNote(0, 1)).toBe("首尾静音与停顿归本镜");
+  });
+});
+describe("升级入口与推荐选中", () => {
+  it("快照未加载时不显示升级入口（防 v1 项目闪现）", () => {
+    const api = fakeApi();
+    const w = mount(NarrationModeUpgradeEntry, { props: { projectId: "p1", snapshotNarrationMode: null, api }, global: { plugins: [ElementPlus] } });
+    expect(w.find("[data-testid=narration-upgrade-entry]").exists()).toBe(false);
+    w.unmount();
+  });
+  it("对话框默认选中推荐组合", async () => {
+    const api = fakeApi();
+    api.preview = vi.fn(async () => ({ ...previewFixture, options: [
+      { provider_model_id: "other", voice_profile_id: "ov", model: "其他", voice: "音色", region: "cn-beijing", protocol: "dashscope_ws", parameters_version: "p1" },
+      { provider_model_id: "m1", voice_profile_id: "v1", model: "Qwen", voice: "木灵", region: "cn-beijing", protocol: "dashscope_ws", parameters_version: "neutral-pcm24k-v1" },
+    ] }));
+    const w = mountDialog(api);
+    await flushPromises();
+    await w.get("[data-testid=narration-upgrade-confirm]").trigger("click");
+    await flushPromises();
+    const body = api.upgrade.mock.calls[0][1];
+    expect(body.narration_selection).toMatchObject({ provider_model_id: "m1", voice_profile_id: "v1" });
     w.unmount();
   });
 });

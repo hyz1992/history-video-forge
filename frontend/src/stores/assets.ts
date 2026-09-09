@@ -428,3 +428,16 @@ export function narrationSpeechRanges(input: {
   }
   return result;
 }
+
+/** 任务11B：v2 manifest 的口播记录引用（timing 拉取与授权 URL 的锚点）。 */
+export function narrationRecordIdFromManifest(manifest: { narration_reference?: unknown } | null | undefined): string | null {
+  const reference = manifest?.narration_reference as { narration_record_id?: unknown } | undefined;
+  return typeof reference?.narration_record_id === 'string' && reference.narration_record_id.trim() !== '' ? reference.narration_record_id : null;
+}
+/** 任务11B：画面-发声差额的停顿归属（设计 §5.2：句间停顿归前镜，首尾静音归首末镜）。 */
+export function narrationPauseNote(index: number, total: number): string {
+  if (total === 1) return '首尾静音与停顿归本镜';
+  if (index === 0) return '首部静音与句间停顿归本镜';
+  if (index === total - 1) return '句间停顿与尾部静音归本镜';
+  return '句间停顿归本镜末尾';
+}

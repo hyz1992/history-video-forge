@@ -480,10 +480,7 @@ function artifactUrl(artifactId: string): string {
 /* -------------------------------------------------------------------------- */
 
 /** 任务11B：画面区间与发声区间之差即停顿（句间停顿归前镜、首尾静音归首末镜），负值按 0 展示。 */
-const pauseSeconds = computed(() => {
-  if (!props.speechTime || typeof props.speechTime.pauseSec !== "number") return "0";
-  return props.speechTime.pauseSec.toFixed(1);
-});
+const pauseSeconds = computed(() => (typeof props.speechTime?.pauseSec === "number" ? props.speechTime.pauseSec.toFixed(1) : ""));
 
 function formatSeconds(seconds: number): string {
   const rounded = Math.round(seconds * 10) / 10;

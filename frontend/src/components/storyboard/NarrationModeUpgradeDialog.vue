@@ -13,7 +13,13 @@ const resolved = computed(() => props.api ?? defaultApi);
 const stageField: Record<string, string> = { storyboard: "storyboard_record_id", asset_plan: "asset_plan_record_id", assets: "asset_manifest_record_id", compose: "compose_record_id", render: "render_job_record_id", publish: "publish_package_record_id" };
 const stageLabel: Record<string, string> = { storyboard: "分镜", asset_plan: "资产计划", assets: "资产生成", compose: "合成", render: "渲染", publish: "发布交付" };
 onMounted(async () => {
-  try { preview.value = await resolved.value.preview(props.projectId); }
+  try {
+    preview.value = await resolved.value.preview(props.projectId);
+    if (preview.value.recommended) {
+      const index = preview.value.options.findIndex(o => o.provider_model_id === preview.value!.recommended!.provider_model_id && o.voice_profile_id === preview.value!.recommended!.voice_profile_id);
+      if (index >= 0) optionIndex.value = index;
+    }
+  }
   catch (e) { error.value = e instanceof Error ? e.message : "升级预览加载失败"; }
 });
 const currentModel = computed(() => {
