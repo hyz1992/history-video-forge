@@ -45,6 +45,10 @@ export function useNarrationProjectCreation(
         ...input,
         ...(selection ? { narrationSelection: selection } : {}),
       });
+      if (cancelledDuringFlight) {
+        cancelledDuringFlight = false;
+        return { ok: false, error: new NarrationCreationCancelled() };
+      }
       return { ok: true, project };
     } catch (error) {
       if (!(error instanceof NarrationCreationError)) return { ok: false, error };
@@ -89,7 +93,11 @@ export function useNarrationProjectCreation(
   }
 
   function confirmSelection(choice: NarrationSelectionChoice) {
-    onSelected?.(choice);
+    if (onSelected) {
+      onSelected(choice);
+      // 确认即进入重试在途：立即收起选择面板，取消只对等待期开放（零创建语义窗口收敛）。
+      pendingSelection.value = null;
+    }
   }
 
   function cancelSelection() {

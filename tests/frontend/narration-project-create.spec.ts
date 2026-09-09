@@ -136,6 +136,47 @@ describe("创建协调 composable", () => {
     nextCreation.confirmSelection({ provider_model_id: "m", voice_profile_id: "v", policy_version: "v1" });
     await pending;
   });
+  it("409 到达后选择面板重现并再次确认成功", async () => {
+    const create = vi.fn().mockRejectedValueOnce(selectionError())
+      .mockRejectedValueOnce(new NarrationCreationError(409, "narration_creation_context_changed", "偏好已变化，请重新确认", "v2", [OPTION]))
+      .mockResolvedValueOnce({ project_id: "p" });
+    const creation = useNarrationProjectCreation(create);
+    const flow = creation.createOrAwait();
+    await flushPromises();
+    creation.confirmSelection({ provider_model_id: "m", voice_profile_id: "v", policy_version: "v1" });
+    expect(creation.pendingSelection.value).toBeNull(); // 确认同步收起面板
+    await flushPromises(); // 重试 409 到达后面板重现
+    expect(creation.pendingSelection.value).not.toBeNull();
+    creation.confirmSelection({ provider_model_id: "m", voice_profile_id: "v", policy_version: "v2" });
+    creation.confirmSelection({ provider_model_id: "m", voice_profile_id: "v", policy_version: "v2" });
+    await expect(flow).resolves.toMatchObject({ project_id: "p" });
+    expect(create).toHaveBeenCalledTimes(3);
+  });
+  it("确认后重试在途不再暴露选择面板（取消窗口仅等待期）", async () => {
+    let release: ((v: unknown) => void) | null = null;
+    const create = vi.fn().mockRejectedValueOnce(selectionError()).mockImplementationOnce(() => new Promise((resolve) => { release = resolve; }));
+    const creation = useNarrationProjectCreation(create);
+    const flow = creation.createOrAwait();
+    await flushPromises();
+    expect(creation.pendingSelection.value).not.toBeNull();
+    creation.confirmSelection({ provider_model_id: "m", voice_profile_id: "v", policy_version: "v1" });
+    await flushPromises();
+    expect(creation.pendingSelection.value).toBeNull();
+    release!({ project_id: "p" });
+    await expect(flow).resolves.toMatchObject({ project_id: "p" });
+    expect(create).toHaveBeenCalledTimes(2);
+  });
+  it("在途取消后成功到达：整笔放弃不续发（宿主强制关闭兜底）", async () => {
+    let release: ((v: unknown) => void) | null = null;
+    const create = vi.fn().mockImplementationOnce(() => new Promise((resolve) => { release = resolve; }));
+    const creation = useNarrationProjectCreation(create);
+    const flow = creation.createOrAwait();
+    await flushPromises();
+    creation.cancelSelection();
+    release!({ project_id: "p" });
+    await expect(flow).rejects.toBeInstanceOf(NarrationCreationCancelled);
+    expect(create).toHaveBeenCalledTimes(1);
+  });
   it("确认双击只触发一次重试", async () => {
     const create = vi.fn().mockRejectedValueOnce(selectionError()).mockResolvedValueOnce({ project_id: "p" });
     const creation = useNarrationProjectCreation(create);
