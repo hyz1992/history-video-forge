@@ -137,6 +137,9 @@ function closeDetail() {
 
 async function handleGenerate() {
   if (!selectedEntry.value || generating.value) return;
+  // 任务11C：提交时快照目标（等待选择期间详情可关闭/可切换，恢复后目标不漂移）。
+  const entryId = selectedEntry.value.id;
+  const angleId = selectedAngleId.value || undefined;
   generating.value = true;
   error.value = null;
   try {
@@ -146,10 +149,7 @@ async function handleGenerate() {
     await projectStore.ensureProject();
     topicStore.selectTab("library");
     // fire-and-forget：store 立即设 isGenerating=true，组件立即跳转到 loading 页
-    topicStore.generateFromLibrary(
-      selectedEntry.value.id,
-      selectedAngleId.value || undefined,
-    );
+    topicStore.generateFromLibrary(entryId, angleId);
     emit("close");
   } catch (e) {
     if (e instanceof NarrationCreationCancelled) return;

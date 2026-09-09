@@ -31,6 +31,8 @@ export function useNarrationProjectCreation(
   const waiting = computed(() => pendingSelection.value !== null);
   let onSelected: ((choice: NarrationSelectionChoice) => void) | null = null;
   let onCancelled: (() => void) | null = null;
+  // 创建请求在途时的取消标记：取消先于资格错误到达时，错误到达后不进入等待、整笔放弃。
+  let cancelledDuringFlight = false;
 
   async function attempt(
     input: NarrationProjectCreationInput | undefined,
@@ -46,6 +48,10 @@ export function useNarrationProjectCreation(
       if (!(error instanceof NarrationCreationError)) return { ok: false, error };
       // 开关关闭：解释不可用，不擅自创建 legacy，也不进入选择等待。
       if (error.code === "narration_mode_unavailable") return { ok: false, error };
+      if (cancelledDuringFlight) {
+        cancelledDuringFlight = false;
+        return { ok: false, error: new NarrationCreationCancelled() };
+      }
       // 422 资格不合格 / 409 策略或偏好变化：展示（或更新）合格组合并等待用户选择。
       pendingSelection.value = { reason: error.reason, policyVersion: error.policyVersion, options: error.options };
       const chosen = await new Promise<NarrationSelectionChoice>((resolve, reject) => {
@@ -59,6 +65,7 @@ export function useNarrationProjectCreation(
   async function createOrAwait(input?: NarrationProjectCreationInput): Promise<unknown> {
     // 重入守卫：已有流程在等待选择时拒绝再次进入，防止覆盖选择回调使前序流程永久挂起。
     if (pendingSelection.value !== null) throw new NarrationCreationCancelled();
+    cancelledDuringFlight = false;
     let selection: NarrationSelectionChoice | undefined;
     try {
       for (;;) {
@@ -82,7 +89,8 @@ export function useNarrationProjectCreation(
   }
 
   function cancelSelection() {
-    onCancelled?.();
+    if (onCancelled) onCancelled();
+    else cancelledDuringFlight = true;
   }
 
   return { pendingSelection: computed(() => pendingSelection.value), waiting, createOrAwait, confirmSelection, cancelSelection };

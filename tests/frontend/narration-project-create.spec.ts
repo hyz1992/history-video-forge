@@ -116,6 +116,26 @@ describe("创建协调 composable", () => {
     await expect(first).rejects.toBeInstanceOf(NarrationCreationCancelled);
     expect(create).toHaveBeenCalledTimes(1);
   });
+  it("创建在途取消先于资格错误到达：整笔放弃且不进入等待", async () => {
+    let lateReject: ((e: unknown) => void) | null = null;
+    const create = vi.fn().mockImplementationOnce(() => new Promise((_, reject) => { lateReject = reject; }));
+    const creation = useNarrationProjectCreation(create);
+    const flow = creation.createOrAwait();
+    await flushPromises();
+    creation.cancelSelection();
+    lateReject!(selectionError());
+    await expect(flow).rejects.toBeInstanceOf(NarrationCreationCancelled);
+    expect(creation.pendingSelection.value).toBeNull();
+    expect(create).toHaveBeenCalledTimes(1);
+    // 标记不泄漏：下一次流程正常等待
+    const next = vi.fn().mockRejectedValueOnce(selectionError()).mockResolvedValueOnce({ project_id: "p" });
+    const nextCreation = useNarrationProjectCreation(next);
+    const pending = nextCreation.createOrAwait();
+    await flushPromises();
+    expect(nextCreation.pendingSelection.value).not.toBeNull();
+    nextCreation.confirmSelection({ provider_model_id: "m", voice_profile_id: "v", policy_version: "v1" });
+    await pending;
+  });
   it("确认双击只触发一次重试", async () => {
     const create = vi.fn().mockRejectedValueOnce(selectionError()).mockResolvedValueOnce({ project_id: "p" });
     const creation = useNarrationProjectCreation(create);
@@ -288,13 +308,27 @@ describe("事件库入口协调", () => {
     expect(topicStore.generateFromLibrary).toHaveBeenCalledWith("ev1", "a1");
     w.unmount();
   });
+  it("等待期间关闭详情后完成创建：选题目标仍为提交时快照", async () => {
+    let release: ((v: unknown) => void) | null = null;
+    const create = vi.fn().mockImplementationOnce(() => new Promise((resolve) => { release = resolve; }));
+    const { w, topicStore } = mountLibrary(create);
+    await openDetailAndPick(w);
+    await w.get("[data-testid=library-generate]").trigger("click");
+    await flushPromises();
+    await w.get(".detail-close").trigger("click");
+    expect((w.vm as unknown as { selectedEntry: unknown }).selectedEntry).toBeNull();
+    release!({ project_id: "p1" });
+    await flushPromises();
+    expect(topicStore.generateFromLibrary).toHaveBeenCalledWith("ev1", "a1");
+    w.unmount();
+  });
   it("422 不被子组件吞掉：错误冒泡展示且不生成", async () => {
     const create = vi.fn().mockRejectedValue(selectionError());
     const { w, topicStore } = mountLibrary(create);
     await openDetailAndPick(w);
     await w.get("[data-testid=library-generate]").trigger("click");
     await flushPromises();
-    expect(w.text()).toContain("narration_selection_required");
+    expect(w.text()).toContain("旧音色不合格");
     expect(topicStore.generateFromLibrary).not.toHaveBeenCalled();
     expect((w.vm as unknown as { selectedAngleId: string }).selectedAngleId).toBe("a1");
     w.unmount();
@@ -338,7 +372,7 @@ describe("自定义选题入口协调", () => {
     await w.get("textarea").setValue("晏子使楚");
     await w.get("[data-testid=custom-generate]").trigger("click");
     await flushPromises();
-    expect(w.text()).toContain("narration_selection_required");
+    expect(w.text()).toContain("旧音色不合格");
     expect(apiFetchMock.mock.calls.some(([url]) => String(url).includes("/topic/from-custom"))).toBe(false);
     expect((w.get("textarea").element as HTMLTextAreaElement).value).toBe("晏子使楚");
     w.unmount();

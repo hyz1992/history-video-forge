@@ -52,7 +52,7 @@ export class NarrationCreationError extends Error {
     readonly policyVersion: string,
     readonly options: NarrationSelectionOption[],
   ) {
-    super(code);
+    super(reason || code);
     this.name = "NarrationCreationError";
   }
 }
