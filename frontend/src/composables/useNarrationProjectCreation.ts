@@ -95,14 +95,23 @@ export function useNarrationProjectCreation(
   function confirmSelection(choice: NarrationSelectionChoice) {
     if (onSelected) {
       onSelected(choice);
-      // 确认即进入重试在途：立即收起选择面板，取消只对等待期开放（零创建语义窗口收敛）。
+      // 确认即进入重试在途：清空等待期回调并收起面板，取消窗口收敛为仅等待期（零创建语义窗口收敛）。
+      onSelected = null;
+      onCancelled = null;
       pendingSelection.value = null;
     }
   }
 
   function cancelSelection() {
-    if (onCancelled) onCancelled();
-    else cancelledDuringFlight = true;
+    if (pendingSelection.value !== null) {
+      // 等待期（面板可见、无请求在途）：直接拒绝待续流程，零创建。
+      onCancelled?.();
+      onSelected = null;
+      onCancelled = null;
+      return;
+    }
+    // 在途（创建/重试请求飞行中）：置取消标记，成功或资格错误到达时均整笔放弃。
+    cancelledDuringFlight = true;
   }
 
   return { pendingSelection: computed(() => pendingSelection.value), waiting: computed(() => waiting.value || inFlight.value), inFlight: computed(() => inFlight.value), createOrAwait, confirmSelection, cancelSelection };

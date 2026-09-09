@@ -166,6 +166,20 @@ describe("创建协调 composable", () => {
     await expect(flow).resolves.toMatchObject({ project_id: "p" });
     expect(create).toHaveBeenCalledTimes(2);
   });
+  it("确认后重试在途取消：成功到达整笔放弃（重试窗口宿主兜底）", async () => {
+    let release: ((v: unknown) => void) | null = null;
+    const create = vi.fn().mockRejectedValueOnce(selectionError()).mockImplementationOnce(() => new Promise((resolve) => { release = resolve; }));
+    const creation = useNarrationProjectCreation(create);
+    const flow = creation.createOrAwait();
+    await flushPromises();
+    creation.confirmSelection({ provider_model_id: "m", voice_profile_id: "v", policy_version: "v1" });
+    await flushPromises();
+    expect(creation.pendingSelection.value).toBeNull();
+    creation.cancelSelection();
+    release!({ project_id: "p" });
+    await expect(flow).rejects.toBeInstanceOf(NarrationCreationCancelled);
+    expect(create).toHaveBeenCalledTimes(2);
+  });
   it("在途取消后成功到达：整笔放弃不续发（宿主强制关闭兜底）", async () => {
     let release: ((v: unknown) => void) | null = null;
     const create = vi.fn().mockImplementationOnce(() => new Promise((resolve) => { release = resolve; }));
