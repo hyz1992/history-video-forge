@@ -167,7 +167,8 @@ function makeAssetPlanV2(input: {
 export async function runNarrationFirstRuntimeSmoke(input: { outputDir?: string } = {}): Promise<NarrationFirstRuntimeSmokeResult> {
   // 冒烟 fail-closed：带真实供应商凭据的环境一律拒绝运行，保证零付费调用不依赖环境运气。
   if (process.env.ALIYUN_DASHSCOPE_API_KEY) throw new Error("narration_smoke_refuses_real_dashscope_credentials");
-  if (process.env.LLM_PROVIDER === "openai") throw new Error("narration_smoke_refuses_real_llm_credentials");
+  // 与后端 stub 闸门同构：任何非 stub 值（openai/deepseek/zhipu 等）均进入真实 LLM 路由，一律拒绝。
+  if ((process.env.LLM_PROVIDER ?? "stub") !== "stub") throw new Error("narration_smoke_refuses_real_llm_credentials");
   const outputDir = input.outputDir ?? mkdtempSync(join(tmpdir(), "narration-first-smoke-"));
   mkdirSync(outputDir, { recursive: true });
   const storageBaseDir = join(outputDir, "storage");
@@ -404,11 +405,4 @@ export async function runNarrationFirstRuntimeSmoke(input: { outputDir?: string 
   };
   writeJson(outputDir, "narration-first-runtime-smoke.json", result);
   return result;
-}
-
-if (import.meta.url === `file://${process.argv[1]?.replace(/\\/g, "/")}`) {
-  runNarrationFirstRuntimeSmoke().then((result) => console.log(JSON.stringify(result, null, 2))).catch((error) => {
-    console.error(error);
-    process.exitCode = 1;
-  });
 }

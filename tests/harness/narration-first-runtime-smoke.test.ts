@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, afterEach } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { runNarrationFirstRuntimeSmoke } from "../../harness/scripts/runtime/narration-first-runtime-smoke.js";
@@ -39,6 +39,9 @@ describe("口播前置 fake runtime 冒烟", () => {
     await expect(runNarrationFirstRuntimeSmoke()).rejects.toThrow("narration_smoke_refuses_real_dashscope_credentials");
     vi.unstubAllEnvs();
     vi.stubEnv("LLM_PROVIDER", "openai");
+    await expect(runNarrationFirstRuntimeSmoke()).rejects.toThrow("narration_smoke_refuses_real_llm_credentials");
+    vi.unstubAllEnvs();
+    vi.stubEnv("LLM_PROVIDER", "deepseek");
     await expect(runNarrationFirstRuntimeSmoke()).rejects.toThrow("narration_smoke_refuses_real_llm_credentials");
     vi.unstubAllEnvs();
   });
