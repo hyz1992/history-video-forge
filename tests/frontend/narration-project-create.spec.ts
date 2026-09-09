@@ -346,6 +346,32 @@ describe("系统推荐入口协调", () => {
     expect((w.get('[data-testid="period-end"]').element as HTMLSelectElement).value).toBe("6");
     w.unmount();
   });
+  it("等待期卸载弹窗：整笔放弃且不续发生成", async () => {
+    const stores = SEGMENT_STORES();
+    stores.projectStore.createProject = vi.fn().mockRejectedValueOnce(selectionError());
+    const w = mountModal(stores);
+    await flushPromises();
+    await w.get("[data-testid=generate-topic]").trigger("click");
+    await flushPromises();
+    expect(w.find("[data-testid=narration-creation-option]").exists()).toBe(true);
+    w.unmount();
+    await flushPromises();
+    expect(stores.projectStore.createProject).toHaveBeenCalledTimes(1);
+    expect(stores.topicStore.generateSystemRecommendations).not.toHaveBeenCalled();
+  });
+  it("在途创建卸载弹窗：成功到达不续发生成", async () => {
+    let release: ((v: unknown) => void) | null = null;
+    const stores = SEGMENT_STORES();
+    stores.projectStore.createProject = vi.fn().mockImplementationOnce(() => new Promise((resolve) => { release = resolve; }));
+    const w = mountModal(stores);
+    await flushPromises();
+    await w.get("[data-testid=generate-topic]").trigger("click");
+    await flushPromises();
+    w.unmount();
+    release!({ project_id: "p1" });
+    await flushPromises();
+    expect(stores.topicStore.generateSystemRecommendations).not.toHaveBeenCalled();
+  });
   it("创建在途期间 Tab 与关闭按钮禁用", async () => {
     let release: ((v: unknown) => void) | null = null;
     const stores = SEGMENT_STORES();

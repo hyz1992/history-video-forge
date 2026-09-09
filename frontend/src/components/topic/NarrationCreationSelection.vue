@@ -39,5 +39,5 @@ function confirm() {
 </section>
 </template>
 <style scoped>
-.narration-creation-selection{display:grid;gap:8px;padding:14px;border:1px solid var(--border-default);border-radius:12px;background:var(--bg-card);color:inherit}h3,p{margin:0}button{justify-self:start;padding:8px 12px;border:1px solid var(--border-default);border-radius:6px;background:var(--bg-panel);color:inherit;cursor:pointer}button:disabled{opacity:.45;cursor:not-allowed}
+.narration-creation-selection{position:relative;z-index:1200;display:grid;gap:8px;padding:14px;border:1px solid var(--border-default);border-radius:12px;background:var(--bg-card);color:inherit}h3,p{margin:0}button{justify-self:start;padding:8px 12px;border:1px solid var(--border-default);border-radius:6px;background:var(--bg-panel);color:inherit;cursor:pointer}button:disabled{opacity:.45;cursor:not-allowed}
 </style>

@@ -330,7 +330,11 @@ onMounted(() => {
   void focusDialog();
 });
 
-onBeforeUnmount(restorePreviousFocus);
+onBeforeUnmount(() => {
+  // 任务11C：路由导航等宿主卸载路径的兜底取消（在途成功/资格错误到达时整笔放弃，不续发选题）。
+  cancelSelection();
+  restorePreviousFocus();
+});
 </script>
 
 <template>
