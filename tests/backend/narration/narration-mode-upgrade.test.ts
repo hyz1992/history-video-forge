@@ -347,7 +347,6 @@ describe("Task11B 无冻结配置的老项目", () => {
       await upgradeProjectToNarrationFirst(db, { projectId: project.id, user: { userId: "u", role: "USER" }, narrationFirstEnabled: true, request: { expected_active_script_record_id: project.activeScriptRecordId!, expected_configuration_revision: 0, expected_downstream: { storyboard_record_id: "old", asset_plan_record_id: "old", asset_manifest_record_id: "old", compose_record_id: "old", render_job_record_id: "old", publish_package_record_id: "old" }, narration_selection: selection(), confirm_invalidation: true } });
       throw new Error("should_reject");
     } catch (error) {
-      const before = captureState({ db, project });
       await expectZeroWrite({ db, project }, before, error, "project_generation_configuration_revision_conflict", 409);
     }
   });
