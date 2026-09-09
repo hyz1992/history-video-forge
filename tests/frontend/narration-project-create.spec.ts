@@ -106,6 +106,16 @@ describe("创建协调 composable", () => {
     expect(creation.pendingSelection.value).toBeNull();
     expect(create).toHaveBeenCalledTimes(1);
   });
+  it("等待选择期间重入 createOrAwait 被拒绝（防回调覆盖）", async () => {
+    const create = vi.fn().mockRejectedValue(selectionError());
+    const creation = useNarrationProjectCreation(create);
+    const first = creation.createOrAwait();
+    await flushPromises();
+    await expect(creation.createOrAwait()).rejects.toBeInstanceOf(NarrationCreationCancelled);
+    creation.cancelSelection();
+    await expect(first).rejects.toBeInstanceOf(NarrationCreationCancelled);
+    expect(create).toHaveBeenCalledTimes(1);
+  });
   it("确认双击只触发一次重试", async () => {
     const create = vi.fn().mockRejectedValueOnce(selectionError()).mockResolvedValueOnce({ project_id: "p" });
     const creation = useNarrationProjectCreation(create);
@@ -179,6 +189,8 @@ describe("系统推荐入口协调", () => {
     stores.projectStore.createProject = vi.fn().mockRejectedValueOnce(err).mockResolvedValueOnce({ project_id: "p1" });
     const w = mountModal(stores);
     await flushPromises();
+    await w.get('[data-testid="period-start"]').setValue("4");
+    await w.get('[data-testid="period-end"]').setValue("6");
     await w.get("[data-testid=generate-topic]").trigger("click");
     await flushPromises();
     expect(w.find("[data-testid=narration-creation-option]").exists()).toBe(true);
@@ -188,6 +200,23 @@ describe("系统推荐入口协调", () => {
     expect(stores.projectStore.createProject).toHaveBeenCalledTimes(2);
     expect(stores.topicStore.generateSystemRecommendations).toHaveBeenCalledTimes(1);
     expect(w.emitted("confirmed")).toHaveLength(1);
+    expect((w.get('[data-testid="period-start"]').element as HTMLSelectElement).value).toBe("4");
+    expect((w.get('[data-testid="period-end"]').element as HTMLSelectElement).value).toBe("6");
+    w.unmount();
+  });
+  it("等待选择期间关闭弹窗：取消待续流程并清空选择面板", async () => {
+    const stores = SEGMENT_STORES();
+    stores.projectStore.createProject = vi.fn().mockRejectedValueOnce(selectionError());
+    const w = mountModal(stores);
+    await flushPromises();
+    await w.get("[data-testid=generate-topic]").trigger("click");
+    await flushPromises();
+    expect(w.find("[data-testid=narration-creation-option]").exists()).toBe(true);
+    await w.setProps({ visible: false });
+    await flushPromises();
+    expect(w.find("[data-testid=narration-creation-option]").exists()).toBe(false);
+    expect(stores.projectStore.createProject).toHaveBeenCalledTimes(1);
+    expect(stores.topicStore.generateSystemRecommendations).not.toHaveBeenCalled();
     w.unmount();
   });
   it("取消后不触发生成", async () => {
@@ -248,6 +277,17 @@ describe("事件库入口协调", () => {
     expect((w.vm as unknown as { selectedAngleId: string }).selectedAngleId).toBe("a1");
     w.unmount();
   });
+  it("创建一次成功后恰好生成一次", async () => {
+    const create = vi.fn().mockResolvedValue({ project_id: "p1" });
+    const { w, topicStore } = mountLibrary(create);
+    await openDetailAndPick(w);
+    await w.get("[data-testid=library-generate]").trigger("click");
+    await flushPromises();
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(topicStore.generateFromLibrary).toHaveBeenCalledTimes(1);
+    expect(topicStore.generateFromLibrary).toHaveBeenCalledWith("ev1", "a1");
+    w.unmount();
+  });
   it("422 不被子组件吞掉：错误冒泡展示且不生成", async () => {
     const create = vi.fn().mockRejectedValue(selectionError());
     const { w, topicStore } = mountLibrary(create);
@@ -279,6 +319,17 @@ describe("自定义选题入口协调", () => {
     expect((w.get("textarea").element as HTMLTextAreaElement).value).toBe("晏子使楚");
     expect(apiFetchMock.mock.calls.some(([url]) => String(url).includes("/topic/from-custom"))).toBe(false);
     expect(w.text()).not.toContain("narration_selection_required");
+    w.unmount();
+  });
+  it("创建一次成功后 from-custom 恰好一次", async () => {
+    const create = vi.fn().mockResolvedValue({ project_id: "p1" });
+    apiFetchMock.mockResolvedValue({ candidates: [] });
+    const w = mountCustom(create);
+    await w.get("textarea").setValue("晏子使楚");
+    await w.get("[data-testid=custom-generate]").trigger("click");
+    await flushPromises();
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(apiFetchMock.mock.calls.some(([url]) => String(url).includes("/topic/from-custom"))).toBe(true);
     w.unmount();
   });
   it("422 不被吞掉：错误冒泡展示且不发 from-custom", async () => {

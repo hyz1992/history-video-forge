@@ -19,8 +19,7 @@ import {
   useCreativePresetsStore,
   type VoicePreviewResult,
 } from "../../stores/creative-presets";
-import { ApiError } from "../../utils/api";
-import { apiFetch } from "../../utils/api";
+import { ApiError, apiFetch } from "../../utils/api";
 
 // 任务11C：项目适用口播模式（narration_first_v1 时禁用 tts 槽与付费试听，引导到文案页口播面板）。
 const narrationMode = ref<string | null>(null);
@@ -91,11 +90,13 @@ watch(
     loaded.value = false;
     // 重开对话框时清空上次会话残留状态
     saveError.value = null;
-    // 任务11C：读取项目口播适用模式（只读快照，失败按未启用处理）。
+    // 任务11C：读取项目口播适用模式（只读快照，失败按未启用处理）；快切项目时丢弃过期响应。
     try {
       const snapshot = await apiFetch(`/api/projects/${projectId}`);
+      if (props.projectId !== projectId || !props.open) return;
       narrationMode.value = (snapshot as { narration_timing_mode?: string } | null)?.narration_timing_mode ?? null;
     } catch {
+      if (props.projectId !== projectId || !props.open) return;
       narrationMode.value = null;
     }
     await store.loadProjectConfig(projectId);

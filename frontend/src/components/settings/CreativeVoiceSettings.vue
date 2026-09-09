@@ -30,7 +30,8 @@ const narrationActive = computed(() => props.narrationMode === "narration_first_
 const previewingId = ref<string | null>(null);
 
 async function handlePreview(profile: VoiceProfileDto) {
-  previewError.value = null;
+    if (narrationActive.value) return; // 任务11C：WS 口播音色不触发旧付费 voice.preview
+    previewError.value = null;
   // cached：零费用直接播放
   if (profile.preview_audio_uri) {
     playAudio(profile.preview_audio_uri);

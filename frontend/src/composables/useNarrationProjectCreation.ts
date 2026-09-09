@@ -52,12 +52,13 @@ export function useNarrationProjectCreation(
         onSelected = resolve;
         onCancelled = () => reject(new NarrationCreationCancelled());
       });
-      waiting.value = false;
       return { ok: true, retrySelection: chosen };
     }
   }
 
   async function createOrAwait(input?: NarrationProjectCreationInput): Promise<unknown> {
+    // 重入守卫：已有流程在等待选择时拒绝再次进入，防止覆盖选择回调使前序流程永久挂起。
+    if (pendingSelection.value !== null) throw new NarrationCreationCancelled();
     let selection: NarrationSelectionChoice | undefined;
     try {
       for (;;) {
