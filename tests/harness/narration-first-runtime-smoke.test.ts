@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { runNarrationFirstRuntimeSmoke } from "../../harness/scripts/runtime/narration-first-runtime-smoke.js";
+import { runNarrationFirstRuntimeSmoke, assertNoAsrAlignment } from "../../harness/scripts/runtime/narration-first-runtime-smoke.js";
 
 describe("口播前置 fake runtime 冒烟", () => {
   it("确认文案→原生timing→确认口播→分镜→资产计划→fake图→compose→render 全链路同源且TTS恰一次", async () => {
@@ -34,6 +34,12 @@ describe("口播前置 fake runtime 冒烟", () => {
     expect(JSON.parse(readFileSync(reportPath, "utf8")).passed).toBe(true);
   }, 120000);
 
+  it("字幕 artifact 为 forced_alignment 时断言可失败（ASR 对齐信号）", () => {
+    expect(assertNoAsrAlignment([{ artifact_type: "subtitle_track", metadata: { timing_source: "provider_timestamp" } }])).toBe(true);
+    expect(assertNoAsrAlignment([{ artifact_type: "subtitle_track", metadata: { timing_source: "forced_alignment" } }])).toBe(false);
+    expect(assertNoAsrAlignment([{ artifact_type: "image", metadata: { timing_source: "forced_alignment" } }])).toBe(true);
+    expect(assertNoAsrAlignment(null)).toBe(true);
+  });
   it("带真实供应商凭据的环境拒绝运行（fail-closed）", async () => {
     vi.stubEnv("ALIYUN_DASHSCOPE_API_KEY", "test-key");
     await expect(runNarrationFirstRuntimeSmoke()).rejects.toThrow("narration_smoke_refuses_real_dashscope_credentials");

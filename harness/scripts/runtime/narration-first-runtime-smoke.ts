@@ -17,6 +17,13 @@ import type { AppInstance } from "../../../backend/src/app";
 import type { AssetPlanV2, StoryboardPlan } from "../../../shared/src/index.js";
 import type { AuthContext } from "../../../backend/src/auth/auth-context.js";
 
+/** 任务12：ASR 零参与的可失败断言——字幕 artifact 的 timing 来源不得为 forced_alignment
+ *  （local-subtitle-provider 仅在真实 ASR 对齐成功时写入该键；narration_first 字幕来自 revision 派生）。 */
+export function assertNoAsrAlignment(artifacts: unknown): boolean {
+  const list = Array.isArray(artifacts) ? artifacts as Array<{ artifact_type?: unknown; metadata?: Record<string, unknown> }> : [];
+  return !list.some((artifact) => artifact.artifact_type === "subtitle_track" && artifact.metadata?.timing_source === "forced_alignment");
+}
+
 export interface NarrationFirstRuntimeSmokeResult {
   outputDir: string;
   passed: boolean;
@@ -293,12 +300,9 @@ export async function runNarrationFirstRuntimeSmoke(input: { outputDir?: string 
   if ((fullManifest.audio_summary?.tts_chunk_artifact_ids ?? []).length !== 0) throw new Error("unexpected_chunk_artifacts");
   const mergedId = fullManifest.audio_summary?.tts_merged_artifact_id;
   if (!mergedId || (fullManifest.segment_routes ?? []).some((route) => route.tts_artifact_id !== mergedId)) throw new Error("segment_route_not_global_narration");
-  // ASR 零参与的可失败信号：字幕 artifact 的 timing 来源不得为 forced_alignment
-  //（local-subtitle-provider 仅在真实 ASR 对齐成功时才写入该值；narration_first 字幕来自 revision 派生，永不为 ASR 对齐）。
-  const asrAligned = ((fullManifest as unknown as { artifacts?: Array<{ artifact_type?: string; metadata?: Record<string, unknown> }> }).artifacts ?? [])
-    .filter((artifact) => artifact.artifact_type === "subtitle_track")
-    .some((artifact) => artifact.metadata?.subtitle_timing_source === "forced_alignment");
-  if (asrAligned) throw new Error("asr_unexpected_in_narration_first");
+  const manifestArtifacts = (fullManifest as unknown as { artifacts?: Array<{ artifact_id: string; artifact_type?: string; metadata?: Record<string, unknown> }> }).artifacts ?? [];
+  const importedSubtitle = manifestArtifacts.find((artifact) => artifact.artifact_id === "narration_subtitle_" + narrationRecordId);
+  if (importedSubtitle && !assertNoAsrAlignment([importedSubtitle])) throw new Error("asr_unexpected_in_narration_first");
   const nonFakeJobs = [...app.db.assetProviderJobRecords.values()].filter((job) => job.providerName !== "fake_image");
   if (nonFakeJobs.length > 0) throw new Error(`non_fake_provider_jobs:${nonFakeJobs.map((job) => job.providerName).join(",")}`);
   checks["assets_provider"] = "fake_image_only";
