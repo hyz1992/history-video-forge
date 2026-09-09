@@ -2,7 +2,7 @@ import { PrismaFirstAggregateWriter } from "../../../backend/src/db/repositories
 import Database from "better-sqlite3";
 import { applyAllDatabaseMigrations } from "../db/migration-test-utils.js";
 import { createPrismaClient } from "../../../backend/src/db/prisma-client.js";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve, sep } from "node:path";
 import { DashScopeNarrationProvider } from "../../../backend/src/modules/narration/providers/dashscope-narration-provider.js";
@@ -404,5 +404,21 @@ describe("EX7 Map文案确认最终来源", () => {
         const before = structuredClone(f.app.db.scriptConfirmations.get("s"));
         await confirmScript(f);
         expect(f.app.db.scriptConfirmations.get("s")).toEqual(before);
+    });
+});
+describe("字幕bundle读取失败降级", () => {
+    it("bundle损坏时详情返回subtitle:null且保留记录与音频，不整体失败", async () => {
+        const f = await fixture(syntheticProvider());
+        await confirmScript(f);
+        const record = await readyCandidate(f, "degrade");
+        const ok = await f.app.inject({ method: "GET", url: f.url + "/script/narrations/" + record.id, auth });
+        expect(ok.statusCode).toBe(200);
+        expect(ok.json().subtitle).not.toBeNull();
+        writeFileSync(join(f.project.storageRootDir!, record.output!.timingMap.uri), "corrupt");
+        const r = await f.app.inject({ method: "GET", url: f.url + "/script/narrations/" + record.id, auth });
+        expect(r.statusCode).toBe(200);
+        expect(r.json().subtitle).toBeNull();
+        expect(r.json().record.id).toBe(record.id);
+        expect(r.json().files?.audio).toBeTruthy();
     });
 });

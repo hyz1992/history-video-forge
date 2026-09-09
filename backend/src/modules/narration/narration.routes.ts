@@ -65,7 +65,7 @@ export function registerNarrationRoutes(app: AppInstance) {
         if(record.output && revision){
           const shortId="p_"+project.id.replace(/[^a-zA-Z0-9]/g,"").toLowerCase().slice(0,8).padEnd(8,"0");
           const storageRootDir = "storageRootDir" in project ? project.storageRootDir as string : resolveProjectStorageRoot({storageRoot:c.app.storageBaseDir,createdAt:project.createdAt,displayName:project.storageDisplayName,shortId,storageKey:project.storageKey});
-          subtitle = await new NarrationBundleStorage({projectId:record.projectId,storageRootDir}).readSubtitleRevision({record,revision});
+          try{ subtitle = await new NarrationBundleStorage({projectId:record.projectId,storageRootDir}).readSubtitleRevision({record,revision}); }catch{ subtitle = null; }
         }
         const base = "/api/projects/" + encodeURIComponent(record.projectId) + "/script/narrations/" + encodeURIComponent(record.id);
         return { statusCode: 200, body: { record, subtitle, idempotency_key: run?.idempotencyKey ?? null, effective_status: narrationVisibleStatus(record.status, run?.status ?? null), run_status: run?.status ?? null, files: record.output ? { audio: base + "/files/audio", timing: base + "/files/timing", events: base + "/files/events", srt: base + "/subtitles/" + (revision?.id ?? record.output.initialSubtitleRevisionId) + "/files/srt", vtt: base + "/subtitles/" + (revision?.id ?? record.output.initialSubtitleRevisionId) + "/files/vtt" } : null } };
