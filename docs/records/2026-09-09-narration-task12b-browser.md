@@ -37,6 +37,10 @@
 - 隔离库 FK 根因闭环：库内 admin-private/owner-private 两条档案 owner 指向 browser-admin/browser-owner，验收用户建为自动 id 导致 FK 失败；已改为显式 id 建用户 + 预置隔离音色库，voiceProfile seed FK 通过。
 - topic 页 confirm-candidate 仍不出现：原因与 stub 推荐生成的触发时机有关（系统入口 fire-and-forget 的候选在整页跳转后由后端候选库承载，页面加载路径上另有 better-sqlite3 目录打开错误未处理拒绝使进程退出）。需下一轮定位后端该 sqlite 打开点。
 
+## 补充调试三（09-10）
+
+- 捕获未处理拒绝完整堆栈：失败连接确为 Prisma better-sqlite3 adapter connect（），即在途/页面加载期间存在第二个按 env DATABASE_URL 惰性连接的客户端实例，其目录不存在。待定位该第二实例的创建点（疑与  在 createPrismaClient 之后的赋值时序或某模块自建 client 有关）。
+
 ## 处置
 
 - Task11C 候选 f27a6c3a 的层叠修复（代码级）维持已修判定；浏览器命中验证标注为未验证，归 Task12 后续。

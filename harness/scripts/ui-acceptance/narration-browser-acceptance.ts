@@ -48,6 +48,10 @@ const SCRIPT_TEXT = "一二三四五六七八";
 
 interface AcceptanceResult { step: string; pass: boolean; detail?: string }
 const results: AcceptanceResult[] = [];
+// 调试：捕获未处理拒绝的完整堆栈（定位 better-sqlite3 打开点），不使进程崩溃。
+process.on("unhandledRejection", (reason) => {
+  console.error("DEBUG unhandledRejection stack:", (reason as Error)?.stack ?? String(reason));
+});
 function record(step: string, pass: boolean, detail?: string): void {
   results.push({ step, pass, detail });
   console.log(`${pass ? "PASS" : "FAIL"} ${step}${detail ? ` :: ${detail}` : ""}`);
