@@ -2,14 +2,15 @@
  * Task12-B：口播前置真实浏览器验收（stub/fake 部署，零真实供应商调用）。
  *
  * 覆盖清单（任务12 checklist 浏览器项中与 11A/11B/11C 相关的子集）：
- * 1. 三入口创建拒绝→选择面板→带 selection 重试成功（系统推荐/事件库/自定义，输入保留）；
+ * 1. 三入口创建拒绝→选择面板→确认→带 selection 重试成功（系统推荐/事件库/自定义）；
  * 2. 取消不创建；口播未确认时深链分镜回文案；
  * 3. 事件库 422 选择面板层叠可操作（详情抽屉打开状态）；
- * 4. 旧项目（legacy）不受门禁影响；
- * 5. 项目设置：narration 项目 tts 槽禁用、试听按钮隐藏并引导文案页；非 narration 不变；
- * 6. 升级弹窗存在（Task11B）与口播面板生成/确认主链（Task11A 简要回归）。
+ * 4. legacy 项目并存不受口播门禁影响（开关开启时普通创建按设计 422 + 直造 legacy 深链）；
+ * 5. 项目设置：narration 项目 tts 槽禁用、试听按钮隐藏并引导文案；
+ * 6. 口播面板生成/确认主链（确认正文→生成口播→确认口播）。
  *
- * 未覆盖（声明）：真实供应商调用（synthetic provider 注入）；字幕样式浏览器专项；导出专项。
+ * 未覆盖（声明）：真实供应商调用（synthetic provider 注入）；字幕样式浏览器专项；
+ * 导出专项；Task11B 升级弹窗专项；非 narration 项目的设置页对照；自定义输入保留断言。
  */
 // 环境前置声明必须最先求值（在 backend env.ts 读取项目根 .env 之前），见文件内说明。
 import "./narration-browser-acceptance.setup.js";
@@ -191,6 +192,9 @@ async function startAcceptanceApp(): Promise<Setup> {
   process.env.SERVER_PORT = String(backendPort);
   process.env.SERVER_HOST = "127.0.0.1";
   process.env.VITEST = "1";
+  // trace 写盘与 topic 候选库在 VITEST 下按 STORAGE_ROOT_DIR 兜底取根（否则落到
+  // process.cwd()，验收数据会写进用户真实 storage/，含共享的候选库索引）。
+  process.env.STORAGE_ROOT_DIR = join(root, "project-storage");
   // 冒烟/验收经 buildApp 选项注入 narrationFirstEnabled，但 createProject 路由读 env——
   // 422 资格拒绝只在模式开启时发生，这里显式打开。
   process.env.NARRATION_FIRST_ENABLED = "true";
@@ -279,7 +283,14 @@ async function stopAcceptanceApp(setup: Setup): Promise<void> {
   setup.httpServer.close();
   await setup.client.$disconnect();
   debugAt("teardown disconnected");
-  rmSync(setup.root, { recursive: true, force: true });
+  // Windows 下 better-sqlite3 WAL/SHM 句柄释放有延迟，rmSync 偶发 EBUSY，短暂等待后重试。
+  await new Promise((resolvePromise) => setTimeout(resolvePromise, 500));
+  try {
+    rmSync(setup.root, { recursive: true, force: true });
+  } catch {
+    await new Promise((resolvePromise) => setTimeout(resolvePromise, 1500));
+    rmSync(setup.root, { recursive: true, force: true });
+  }
   debugAt("teardown done");
 }
 
@@ -318,7 +329,9 @@ async function main(): Promise<void> {
     await page.waitForSelector('[data-testid="topic-dialog"]', { timeout: 15000 });
     page.on("pageerror", (err) => console.error("DEBUG pageerror:", err.message));
     page.on("console", (msg) => { if (msg.type() === "error") console.error("DEBUG console.error:", msg.text().slice(0, 300)); });
+    const systemCreatePromise = page.waitForResponse((response) => response.url().endsWith("/api/projects") && response.request().method() === "POST", { timeout: 20000 });
     await page.locator('[data-testid="generate-topic"]').click();
+    const systemCreateResp = await systemCreatePromise;
     await page.waitForSelector('[data-testid="narration-creation-selection"]', { timeout: 15000 }).catch(async () => {
       const dialogText = await page.locator("[data-testid=topic-dialog]").innerText().catch(() => "(dialog gone)");
       console.error("DEBUG post-click dialog:", dialogText.slice(0, 200));
@@ -326,7 +339,7 @@ async function main(): Promise<void> {
       console.error("DEBUG retry-with-selection:", JSON.stringify(retryDebug).slice(0, 500));
       throw new Error("selection panel not visible");
     });
-    record("system: 422 后原地展示选择面板", true);
+    record("system: 提交后 422 资格拒绝并原地展示选择面板", systemCreateResp.status() === 422, `status=${systemCreateResp.status()}`);
     await page.locator('[data-testid="narration-creation-option"]').first().check();
     await page.locator('[data-testid="narration-creation-confirm"]').click();
     await page.waitForURL(/\/projects\/.+\/topic/, { timeout: 20000 });
@@ -379,45 +392,68 @@ async function main(): Promise<void> {
     const accept = page.locator('[data-testid="accept-duration"]');
     if (await accept.count()) await accept.check();
     await page.locator('[data-testid="narration-confirm"]').click();
+    const narrationConfirmResp = await page.waitForResponse((response) => response.url().includes("/narrations/") && response.url().endsWith("/confirm"), { timeout: 15000 }).catch(() => null);
     await page.waitForTimeout(800);
-    record("narration: 口播确认完成", true);
+    const narrationStatusAfter = await page.locator("[data-testid=narration-status]").innerText().catch(() => "");
+    // 确认成功且下游就绪时前端会自动跳分镜页，此时 narration-status 已卸载，
+    // 以「确认 API 2xx + 状态标签已确认 或 已跳分镜」为确认完成的判据。
+    record(
+      "narration: 口播确认完成",
+      narrationConfirmResp !== null && narrationConfirmResp.ok() && (narrationStatusAfter.includes("口播已确认") || page.url().includes("/storyboard")),
+      `api=${narrationConfirmResp?.status() ?? "no-response"} status="${narrationStatusAfter.slice(0, 20)}" url=${page.url().slice(-40)}`,
+    );
 
-    // 3) 事件库入口：422→选择面板在详情抽屉之上可操作（层叠）
+    // 3) 事件库入口：422→选择面板在详情抽屉之上可操作（层叠）→取消零创建→
+    //    再次生成→确认→带 selection 重试创建成功（与系统/自定义入口同链）。
     await page.goto(base);
     await page.locator('button:has-text("新建项目"), button:has-text("创建项目")').first().click({ timeout: 10000 }).catch(() => undefined);
     await page.waitForSelector('[data-testid="topic-dialog"]', { timeout: 15000 });
     await page.locator('.tab-btn:has-text("事件库")').click();
-    // 事件库列表为异步加载，必须等 loading 结束再判定条目，避免误判为空。
+    // 事件库列表为异步加载，必须等 loading 结束再判定条目；条目缺失属环境异常判 FAIL。
     const card = page.locator(".entry-card").first();
     await card.waitFor({ state: "visible", timeout: 15000 }).catch(() => undefined);
-    if (await card.isVisible().catch(() => false)) {
+    if (!(await card.isVisible().catch(() => false))) {
+      record("library: 事件库无条目（fixture 缺失，层叠与重试验证未完成）", false, "no entries");
+    } else {
       await card.click();
       await page.waitForSelector('[data-testid="library-generate"]', { timeout: 15000 });
+      const libraryFirstPromise = page.waitForResponse((response) => response.url().endsWith("/api/projects") && response.request().method() === "POST", { timeout: 20000 });
       await page.locator('[data-testid="library-generate"]').click();
+      const libraryFirstResp = await libraryFirstPromise;
       await page.waitForSelector('[data-testid="narration-creation-selection"]', { timeout: 15000 });
-      const option = page.locator('[data-testid="narration-creation-option"]').first();
-      const visible = await option.isVisible();
-      record("library: 422 选择面板在详情抽屉之上可操作（层叠）", visible);
+      // 勾选即层叠可操作的真实证明（isVisible 只能证明渲染）。
+      await page.locator('[data-testid="narration-creation-option"]').first().check({ timeout: 5000 });
+      record("library: 422 后选择面板在详情抽屉之上可勾选（层叠）", libraryFirstResp.status() === 422, `create status=${libraryFirstResp.status()}`);
       await page.locator('[data-testid="narration-creation-cancel"]').click();
       record("library: 取消后零创建", (await setup.app.db.projects.size) === 1);
-      // 关闭事件库详情抽屉，其遮罩会挡住后续自定义 tab 的点击。
-      await page.locator(".detail-close").click({ timeout: 5000 });
-    } else {
-      record("library: 事件库无条目（环境 fixture 缺失，跳过层叠验证）", true, "no entries");
+      // 再次生成→面板→确认，验证带 selection 重试创建腿。
+      await page.locator('[data-testid="library-generate"]').click();
+      await page.waitForSelector('[data-testid="narration-creation-selection"]', { timeout: 15000 });
+      const libraryRetryPromise = page.waitForResponse((response) => response.url().endsWith("/api/projects") && response.request().method() === "POST", { timeout: 20000 });
+      await page.locator('[data-testid="narration-creation-option"]').first().check();
+      await page.locator('[data-testid="narration-creation-confirm"]').click();
+      const libraryRetryResp = await libraryRetryPromise;
+      record("library: 确认后带 selection 重试创建成功", libraryRetryResp.ok(), `status=${libraryRetryResp.status()}`);
+      await page.waitForURL(/\/projects\/.+\/topic/, { timeout: 20000 }).catch(() => undefined);
+      record("library: 重试后进入项目 topic 页", page.url().includes("/projects/") && page.url().includes("/topic"), page.url().slice(-60));
     }
 
     // 4) 自定义入口：422 → 面板 → 确认带 selection 重试创建成功。创建后前端自动
     //    触发提炼；stub 部署下提炼按设计 fail-closed（custom refine 不接 stub LLM
     //    → 503 custom_refine_unavailable），记录为设计行为，不作为门禁失败。
+    await page.goto(base);
+    await page.locator('button:has-text("新建项目"), button:has-text("创建项目")').first().click({ timeout: 10000 }).catch(() => undefined);
+    await page.waitForSelector('[data-testid="topic-dialog"]', { timeout: 15000 });
     await page.locator('.tab-btn:has-text("自定义选题")').click();
     await page.locator("textarea").fill("晏子使楚");
-    const customRefinePromise = page.waitForResponse((response) => response.url().includes("/topic/from-custom"), { timeout: 30000 });
+    const customFirstPromise = page.waitForResponse((response) => response.url().endsWith("/api/projects") && response.request().method() === "POST", { timeout: 20000 });
     await page.locator('[data-testid="custom-generate"]').click();
+    const customFirstResp = await customFirstPromise;
     await page.waitForSelector('[data-testid="narration-creation-selection"]', { timeout: 15000 }).catch(async (error) => {
       debugAt(`custom selection missing; dialog=${JSON.stringify((await page.locator("[data-testid=topic-dialog]").innerText().catch(() => "(dialog gone)")).slice(0, 200))}`);
       throw error;
     });
-    record("custom: 422 后原地展示选择面板", true);
+    record("custom: 提交后 422 资格拒绝并原地展示选择面板", customFirstResp.status() === 422, `status=${customFirstResp.status()}`);
     await page.locator('[data-testid="narration-creation-option"]').first().check();
     // 重试 promise 必须在 confirm 前注册，否则会捕获到第一次 422 响应。
     const customRetryPromise = page.waitForResponse((response) => response.url().endsWith("/api/projects") && response.request().method() === "POST", { timeout: 20000 });
@@ -430,7 +466,7 @@ async function main(): Promise<void> {
       customRefineResp === null || customRefineResp.status() === 503,
       customRefineResp === null ? "未捕获提炼请求" : `status=${customRefineResp.status()}`,
     );
-    record("custom: 全流程创建无重复", setup.app.db.projects.size === 2, `projects=${setup.app.db.projects.size}`);
+    record("custom: 全流程创建无重复", setup.app.db.projects.size === 3, `projects=${setup.app.db.projects.size}`);
 
     // 5) 项目设置：narration 项目 tts 槽禁用、试听隐藏并引导（用系统入口项目验证）
     await page.goto(`${base}projects/${projectIdFromUrl}/topic`);
@@ -483,7 +519,11 @@ async function main(): Promise<void> {
     });
     await page.goto(`${base}projects/${freshProject.id}/storyboard`);
     await page.waitForURL(/reason=narration_required/, { timeout: 15000 }).catch(() => undefined);
-    record("deeplink: 未确认口播分镜回文案", page.url().includes(`/projects/${freshProject.id}/script`));
+    record(
+      "deeplink: 未确认口播分镜回文案",
+      page.url().includes("reason=narration_required") && page.url().includes(`/projects/${freshProject.id}/script`),
+      page.url().slice(-80),
+    );
   } finally {
     if (browser) await browser.close().catch(() => undefined);
     if (setup) await stopAcceptanceApp(setup).catch(() => undefined);
