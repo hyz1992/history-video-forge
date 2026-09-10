@@ -8,6 +8,13 @@
 
 ## 当前状态
 
+截至 2026-09-10：
+
+- `口播前置与真实时间轴` 实施计划任务 1–11 全部完成并通过独立审查收敛；任务 12 拆分的两个子任务已收敛：Task12-A fake runtime 冒烟（[记录](../records/2026-09-09-narration-task12a-runtime-smoke.md)）与 Task12-B 真实浏览器验收（[记录](../records/2026-09-09-narration-task12b-browser.md)，run13/run14 两轮 0 failed，含三入口 422→面板→重试、事件库层叠命中、口播主链、深链门禁、legacy 并存、设置项禁用与零未处理拒绝）。
+- Task12-C 已完成 [A1–A10 验收标注矩阵](../records/2026-09-10-narration-task12c-acceptance-matrix.md)：A1–A7、A9、A10 已验证（离线/隔离/资格级，缺口逐项留档）；**A8 成品级未验证**（无整片 MP4 与真实音视频 probe、字幕误差人工达标无记录），需另行明确预算授权的整片验收。
+- 发布开关 `NARRATION_FIRST_ENABLED` 保持 `false`（A8 未通过前不开放）；关闭语义、显式升级与回滚方式已验证（开关关闭回到 legacy 新建，v1/v2 读取并存，禁止破坏性 down migration）。
+- 未完成收口项：正式架构文档（pipeline-io-spec / script-stage-design / api-design / field-design / schema-design / harness README）中"字幕纯估算/只能资产阶段 TTS"等过时表述清理为独立后续子任务。
+
 截至 2026-09-05：
 
 任务 0 更新：用户已授权 5 元，三组候选同稿九次真实采集完成，用量折价 1.55102 元；相关 58 项测试通过。CosyVoice 两组全文时间戳覆盖失败，Qwen 听审及边界精度待验证，语气槽未执行；[真实证据](../records/2026-09-05-narration-provider-live-comparison.md)。任务 0 整体未通过，不进入任务 1。
@@ -16,8 +23,8 @@
 
 后续：用户已批准[两次自然段输入对照](../records/2026-09-06-narration-paragraph-comparison.md)，两次均已执行，累计usage折价2.33198元；Cosy仍截断，Qwen全文映射仍完整、旧长等分现象本轮消失，但正文零时长/听审尚未验收。101项回归通过，任务1保持关闭。
 
-- `口播前置与真实时间轴`：已形成[设计及候选比较](./2026-09-05-narration-first-timing-design.md)和[实施计划](./2026-09-05-narration-first-timing-implementation-plan.md)，业务尚未实施。用户限定的三轮自审修复已结束，设计及计划终审通过，任务 0 已进入有限实测；共享音色/协议、三入口创建、真实持久化/偏好继承、字幕渲染直通及摘录绑定等闭环见[循环记录](../records/2026-09-05-narration-first-design-review-loops.md)。最终默认待本轮资格与比较验收后选定，不把官方能力或文档通过当作项目实测结论。
-- 本需求下一步以新计划任务 0 为入口；下方 S2-2 顺序为历史项目状态，不作为本次口播改造执行指令。环境音效不在本次范围。
+- （历史状态，截至 2026-09-05）`口播前置与真实时间轴`：已形成[设计及候选比较](./2026-09-05-narration-first-timing-design.md)和[实施计划](./2026-09-05-narration-first-timing-implementation-plan.md)，当时业务尚未实施。用户限定的三轮自审修复已结束，设计及计划终审通过，任务 0 已进入有限实测；共享音色/协议、三入口创建、真实持久化/偏好继承、字幕渲染直通及摘录绑定等闭环见[循环记录](../records/2026-09-05-narration-first-design-review-loops.md)。最终默认待本轮资格与比较验收后选定，不把官方能力或文档通过当作项目实测结论。
+- （历史状态）本需求下一步以新计划任务 0 为入口；下方 S2-2 顺序为历史项目状态，不作为本次口播改造执行指令。环境音效不在本次范围。当前实际进度以上方 2026-09-10 块为准。
 
 截至 2026-08-23：
 

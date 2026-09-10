@@ -60,6 +60,7 @@
 - [x] 收口 `S2-0` LLM 回复速度、质量和结构化输出优化基线：S2-0 期间尝试了紧凑结论合同、selector thinking on、builder+light-review 等多轮方案，均未能解决"细粒度语义风险识别需要 reasoning、而 reasoning 在 GLM-5.x 上必然带来 70~400s 长尾"这一死结；最终于 `2968c5e` 回滚到 builder(8)+selector 架构并冻结当前模型组合下的进一步优化。最终设计与实施计划见 [S2-0 回滚设计](../plans/archive/2026-07-17-s2-0-topic-rollback-to-builder-selector-design.md) 与 [实施计划](../plans/archive/2026-07-17-s2-0-topic-rollback-to-builder-selector-implementation-plan.md)；67 个试错 commit 与全部实测记录完整保留在 git 历史中作为 S2-1 输入。
 - [x] 完成 `S2-1` 多模型、多供应商切换：引入 `smart` / `flash` 两档 tier 作为模型路由唯一维度，每个 operation 声明所需 tier，gateway 按 tier 解析到具体 `provider:model`。阶段一主链路改造（operation-tier-registry / provider-registry / tier-resolver / tier-aware-provider / tier-aware-provider-factory / env 接入新变量 / providers.json 示例 / 8 个调用方接入 / 启动诊断日志）与阶段二 live 验收（DeepSeek smart + 智谱 flash 端到端冒烟、selector thinking 决策）均完成。设计见 [S2-1 设计](../plans/archive/2026-07-17-s2-1-multi-provider-model-routing-design.md)，selector 决策记录见 [2026-07-18 S2-1 Selector Thinking 决策记录](../records/2026-07-18-s2-1-selector-thinking-decision.md)。S2-1 进入冻结状态，作为 S2-2 输入。
 - [x] 收口当前未归档计划，避免历史 implementation plan 误导新任务（2026-08-11 完成；`docs/plans/` 根目录仅保留状态 README，历史计划已移入 `archive/` 且不可续跑）
+- [x] 完成 `口播前置与真实时间轴` 实施计划任务 1–11（模型资格/策略门禁、原生字幕合同、WS 适配器、字幕 bundle、生命周期、失效链、分镜投影、planner、资产/manifest/字幕修订、时间轴与渲染投影、文案面板/升级/三入口创建）并逐任务审查收敛；任务 12 子任务 Task12-A fake runtime 冒烟与 Task12-B 真实浏览器验收已收敛（2026-09-10；三入口 422→选择面板→selection 重试、事件库层叠命中、口播生成/确认主链、深链门禁、legacy 并存、设置项禁用、零未处理拒绝），Task12-C 完成 [A1–A10 验收标注矩阵](../records/2026-09-10-narration-task12c-acceptance-matrix.md)（A1–A7/A9/A10 已验证，A8 成品级未验证）。发布开关 `NARRATION_FIRST_ENABLED` 保持 `false`，开放前须完成预算授权的整片成片验收
 
 ## 进行中
 - [ ] 细化 `family_confidence` 计算规则
@@ -99,6 +100,9 @@
 - [第四阶段实施计划](../plans/archive/topic-script/2026-04-21-topic-script-phase-4-implementation-plan.md)
 
 ## 剩余风险与验证缺口
+
+- [ ] `口播前置` A8 成品级验收未验证：无整片成品 MP4 与真实音视频 probe、字幕误差人工达标无记录（组件级证据齐备，见 [A1–A10 标注矩阵](../records/2026-09-10-narration-task12c-acceptance-matrix.md)）；解锁需明确预算授权的整片验收（少量真实口播 + 已有/本地视觉素材，逐镜输出起止差值表并 probe 实际 MP4）。发布开关保持关闭直至该项通过。附带留档：跨模型盲听评分未执行、供应商结算账单未核对、旧字幕样式整片重放未执行、导出动作直接断言与 Task11B 升级弹窗浏览器覆盖未做。
+- [ ] 正式架构文档同步：`pipeline-io-spec` / `script-stage-design` / `api-design` / `field-design` / `schema-design` / `harness/README` 中"字幕一直纯估算/只能资产阶段 TTS"等过时表述待清理（口播前置已实现原生时间轴直通，保留 legacy 说明）。
 
 - [ ] 前端类型检查闸门缺失（frontend 无 tsconfig，`vite build` 不做 TS 类型检查；2026-08-20 任务 10 审查登记，计划已更正为 `npm run build:frontend` 等价替代，正式类型检查闸门待建）
 - [ ] S2-2A 任务 11 留档（2026-08-20 终审 Minor，详见 [任务 11 审查记录](../records/2026-08-20-s2-2a-task11-review-record.md)）：成本页按运行/成功失败分组未实现（设计 §11.4，待补实施）；404 重试启发式待修（建议与 409 同归"重新报价"）；批量生成成功提示时序已修复（2026-08-21 外部审查 B1，确认提交后触发）；StrictFallbackDialog 交互层测试待补（浏览器验收未覆盖，roadmap 登记承接）；generationCostStore 未 main.ts provide（跨页不共享）+ CLIENT_PREVIEW_ONLY 死导出
