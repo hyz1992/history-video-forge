@@ -50,28 +50,39 @@
    - **诚实披露**：09-09 至 09-10 上午的验收轮次（.env 泄漏期间）中，系统入口确认后的 fire-and-forget topic 推荐 run（≤3 次）可能已向 `.env` 所配 LLM 服务发起真实调用，产生少量真实消耗，无法精确审计。此后环境已隔离，不再可能。
    - 修复：新增 `narration-browser-acceptance.setup.ts`，作为主脚本第一条 import 在任何 backend 模块求值前声明 `VITEST=1`、`LLM_PROVIDER=stub`、删除真实 LLM key、设置 fake DashScope key（供 generation-cost bootstrap 种出媒体目录 active 项，满足 run 解析的 `image.generate` 槽位；验收主链不派发媒体任务，零真实调用）。
 3. **synthetic 口播 provider 不满足合同**：固定 8 字/2 秒返回无法通过 `narration_timing_invalid` 校验（要求 sentences.originalText 拼接 === 请求正文、words 拼接 === normalizedText、词级时间戳非零递增、PCM 时长一致）。改为按真实请求正文动态生成单句+逐字时间戳（每字 60ms、24000Hz PCM），通过 timing normalizer 与 bundle 校验。
-4. **脚本层修复**：`projectIdFromUrl` 进入项目后从未赋值（此前 `/projects//topic` 空路径导致「生成选题」按钮误判不存在）；TopicPanel 的 `confirm-candidate` 仅在选中候选卡片后渲染；事件库列表需等异步 loading 结束再判定条目；事件库详情抽屉遮罩（`detail-overlay`）取消面板后仍拦截点击，需先关抽屉；custom 重试 `waitForResponse` 需在 confirm 前注册；settings 入口为 `data-testid="open-project-settings"`；narration 开启时普通创建（无 selection）按设计 422，legacy 与 fresh narration 项目改为经 `createProject` service 直造。
+4. **脚本层修复**：`projectIdFromUrl` 进入项目后从未赋值（此前 `/projects//topic` 空路径导致「生成选题」按钮误判不存在）；TopicPanel 的 `confirm-candidate` 仅在选中候选卡片后渲染；事件库列表需等异步 loading 结束再判定条目；事件库详情抽屉遮罩（`detail-overlay`）取消面板后仍拦截点击；custom 重试 `waitForResponse` 需在 confirm 前注册；settings 入口为 `data-testid="open-project-settings"`；narration 开启时普通创建（无 selection）按设计 422，legacy 与 fresh narration 项目改为经 `createProject` service 直造。
+5. **验收数据写进用户真实 storage 的隔离缺口（双角色复审 R2 发现，重要）**：Vitest 下 run trace 写盘（`resolveStorageBaseDir()`）与 topic 候选库（`topic-candidate-library.repository.ts`）按 `STORAGE_ROOT_DIR` 兜底取根，未设时落到项目根——run1–run12 期间验收数据（`storage/projects/2026-09-10/` 下的项目 trace、`storage/topic-candidate-library/library-index.json` 的合并写入）污染了用户真实 storage。修复：脚本显式设 `STORAGE_ROOT_DIR` 指向临时根（`project-storage`），run13 起用户 storage 零新增写入（已核实 mtime）。
+   - **诚实披露**：run1–run12 写入的用户 storage 验收数据未自动清理——`storage/projects/2026-09-10/` 混有用户当日 dev 数据不便脚本侧甄别，`library-index.json` 为共享运行态索引（合并写入不可逆），是否清理交由用户决定。
+   - **附带闭环**：该兜底正是「确认口播后自动触发的 `storyboard/generate` 500 `narration_bundle_incomplete`」的根因——分镜读路径经 cwd 兜底解析 `storageRootDir`，与 narration bundle 写路径（app `storageBaseDir` 临时根）不同根导致 bundle 读取 missing。`STORAGE_ROOT_DIR` 修复后 run13/run14 该 500 不再出现。
+6. **双角色复审修复（R1 critical/important）**：事件库入口补齐「确认→带 selection 重试创建→进入项目」验证腿（此前只验证到 422→面板→层叠→取消，文档曾误将其表述为清单整项通过）；层叠断言从 `isVisible` 升级为真实勾选（可操作性证明）；事件库条目缺失分支从记 PASS 改为记 FAIL（环境异常不得静默通过）；「口播确认完成」从无断言点击升级为「确认 API 2xx + 状态标签已确认或已自动跳分镜」复合判据（确认成功且下游就绪时前端自动跳分镜、`narration-status` 卸载，属合法完成形态）；系统/事件库/自定义三入口的 422 均断言 HTTP 状态；深链断言补 `reason=narration_required`；脚本头注释与实际覆盖清单对齐（输入保留、非 narration 设置对照、Task11B 升级弹窗移入未覆盖声明）。
+7. **进程清理**：历次轮次在 Windows 下遗留验收孤儿进程（tsx 脚本链 + 随机端口 vite）与 mkdtemp 临时目录（better-sqlite3 WAL 句柄释放延迟导致 `rmSync` 偶发 EBUSY）。修复：teardown 在 disconnect 后等待句柄释放并对 `rmSync` 重试；存量孤儿进程（与用户 5173/3008 dev 服务可按命令行区分）已手动终止、临时目录已清理。
 
-### 验收结果（真实 Chromium，run11/run12 连续两轮全绿，0 failed）
+### 验收结果（真实 Chromium，复审修复后 run13/run14 连续两轮 0 failed）
 
 | 验收项（原始清单） | 结果 | 证据 |
 |---|---|---|
-| 系统推荐入口：422 资格拒绝→原地选择面板→确认→带 selection 重试成功进入项目 | 已验证 PASS | run12 `system: 422 后原地展示选择面板` 等 3 项 |
-| 单项目创建（无重复） | 已验证 PASS | run12 `projects=1` |
-| topic 候选确认→script 生成→NarrationPanel 确认正文→生成口播→确认口播主链 | 已验证 PASS | run12 `narration: 口播生成成功（音频出现）`、`narration: 口播确认完成` |
-| 事件库入口：422→面板在详情抽屉之上可操作（Task11C F1 层叠命中） | 已验证 PASS | run12 `library: 422 选择面板在详情抽屉之上可操作（层叠）`；此前标注"未验证"的 z-index 1200>1100 修复现已被真实浏览器命中验证覆盖 |
-| 取消不创建 | 已验证 PASS | run12 `library: 取消后零创建` |
-| 自定义入口：422→面板→确认重试创建成功 | 已验证 PASS | run12 `custom: 确认后带 selection 重试创建成功 :: status=201`、`projects=2` |
-| narration 项目设置：tts 槽禁用并提示策略固定、试听按钮隐藏且引导文案 | 已验证 PASS | run12 settings 两项 |
+| 系统推荐入口：422 资格拒绝→原地选择面板→确认→带 selection 重试成功进入项目 | 已验证 PASS | run14 `system: 提交后 422 资格拒绝…status=422`、`确认后带 selection 重试成功并进入项目` |
+| 单项目创建（无重复） | 已验证 PASS | run14 `projects=1` |
+| topic 候选确认→script 生成→NarrationPanel 确认正文→生成口播→确认口播主链 | 已验证 PASS | run14 `narration: 口播生成成功（音频出现）`；`口播确认完成`（确认 API 200 + 已自动跳分镜） |
+| 事件库入口：422→面板在详情抽屉之上可勾选（Task11C F1 层叠命中） | 已验证 PASS | run14 `library: 422 后选择面板在详情抽屉之上可勾选（层叠）`；z-index 1200>1100 修复已被真实浏览器命中验证覆盖 |
+| 事件库入口：确认→带 selection 重试创建成功 | 已验证 PASS | run14 `library: 确认后带 selection 重试创建成功 :: status=201`、`重试后进入项目 topic 页` |
+| 取消不创建 | 已验证 PASS | run14 `library: 取消后零创建` |
+| 自定义入口：422→面板→确认带 selection 重试创建成功 | 已验证 PASS | run14 `custom: …status=201`、`projects=3` |
+| narration 项目设置：tts 槽禁用并提示策略固定、试听按钮隐藏且引导文案 | 已验证 PASS | run14 settings 两项 |
 | legacy 并存不受门禁影响 | 已验证 PASS | 开关开启时无 selection 创建按设计 422；直造 legacy 项目分镜深链无 `reason=narration_required` 拦截 |
-| 深链：未确认口播的 narration 项目分镜回文案 | 已验证 PASS | run12 `deeplink: 未确认口播分镜回文案` |
-| 验收期间零未处理拒绝 | 已验证 PASS | run11/run12 `count=0` |
+| 深链：未确认口播的 narration 项目分镜回文案 | 已验证 PASS | run14 `deeplink: …script?reason=narration_required` |
+| 验收期间零未处理拒绝 | 已验证 PASS | run13/run14 `count=0` |
+| 确认口播后分镜链路（附带回归） | 已验证 PASS | run13/run14 确认口播自动跳分镜，`storyboard/generate` 不再 500（`STORAGE_ROOT_DIR` 隔离修复后 bundle 读写同根） |
 
 ### 遗留与未验证边界
 
-- **`narration_bundle_incomplete` 待查（归 downstream / Task12-C）**：确认口播后前端自动跳分镜并自动触发 `storyboard/generate`，run7–run10 曾出现 500 `narration_bundle_incomplete`（run11/run12 未复现）。初判嫌疑为分镜读路径（`project.storageRootDir`）与 narration bundle 写路径的对账问题，或 stub 部署下分镜 LLM 派发的失败形态问题；不影响本任务验收范围，需单独定位。
+- ~~`narration_bundle_incomplete` 待查~~ **已闭环（09-10）**：根因即上文旅离缺口第 5 条——分镜读路径经 `resolveStorageBaseDir()` 兜底取根与 narration bundle 写路径不同根；`STORAGE_ROOT_DIR` 隔离修复后 run13/run14 复现消失。
 - 自定义提炼在 stub 部署下 503 `custom_refine_unavailable` 为**设计 fail-closed**（custom refine 不接 stub LLM，见 topic-custom-refine.service 注释）；提炼成功后的浏览器链路未在本环境验证，组件级已覆盖。
+- 自定义入口「输入保留」断言、非 narration 项目的设置页对照、Task11B 升级弹窗：本轮未覆盖（脚本头注释已声明），留后续。
+- 浏览器内核说明：早期调试轮使用系统 Edge/Chromium 通道，收敛结论轮次统一为 Playwright `chromium.launch()`（真实 Chromium）。
 - 真实供应商音质/时间精度/成片；历史字幕预设浏览器专项；导出专项（延续）。
+
+> 说明：本文「已通过/被阻塞/补充调试」等较早章节为历史过程记录，与最终结论存在演进差异时以本章（收敛结论）为准。
 
 ## 处置（更新）
 
