@@ -11,6 +11,7 @@ import { checkPrismaReadiness } from "./db/prisma-readiness.js";
 import { emptyPrismaReadinessChecks } from "./db/prisma-readiness.js";
 import { resolveDatabasePath } from "./db/database-url.js";
 import { PrismaFirstAggregateWriter } from "./db/repositories/prisma-first-aggregate-writer.js";
+import { seedGlobalVoiceProfiles } from "./modules/assets/voice/voice-profile.repository.js";
 import { PrismaSecondAggregateWriter } from "./db/repositories/prisma-second-aggregate-writer.js";
 import { PrismaThirdAggregateWriter } from "./db/repositories/prisma-third-aggregate-writer.js";
 import { hydrateSecondAggregates } from "./db/repositories/prisma-second-aggregate-hydrator.js";
@@ -386,6 +387,9 @@ export async function startServer(options?: {
       app.db,
       resolveGenerationCostBootstrapInputFromEnv(),
     );
+    // 口播前置定版（2026-09-10）：创建/组合列表依赖全局音色库中的合格 WS 档案，
+    // 启动时按 JSON seed 补齐缺失预设（幂等，只补缺失不覆盖）。
+    await seedGlobalVoiceProfiles(app.db);
     await recoverAndPersistInterruptedRuns(app.db);
     // S2-2A 任务 8：readiness 完成后启动一次恢复扫描 + 低频 lease-expiry sweep。
     // 扫描与 sweep 都跳过 needs_reconciliation；定时器在关闭时清理。
