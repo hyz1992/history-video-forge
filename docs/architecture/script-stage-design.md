@@ -1,5 +1,7 @@
 # Script 阶段设计
 
+> 口播前置注记（2026-09）：本设计描述的是 legacy 默认链路。narration-first 模式（发布开关 `NARRATION_FIRST_ENABLED=false` 未开放）已在"确认 script"之后扩展出「确认正文 → 生成口播 → 确认口播」链路，产物为供应商原生词级时间轴的 `NarrationRecord` 与字幕 revision，并门控分镜推进。设计真相源：[口播前置与真实时间轴设计](../plans/2026-09-05-narration-first-timing-design.md)；阶段输入输出见 [Pipeline IO 规范 §2.6](./pipeline-io-spec.md)。
+
 ## 1. 目标
 
 script 阶段的任务不是重新定义故事，而是在已经冻结的 `Topic Package` 边界内，稳定写出一版可口播、可继续进入后续阶段的历史短视频脚本。
@@ -45,6 +47,8 @@ Topic Package
 - 上述 `patch / regen` 是 script 阶段的设计态能力，不是当前实现主路径。
 - `Script Writer Viral First-draft Quality` 执行期间，semantic reviewer 只作为 shadow-only 量尺。
 - 本轮不得把 `patch_once / regen_once` 接入自动主链路；如需进入主路径，必须先有独立 patch integration 设计与执行指令。
+
+narration-first 变体（2026-09 已实现，开关未开放）：主链路末端「确认 script」扩展为「确认正文 → 生成口播 → 确认口播」；`Script Draft Package` 之外新增 `NarrationRecord`（音频 + provider_native 词级时间戳 + 字幕 revision）作为本阶段正式产物，消费方为 storyboard/asset planning/compose 的 `narration_reference`。
 
 ## 4. 设计原则
 

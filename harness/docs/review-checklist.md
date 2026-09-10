@@ -24,6 +24,7 @@
   - `TopicDeliveryPack`
   - `ScriptDraftPackage`
   - `ScriptValidationResult`
+  - `NarrationRecord` / `NarrationSubtitleRevision`（narration-first，发布开关默认关闭）
 - 如果涉及下游，是否同步核对受影响阶段的正式对象：
   - `StoryboardPlan`
   - `AssetPlan`
@@ -31,6 +32,7 @@
   - `ComposeTimeline`
   - `RenderJob`
   - `PublishPackage`
+  - 下游 `narration_reference` 是否仍三处（storyboard/manifest/compose）同源
 - 是否与 `field-design / schema-design / api-design / implementation-plan` 保持一致？
 - 是否把未定内容误写成了正式规则？
 

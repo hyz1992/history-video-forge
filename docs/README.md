@@ -15,7 +15,14 @@
 
 ## 当前阶段状态
 
-2026-09-05 新设计（尚未实现）：
+截至 2026-09-10：
+
+- **口播前置与真实时间轴已实现（任务 1-12 收敛）**：文案确认后、分镜前生成并确认整篇口播；供应商原生词级时间戳统一派生字幕及镜头时间，`narration_reference` 贯穿分镜/资产/合成三处同源。设计真相源见[口播前置与真实时间轴设计](./plans/2026-09-05-narration-first-timing-design.md)；阶段输入输出见 [Pipeline IO 规范 §2.6](./architecture/pipeline-io-spec.md)。
+- 发布开关 `NARRATION_FIRST_ENABLED=false` 保持关闭：新项目默认仍走 legacy 链路（资产阶段 TTS + 估算/本地字幕时间），已有 v2 项目不受影响；开放前提是 A8 成品级整片验收通过。验收现状见 [A1-A10 标注矩阵](./records/2026-09-10-narration-task12c-acceptance-matrix.md)（A1-A7/A9/A10 已验证，A8 成品级未验证）。
+- **TTS 模型选型已定**：qwen-audio-3.0-tts-plus（龙翼暮凌）为口播前置唯一合格候选，CosyVoice 两组不合格；资格证据见[工程资格记录](./records/2026-09-06-narration-engineering-qualification.md)。assets legacy 链路模型仍为 qwen3-tts-instruct-flash，两链路并存。
+- 真实浏览器验收（Task12-B）已收敛：三入口 422→选择面板→selection 重试、事件库层叠命中、口播生成/确认主链、深链门禁、legacy 并存、设置项禁用，run13/run14 两轮 0 failed，见[浏览器验收记录](./records/2026-09-09-narration-task12b-browser.md)。
+
+截至 2026-09-05（历史状态，已被上块取代）：
 
 任务 0 更新：用户已授权 5 元，三组候选同稿九次真实采集完成，用量折价 1.55102 元；相关 58 项测试通过。CosyVoice 两组全文时间戳覆盖失败，Qwen 听审及边界精度待验证，语气槽未执行；[真实证据](./records/2026-09-05-narration-provider-live-comparison.md)。任务 0 整体未通过，不进入任务 1。
 
@@ -23,9 +30,9 @@
 
 后续：用户已批准[两次自然段输入对照](./records/2026-09-06-narration-paragraph-comparison.md)，两次均已执行，累计usage折价2.33198元；Cosy仍截断，Qwen全文映射仍完整、旧长等分现象本轮消失，但正文零时长/听审尚未验收。101项回归通过，任务1保持关闭。
 
-- 口播前置与真实时间轴：在文案确认后、分镜前生成并确认整篇口播；原生字词时间戳统一派生字幕及镜头时间。见[设计与模型比较](./plans/2026-09-05-narration-first-timing-design.md)、[实施计划](./plans/2026-09-05-narration-first-timing-implementation-plan.md)。已完成用户限定的三轮自审修复，设计与计划文档终审通过，任务 0 已进入有限实测；证据见[有限循环记录](./records/2026-09-05-narration-first-design-review-loops.md)。CosyVoice v3 flash 与 Qwen-Audio 3.0 plus 的最终默认组合待实测，不预设赢家。尚未实现业务、已完成九次基础调用，不包含环境音效。
+- （历史状态）口播前置与真实时间轴：在文案确认后、分镜前生成并确认整篇口播；原生字词时间戳统一派生字幕及镜头时间。见[设计与模型比较](./plans/2026-09-05-narration-first-timing-design.md)、[实施计划](./plans/2026-09-05-narration-first-timing-implementation-plan.md)。已完成用户限定的三轮自审修复，设计与计划文档终审通过，任务 0 已进入有限实测；证据见[有限循环记录](./records/2026-09-05-narration-first-design-review-loops.md)。当时最终默认组合待实测，不预设赢家。尚未实现业务、已完成九次基础调用，不包含环境音效。
 
-截至 2026-08-21：
+截至 2026-08-21（历史状态；其中 quote/报价相关描述已被 2026-08-23 S2-2D 移除，见下条）：
 
 - `S2-2A`（配置与成本基础）核心交付已完成并通过 T2 终审，外部审查整改闭环（见 [整改记录](./records/2026-08-21-s2-2a-external-review-remediation-record.md)）。
 - `S2-2B`（创作偏好：音色/画风/字幕）已完成（2026-08-21）：三类偏好从用户默认复制到项目、支持单次运行覆盖并进入运行快照（`resolved_creative` 冻结 preset 版本/解析结果/最终样式与 tts 实际模型）；画风 preset 解析结果输入 `ProjectArtBible` 与正式中文 prompt（asset-planner v1.3.0），执行端只消费快照冻结参数（注册表升级不改写已冻结运行）；字幕 preset 有限安全覆盖被 renderer 消费；音色库迁入数据库（owner/visibility 同源授权、跨实例 DB 权威）；试听走 `voice.preview` quote + 提交协议（付费部署 409 闸门、幂等、usage 落账、前端弹窗报价确认）；音色执行以快照为权威，客户端 voice_profile_id 冲突先于 quote 消费拒绝（422 generation_voice_profile_conflict）。验收：后端 e2e（`tests/backend/s2-2b-e2e-acceptance.test.ts`）+ jsdom 组件测试 + 浏览器验收脚本（`npm run harness:s2-2b-browser-acceptance`，stub/fake）；真实付费试听 live 未运行（明确标注未验证）。设计/实施入口见 [Plans 状态说明](./plans/README.md)。
@@ -89,9 +96,11 @@
 - [Recent Memory 设计](./architecture/recent-memory-design.md)
 - [Script 阶段设计](./architecture/script-stage-design.md)
 - [Script 校验规范](./architecture/script-validation-spec.md)
-- [Pipeline IO 规范](./architecture/pipeline-io-spec.md)
+- [Pipeline IO 规范](./architecture/pipeline-io-spec.md)（§2.6 口播产物）
 - [Downstream 高层设计留档](./architecture/downstream-stage-high-level-design.md)
-- [API 设计](./architecture/api-design.md)
+- [API 设计](./architecture/api-design.md)（含 Narration API 章节）
+- [口播前置与真实时间轴设计](./plans/2026-09-05-narration-first-timing-design.md)（已实现，开关未开放）
+- [A1-A10 验收标注矩阵](./records/2026-09-10-narration-task12c-acceptance-matrix.md)
 - [Runtime Orchestration 设计](./architecture/runtime-orchestration-design.md)
 
 ### 数据与字段
@@ -166,7 +175,7 @@
 - 更系统的人工审稿流、发布前验收流和真实平台发布流
 - 真实付费 BGM/SFX provider、素材授权包装、响度归一化、ducking 和真实音频素材运营
 - DashScope 图生视频真实小样本验证与成本/失败模式记录（默认仍不自动执行）
-- 原生时间戳与字幕精对齐的实施及真实验收（设计已见上述 2026-09-05 口播前置方案，尚未实现）
+- 口播前置剩余收口：A8 成品级整片验收（真实音视频 probe、字幕误差人工达标）待明确预算授权；正式架构文档的口播前置章节已补（见 Pipeline IO 规范 §2.6 与 Narration API 章节），legacy 链路说明保留
 - 更完整的生产化媒体库：hash 索引、去重、复用、生命周期、失败重试和人工替换记录
 - 更完整的 UI 组件级规范
 - 推荐轻评审阈值

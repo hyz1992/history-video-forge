@@ -35,7 +35,8 @@
 11. `harness/README.md`
 12. `docs/records/2026-05-01-follow-up-backlog.md`
 13. `docs/records/2026-05-09-video-pipeline-engineering-notes.md`（asset planning / assets / compose 阶段设计前必读；记录口播音频、字幕、分镜图/视频的工程约束与已知问题清单）
-14. `docs/plans/README.md`
+14. `docs/records/2026-09-10-narration-task12c-acceptance-matrix.md`（口播前置/真实时间轴的验收现状与 A1–A10 逐项证据；设计真相源为 `docs/plans/2026-09-05-narration-first-timing-design.md`，发布开关当前保持关闭）
+15. `docs/plans/README.md`
 
 说明：
 

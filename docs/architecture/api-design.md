@@ -86,7 +86,7 @@
 - `GET /healthz` 只表示进程存活，不代表快照、媒体库或存储已就绪。
 - `GET /readyz` 检查持久化加载状态和媒体 catalog 状态；依赖异常返回 `503`。
 - 同一项目同一生成阶段的重复 POST 请求返回 `409 project_stage_run_in_progress`。
-- 当前 API 仍无正式用户鉴权；非回环绑定必须显式 opt-in，仅适用于受控演示环境。
+- 用户鉴权与项目隔离已随 V2 S1（2026-08）全量上线：会话 Cookie 鉴权、owner 隔离（`guardUserRoute`/`guardOwnedRoute`）、admin 审计；非回环绑定仍必须显式 opt-in，仅适用于受控环境。
 
 ### A. 系统自动推荐
 
@@ -417,6 +417,18 @@ script 摘要第一版建议至少包含：
 - 人工审稿流 API（可进入正式设计）
 - DashScope 图生视频专用 API：图生视频当前只通过 assets generate 的显式 `provider_mode=dashscope` 配置进入
 
+## Narration API（口播前置，2026-09 已实现；发布开关默认关闭）
+
+仅对 `narration_timing_mode = narration_first_v1` 的项目生效；开关关闭时新项目为 legacy 模式，不产生这些调用。合同细节见 [口播前置设计](../plans/2026-09-05-narration-first-timing-design.md)。
+
+- `POST /api/projects/:projectId/script/:scriptRecordId/confirm`：确认正文（生成口播的前置）。
+- `POST /api/projects/:projectId/script/narration/generate`：提交口播生成 run（资格不合格返回 `422 narration_selection_required` 携带候选组合；阶段冲突 `409 project_stage_run_in_progress`）。
+- `GET /api/projects/:projectId/script/narration/context`：口播面板 UI 上下文（配置/选项/时长带/确认状态）。
+- `GET /api/projects/:projectId/script/narrations/:recordId`：口播记录详情（记录状态机 generating/ready/confirmed/failed/cancelled/unknown/stale；前端在无记录时以 `empty` 作为展示回退）。
+- `POST /api/projects/:projectId/script/narrations/:recordId/confirm`：确认口播（带宽附带时长需显式接受）；确认后分镜推进门禁解除。
+- `POST /api/projects/:projectId/script/narrations/:recordId/cancel`、`.../subtitles`：取消与字幕修订。
+- 音频/时间轴/字幕文件经文件路由读取（audio/timing/events/srt/vtt），由 narration bundle 校验 hash 后提供。
+
 ## Storyboard v1 API（2026-05-10 已实现）
 
 ### `POST /api/projects/:projectId/storyboard/generate`
@@ -434,6 +446,7 @@ script 摘要第一版建议至少包含：
 - project 必须有 `active_script_record_id`，否则返回 `409 active_script_record_missing`。
 - active script record 必须存在，否则返回 `404 script_record_not_found`。
 - script record 对应的 topic package 必须存在，否则返回 `404 topic_package_not_found`。
+- narration-first 模式附加前置：必须存在已确认口播（`narration_readiness` 就绪），否则返回 `409 narration_required` 语义（前端深链回文案页 `reason=narration_required`）；正文或 TTS 设置变更导致的 stale 口播同样拒绝。
 
 成功响应字段：
 - `project_id`
@@ -893,7 +906,7 @@ script 摘要第一版建议至少包含：
 ### 配置扩展
 
 - `PATCH /api/me/generation-preferences` 与 `PATCH /api/projects/:projectId/generation-configuration`：请求体在 A 基础上增加可选 `creative` 段（`voice_profile_id` / `art_style_preset_id` / `subtitle_style_preset_id` / `subtitle_style_overrides` 安全覆盖白名单）。`creative` 提供时整体替换；缺省时回 A 期默认（全 null + 空覆盖，旧客户端零行为变化）。capabilities 仍必须全 auto（越权返回 `400 configuration_invalid_s2_2b_scope`）。revision 冲突码与 409 语义不变。
-- 单次运行覆盖：`run_overrides.creative`（quote 创建与提交逐字段重放，既有协议）——覆盖只进入当次快照，不写回项目配置。
+- 单次运行覆盖：`run_overrides.creative`（随生成提交逐字段重放进入当次快照，既有协议）——覆盖只进入当次快照，不写回项目配置。
 - `GET /api/projects/:projectId/generation-configuration` 的 `diff_from_user_default` 与 `invalidation_preview` 扩展 creative：音色 → `assets`；画风 → `asset_planning`；字幕 → `assets`。
 
 ### 创作偏好目录与音色库
@@ -921,11 +934,11 @@ script 摘要第一版建议至少包含：
 - 失效预览（`invalidation_preview` 与 `diff_from_user_default`）capabilities 映射：`llm.smart`/`llm.flash` → `llm_generation`；`image.generate` → `asset_planning`+`assets`；`video.image_to_video`/`tts.synthesize` → `assets`；无变化不出现。
 - 候选目录：LLM 候选由服务端常量 `LLM_MODEL_CANDIDATES_V1` 声明（deepseek-v4-pro / glm-4，真实在用模型）；bootstrap 预解析（provider 注册 + 凭据健康）失败的候选不种入目录。条目元数据（displayName/qualityTier/speedTier）一律来自候选声明，同一模型跨槽位一致。
 
-### 执行绑定（快照权威，报价-执行-记账同源）
+### 执行绑定（快照权威，快照-执行-记账同源）
 
 - 执行端（LLM provider 构造、媒体 adapter 构造、dispatch gate、usage 记账）一律消费 `RunConfigurationSnapshot.resolved.resolved_capabilities`；auto/fixed 同源（mode 只说明选择来源）。`createTierAwareProviderFromEnv({ snapshotCapabilities })` 按快照 provider_key+model_id 经 provider registry 构造；`buildProviderRegistry({ resolvedCapabilities })` 按快照 model 构造 tts/image/video adapter（provider_key 非 dashscope → 不注册）。
 - `createAssetsDispatchHandler` 与 LLM handler 等价：内存镜像缺失 → repository 以数据库为权威加载；内存与 DB 均缺失 → `dispatch_snapshot_missing` 拒绝派发（禁止无快照执行/回退 env）。
-- 漂移防护两个时序：提交前配置/目录变化 → 提交重校验 `409 generation_quote_configuration_changed`（capabilities 参与 configuration_hash）；快照创建后变化 → 派发仍按快照模型执行与记账。
+- 漂移防护两个时序：提交前配置/目录变化 → 提交重校验失败返回 `409 generation_run_resolution_failed`（capabilities 参与 configuration_hash；原 `generation_quote_configuration_changed` 已随报价体系移除废止）；快照创建后变化 → 派发仍按快照模型执行与记账。
 
 ## S2-2D 前端报价流程移除与费用清单（2026-08-23 已实现）
 

@@ -129,6 +129,8 @@ runtime harness 是当前项目的核心验证层：
 - `runtime/assets-voice-preset-audition.ts`
 - `runtime/compose-runtime-smoke.ts`
 - `runtime/render-runtime-smoke.ts`
+- `runtime/narration-*.ts`
+  - 口播前置（narration-first）显式巡检/live 证据脚本，不进默认回归 gate：`narration-first-runtime-smoke.ts`、`narration-provider-qualification.ts`、`narration-asr-verification.ts`、`narration-audio-review.ts`、`narration-boundary-review.ts`、`narration-paragraph-diagnostic.ts`、`narration-native-spans.ts`、`narration-evidence-inspector.ts`、`narration-omni35-review.ts`。
 - `runtime/product-acceptance-live-check.ts`
 - `runtime/script-semantic-reviewer-fixtures.ts`
 - `runtime/topic-candidate-library-real-check.ts`
@@ -223,6 +225,9 @@ runtime harness 是当前项目的核心验证层：
   - 使用已有上游产物验证 compose timeline contract 的 smoke 入口。
 - `harness/scripts/runtime/render-runtime-smoke.ts`
   - 使用 Remotion 或指定 adapter 验证 render/export 的 smoke 入口。
+- `npm run harness:narration-first-runtime-smoke`（`tests/harness/narration-first-runtime-smoke.test.ts`）
+  - 口播前置 fake runtime 冒烟：覆盖口播单次生成（无 ASR）、storyboard/manifest/compose 三处 narration_reference 同源、资产重试零额外 TTS；fake/stub 部署零付费。该测试为纯离线合同验证，会随默认 `npm test`（vitest）执行，也可用此入口单独运行。
+  - 配套显式巡检/live 证据脚本见 `harness/scripts/runtime/narration-*.ts`（这类非测试脚本才属于人工触发、不进默认 gate 的范畴）。
 - `harness/scripts/runtime/product-acceptance-live-check.ts`
 - `harness/scripts/runtime/seed-second-aggregate-browser-fixture.ts`
   - 面向成品验收的显式 live check，会调用真实 provider 与 Remotion 导出。
@@ -440,6 +445,12 @@ npm run harness:seed-second-aggregate-browser-fixture -- -- --owner=fixture-owne
 - `npm run harness:ui-acceptance:report`
   - 读取最近一次 UI acceptance 的 `summary.json`，输出可读摘要，不重跑浏览器。
 
+### 口播前置浏览器验收与其他阶段浏览器验收
+
+- `npx tsx harness/scripts/ui-acceptance/narration-browser-acceptance.ts`
+  - 口播前置真实浏览器验收（stub/fake 部署，tsx 直调，无 npm 别名）；覆盖三入口创建与选择面板、口播未确认时深链回文案、项目设置 narration 槽位表现，以及确认正文 → 生成口播 → 确认口播主链。
+- package.json 已接入的其他阶段浏览器验收别名：`harness:auth-flow-acceptance`、`harness:s1-browser-acceptance`、`harness:s2-2a/2b/2c/2d-browser-acceptance`、`harness:s2-5-g7-browser-acceptance`。
+
 ## UI Reference Migration Entry
 
 - `npm run harness:ui-reference-migration`
@@ -479,6 +490,8 @@ ALIYUN_DASHSCOPE_BASE_URL=https://dashscope.aliyuncs.com
 ALIYUN_DASHSCOPE_TEXT_TO_IMAGE_MODEL=wan2.6-t2i
 ALIYUN_DASHSCOPE_TTS_MODEL=qwen3-tts-instruct-flash
 ```
+
+注：`ALIYUN_DASHSCOPE_TTS_MODEL=qwen3-tts-instruct-flash` 是 assets legacy 链路的 TTS 模型；口播前置（narration-first）链路模型为 `qwen-audio-3.0-tts-plus`，选型依据见 [narration 引擎选型记录](../docs/records/2026-09-06-narration-engineering-qualification.md)。
 
 如果没有可用 source，可显式加 `--allow-upstream-generation` 先生成一组 topic/script/storyboard 上游样本；该选项会调用真实 LLM，不能作为默认自动化路径。
 

@@ -25,16 +25,18 @@
 每次新会话至少阅读：
 
 1. `AGENTS.md`
-2. `docs/plans/README.md`
-3. `docs/architecture/pipeline-io-spec.md`
-4. `docs/data/field-design.md`
-5. `docs/data/schema-design.md`
-6. `harness/README.md`
+2. `docs/README.md`（文档索引与当前阶段状态）
+3. `docs/plans/README.md`
+4. `docs/todos/roadmap-todo.md`
+5. `docs/architecture/pipeline-io-spec.md`
+6. `docs/data/field-design.md`
+7. `docs/data/schema-design.md`
+8. `harness/README.md`
 
-如果是接手当前最新工作，再读最近的交接或记录文档。当前推荐：
+如果是接手当前最新工作，再读最近的验收/记录文档。当前推荐：
 
-- `docs/records/2026-05-21-claude-code-handoff.md`
-- `docs/records/2026-05-19-video-pipeline-follow-up-backlog.md`
+- `docs/records/2026-09-10-narration-task12c-acceptance-matrix.md`（口播前置 A1-A10 验收现状）
+- `docs/records/2026-09-09-narration-task12b-browser.md`（真实浏览器验收收敛）
 
 如果进入下游视频链路相关工作，再按需补读：
 
@@ -133,6 +135,12 @@ npx vitest run --configLoader runner <test-file>
 npx vitest run --configLoader runner tests/backend/render/remotion-input-builder.test.ts tests/harness/product-acceptance-live-check.test.ts
 ```
 
+口播前置 fake runtime 冒烟（随 `npm test` 默认执行，也可单独运行）：
+
+```powershell
+npm run harness:narration-first-runtime-smoke
+```
+
 成品验收 live-check 示例：
 
 ```powershell
@@ -154,8 +162,8 @@ npx tsx harness/scripts/runtime/product-acceptance-live-check.ts --allow-upstrea
 | 前端 | Vue 3.5 + TypeScript + Element Plus + Vue Router |
 | 后端 | Node.js ESM + 原生 `node:http` 自建路由 |
 | 共享合同 | `shared/src` 中的 Zod schema |
-| 数据层 | 当前主要使用内存 Map，Prisma schema 作为定义参考 |
-| LLM | OpenAI-compatible provider，围绕 GLM / DashScope 等运行 |
+| 数据层 | Prisma（SQLite）激活态为权威持久层（用户/会话/项目聚合/口播/费用账本）；内存 Map 为 legacy 快照兼容层，双模式由数据库激活状态决定 |
+| LLM | S2-1 tier 路由（smart/flash + `providers.json`，实测 DeepSeek/智谱/GLM 等 OpenAI-compatible provider）；口播前置 TTS 为 DashScope WS（qwen-audio-3.0-tts-plus） |
 | 渲染 | Remotion 本地导出 |
 
 ---
@@ -170,15 +178,16 @@ frontend/src/
 
 backend/src/
   app.ts                 自建路由框架，buildApp + inject
-  db/client.ts           内存 Map 数据层
+  db/prisma-client.ts    Prisma（SQLite）客户端与激活态持久层
   modules/
-    topic/
-    script/
-    storyboard/
-    asset-planning/
-    assets/
-    compose/
-    render/
+    topic/  script/  storyboard/  asset-planning/  assets/
+    compose/  render/  publish/
+    narration/           口播前置链路（生成/确认/bundle/字幕修订）
+    generation-run/      统一生成 run 提交、派发与记账
+    generation-config/   用户/项目生成配置与偏好
+    generation-cost/     目录、readiness 与费用账本
+    auth/  admin/        会话鉴权与管理后台
+    event-library/  projects/  events/  cache/
 
 renderer/src/
   Root.tsx               Remotion root

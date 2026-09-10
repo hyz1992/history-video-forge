@@ -1,5 +1,7 @@
 # S2-0 基线盲评与验收记录
 
+> **状态注记（2026-09-10）**：本文是 S2-0 优化期间（2026-07）的历史验收轨迹。文末"S2-0 继续保持打开"等表述为当时结论；S2-0 最终已于 2026-07-17 经提交 `2968c5e` 回滚到 builder(8)+selector 架构并冻结，最终状态以 [docs/todos/roadmap-todo.md](../../docs/todos/roadmap-todo.md) 与 [docs/plans/README.md](../../docs/plans/README.md) 为准。本协议的盲评 rubric 与证据纪律仍可作为后续 live 对比的方法论参考。
+
 > 本协议用于 S2-0b 优化前后的人工内容质量对比。
 > 评分者不应看到模型名称、thinking 状态或策略参数。
 

@@ -339,6 +339,21 @@
 | `opening_span` | 开头片段 |
 | `ending_span` | 结尾片段 |
 
+### 口播产物（narration-first，默认关闭）
+
+口播前置链路（文案确认 → 生成口播 → 确认口播）于 2026-09 实现；发布开关 `NARRATION_FIRST_ENABLED=false`（当前默认）时不产生以下产物。设计真相源见 [口播前置设计](../plans/2026-09-05-narration-first-timing-design.md)，字段名以 `backend/prisma/schema.prisma` 为准：
+
+| 模型.字段 | 含义 |
+|---|---|
+| `NarrationRecord.status` / `generationRunId` / `scriptRecordId` | 口播记录状态、来源生成 run（unique）、来源已确认 script record |
+| `NarrationRecord.sourceTextSha256` / `settingsSha256` / `spokenTextSha256` | 确认正文、口播设置与实际朗读文本的 SHA-256 指纹（spoken 可空） |
+| `NarrationRecord.providerTaskId` / `providerRequestId` / `timingSource` | provider 调用事实；时间轴来源为供应商原生词级时间戳直通 |
+| `NarrationRecord.outputJson` | 输出合同：`audio`（采样率/声道/sampleCount）、`durationMs`、`nativeEvents`、`timingMap`、`initialSubtitleRevisionId`、`validationReport` |
+| `NarrationSubtitleRevision.audioHash` / `timingHash` / `subtitleSettingsSnapshotJson` | 字幕 revision 的音频/时序指纹与字幕设置快照 |
+| `NarrationSubtitleRevision.srtJson` / `vttJson` | SRT/VTT 字幕内容 |
+
+口播产物经 narration bundle 校验后随生成 run 同库持久化；进入 `ready`/`confirmed` 状态的 `NarrationRecord` 必须携带初始字幕 revision（`generating`/`failed` 等中间态记录可能尚无）。
+
 ## 9. ScriptValidationResult
 
 定位：
@@ -813,7 +828,7 @@ shared schema 层应实现为判别联合，而不是扁平对象：
 
 持久化说明：
 
-- 当前实现使用 `storage/voice-profiles/voice-profiles.json` 作为全局音色库 JSON backing store，文档版本为 `voice_profiles_v1`。
+- S2-2B 起（迁移 `20260821130000_s2_2b_voice_profile`）Prisma `VoiceProfile` 表为跨实例权威；`storage/voice-profiles/voice-profiles.json` 降为 legacy 写穿文件（启动 seed 与备份用途），文档版本为 `voice_profiles_v1`。
 - `provider_voice_id`、`provider_status`、`preview_audio_uri`、`usage_count`、`last_used_at` 与 `updated_at` 会随 repository 写入持久化；`usage_count` 和 `last_used_at` 在 assets 成功选择/复用音色后回写。
 - seed 只补齐缺失的预设/system 音色，不覆盖已有同 ID 档案；这保证已 ready 的供应商音色不会被预设默认值覆盖。
 - `preview_audio_uri` 当前可保存声音设计返回的 data URI；若后续预览音频变大，应迁移到 media storage，只在 `VoiceProfile` 保留引用。
@@ -839,7 +854,7 @@ shared schema 层应实现为判别联合，而不是扁平对象：
 
 ## Assets v1 字段（2026-05-18 已同步后端执行基础）
 
-`AssetManifest` 是 assets 阶段的正式输出对象。它描述资产执行结果清单，包含任务执行状态、artifact 元数据、分镜 route 和音频摘要。当前 assets 后端已覆盖 manifest builder、本地 validator、fake/local provider 执行、本地文件存储、provider job 记录、manual artifact metadata registration / accept、media library 基础、默认音频素材库 seed 合同、执行期 TTS 分块规范化、音频时长探测与字幕 timing metadata、本地 BGM/SFX 素材选择与 deterministic WAV fixture 物化，以及显式 DashScope TTS/文生图/image-to-video 路径；真实付费 BGM/SFX provider、上传/预览 UI、发布级素材运营流或署名包装可由后续独立字段/API 设计承接。
+`AssetManifest` 是 assets 阶段的正式输出对象。它描述资产执行结果清单，包含任务执行状态、artifact 元数据、分镜 route 和音频摘要。当前 assets 后端已覆盖 manifest builder、本地 validator、fake/local provider 执行、本地文件存储、provider job 记录、manual artifact metadata registration / accept、media library 基础、媒体库 catalog.json 导入（metadata-first/license-evidence-first）、执行期 TTS 分块规范化、音频时长探测与字幕 timing metadata、本地 BGM/SFX 素材选择与 deterministic WAV fixture 物化，以及显式 DashScope TTS/文生图/image-to-video 路径；真实付费 BGM/SFX provider、上传/预览 UI、发布级素材运营流或署名包装可由后续独立字段/API 设计承接。
 
 ### `AssetManifest`
 
@@ -932,9 +947,9 @@ shared schema 层应实现为判别联合，而不是扁平对象：
 - 同 segment 的 source image 会保留为 `fallback_visual_artifact_id`；图生视频缺失或失败时，compose/renderer 仍可使用 image + `motion_recipe` fallback。
 - DashScope image-to-video provider job 只属于 assets 阶段字段和 provider job 记录，不进入 compose 或 renderer 字段语义。
 - 当前本地 SFX provider 使用 `AssetPlanTask.source_segment_id` 写入 `sfx_artifact_ids`。`bgm_placement_ids` 字段在当前 slice 保留但不写入；BGM 仍通过 `audio_summary.bgm_placements` 与 `BgmPlacement.source_task_id` 进入 compose。
-- 默认音频素材库 seed 只表达元数据和授权证据：`source_url`、license、`file_hash`、tags、mood tags、duration、loopable 和 approval。`sha256:pending-*` 只适用于尚未下载真实文件的 seed 合同；真实文件入库时必须替换为真实 SHA-256。
+- （历史合同，实现已于 2026-09-01 移除；真实素材现走媒体库 catalog.json 导入）默认音频素材库 seed 只表达元数据和授权证据：`source_url`、license、`file_hash`、tags、mood tags、duration、loopable 和 approval。`sha256:pending-*` 只适用于尚未下载真实文件的 seed 合同；真实文件入库时必须替换为真实 SHA-256。
 - TTS timing source 当前支持 `estimated / audio_probe / provider_timestamp / forced_alignment / mixed`，并兼容旧值 `provider / aligned`。DashScope TTS 在 mocked WAV 和真实 WAV/PCM 可探测时写入 `audio_probe`，不可探测格式保守回落为 `estimated`。
-- 字幕 artifact 当前来自本地 subtitle provider，跟随 TTS chunk artifact 生成 chunk-level cues，并记录来源 TTS chunk ids、总时长、timing source 和默认竖屏 `subtitle_style`；多个来源不一致时写入 `mixed`。`subtitle_style` 第一版包含字体、字号、描边、阴影、位置、安全区、最大行数和最大宽度等 renderer-facing 字段。word-level provider timestamps 或 forced alignment 仍属于后续工作。
+- 字幕 artifact 当前来自本地 subtitle provider，跟随 TTS chunk artifact 生成 chunk-level cues，并记录来源 TTS chunk ids、总时长、timing source 和默认竖屏 `subtitle_style`；多个来源不一致时写入 `mixed`。`subtitle_style` 第一版包含字体、字号、描边、阴影、位置、安全区、最大行数和最大宽度等 renderer-facing 字段。word-level provider timestamps 或 forced alignment 仍属于 assets legacy 字幕链路的后续工作；口播前置（narration-first）链路已实现供应商原生词级时间戳直通（见 [口播前置设计](../plans/2026-09-05-narration-first-timing-design.md)）。
 
 ### `AssetAudioSummary`
 
@@ -1139,19 +1154,19 @@ Renderer v1 字段只描述 `ComposeTimeline` 之后的渲染与导出结果，�
 
 ### 运行与费用账本
 
-- `GenerationRun`：`(projectId, operation, idempotencyKey)` 唯一、`payloadFingerprint`（幂等判重）、`quoteId`（unique nullable）、`runConfigurationSnapshotId`（unique）、`dispatchPayloadJson`、`status`（pending_dispatch/running/succeeded/failed/needs_reconciliation）、`dispatchLeaseOwner/ExpiresAt/ClaimCount`。quote 消费、snapshot、pending run 同事务。
-- `GenerationRunEvent`：append-only（`route_auto_downgraded`/`fallback_accepted`/`pricing_overrun`/`dispatch_finalize_fenced_out` 等），不修改 snapshot。
+- `GenerationRun`：`(projectId, operation, idempotencyKey)` 唯一、`payloadFingerprint`（幂等判重）、`quoteId`（unique nullable）、`runConfigurationSnapshotId`（unique）、`dispatchPayloadJson`、`status`（pending_dispatch/running/succeeded/failed/needs_reconciliation）、`dispatchLeaseOwner/ExpiresAt/ClaimCount`。snapshot 创建与 pending run 创建同事务（2026-08-23 起 free 形态，quote 已移除）。
+- `GenerationRunEvent`：append-only（`route_auto_downgraded`/`fallback_accepted`/`pricing_overrun`（已废弃）/`dispatch_finalize_fenced_out` 等），不修改 snapshot。
 - `UsageCostRecord`：`(runConfigurationSnapshotId, providerRequestKey, attemptIndex)` 唯一；`capability/providerKey/modelId`、`status`、`unitType`、`inputUnits/outputUnits`、`estimatedCostMicros/actualCostMicros`（actual 可空）、`costBasis`（estimate|provider_usage|provider_invoice）、`unitDetailJson`（2026-08-23：图片分辨率/视频画质等规格明细）、`durationMs`。媒体按 provider job 三元组判重；LLM 键为 `llm:<runId>:<operationName>:<attemptIndex>`，`interactionId` 可反查 interaction log。
 
 ### S2-2B 创作偏好字段（2026-08-21 已实现）
 
 - `GenerationConfigurationV1.creative` 扩展：`voice_profile_id` / `art_style_preset_id` / `subtitle_style_preset_id`（稳定 ID，null=auto/系统默认）+ `subtitle_style_overrides`（有限安全覆盖白名单，缺省 `{}`，旧 JSON 兼容，无迁移）。`creative` 支持单次运行覆盖（`run_overrides.creative` 逐字段覆盖，只进快照）。
-- `ResolvedGenerationConfigurationV1.resolved_creative`：`voice`（mode=auto|fixed + 稳定身份 id/kind/provider_name/target_model）、`art_style`（mode=none|fixed + preset_id/version/resolved_params）、`subtitle`（mode=none|fixed + preset_id/version + 最终 `resolved_style` + `applied_overrides`）。参与 configuration_hash（creative 或注册表版本变化自动使旧 quote 漂移失效）。旧快照 JSON 缺省为 A 期语义（auto/none/none）。
+- `ResolvedGenerationConfigurationV1.resolved_creative`：`voice`（mode=auto|fixed + 稳定身份 id/kind/provider_name/target_model）、`art_style`（mode=none|fixed + preset_id/version/resolved_params）、`subtitle`（mode=none|fixed + preset_id/version + 最终 `resolved_style` + `applied_overrides`）。参与 configuration_hash（creative 或注册表版本变化触发快照解析结果重解析/更新；历史 quote 漂移语义随报价移除废止）。旧快照 JSON 缺省为 A 期语义（auto/none/none）。
 - 画风/字幕 preset 注册表（`shared/src/creative/`）：`preset_id`（稳定）+ `preset_version`（vN）+ `resolved_params`（结构化输入数据；不含正式 prompt 指令文本）。执行端只消费快照冻结参数，注册表只在解析阶段读取。
 - `VoiceProfile`（Prisma 实体，音色库跨实例权威）：`id/kind/ownerId/visibility(public|private)/providerName/providerVoiceId/providerStatus/targetModel/previewAudioUri/usageCount/lastUsedAt/qualityScore/metadataJson`。preset/system 公共；generated 归创建用户私有；解析/列表/试听同源授权（非可见按不存在处理）。Map 态保留 JSON 写穿持久化（legacy），历史 JSON 一次性导入（无归属字段 → public）。
 - 失效预览扩展：音色 → `assets`；画风 → `asset_planning`；字幕 → `assets`。
-- S2-2C（2026-08-22）：`GenerationConfigurationV1.capabilities` 变为可写——五槽 `{mode:"auto"|"fixed", provider_model_id?}`（provider_model_id = 目录条目 id）。PATCH 缺省 = 保留服务器现值（首次创建全 auto）；参与 `configuration_hash`（fixed/auto 选择变化自动使旧 quote 漂移失效）。
+- S2-2C（2026-08-22）：`GenerationConfigurationV1.capabilities` 变为可写——五槽 `{mode:"auto"|"fixed", provider_model_id?}`（provider_model_id = 目录条目 id）。PATCH 缺省 = 保留服务器现值（首次创建全 auto）；参与 `configuration_hash`（fixed/auto 选择变化触发快照解析结果重解析/更新；历史 quote 漂移语义随报价移除废止）。
 - `ResolvedGenerationConfigurationV1.resolved_capabilities`：五槽各冻结 `mode/provider_model_id/provider_key/model_id`（auto 同样冻结实际解析结果——执行权威依据）。
 - 目录多候选（无新表）：每槽恰好一个 `active + is_default=true` 默认条目（resolver auto 硬合同）+ 若干非默认候选条目。LLM 候选来自服务端常量 `LLM_MODEL_CANDIDATES_V1`（`providerKey/modelId/displayName/qualityTier/speedTier` 声明式元数据，同一模型跨槽位一致）；媒体候选经 seed 输入 `media.additionalModels` 预留（首版空）。
 - readiness 分层：`llm_tier_mismatch` 只对默认条目（与 tier 解析一致）；非默认条目按 (providerKey, modelId) 属于候选集校验（`llm_candidate_not_declared` 防目录手工改动漂移）；媒体 registeredModels = env 默认 ∪ additionalModels 候选。
-- `voice.preview` operation：quote 计价含 `tts_character`（preview_text）+ 设计请求（missing 档案，无目录单价 → unbounded）；usage 键 `voice-preview:<profileId>`，attempt 0=设计、1=合成。
+- `voice.preview` operation（历史废弃：2026-08-23 起试听恢复直连、不建 run、不记账）：历史 quote 计价含 `tts_character`（preview_text）+ 设计请求（missing 档案，无目录单价 → unbounded）；usage 键 `voice-preview:<profileId>`，attempt 0=设计、1=合成。

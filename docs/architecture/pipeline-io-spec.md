@@ -168,9 +168,22 @@
 
 - [Script 校验与决策规范](./script-validation-spec.md)
 
+### 2.6 口播产物（narration-first 模式，发布开关默认关闭）
+
+口播前置改造（2026-09 已实现，任务 1-12 收敛）在 Script 阶段新增口播链路：确认正文 → 生成口播 → 确认口播。设计真相源见 [口播前置与真实时间轴设计](../plans/2026-09-05-narration-first-timing-design.md)，验收矩阵见 [A1-A10 标注矩阵](../records/2026-09-10-narration-task12c-acceptance-matrix.md)。
+
+- 触发条件：项目 `narration_timing_mode = narration_first_v1`（由创建时的 `NARRATION_FIRST_ENABLED` 决定；当前发布开关为 `false`，新项目默认仍走 legacy 链路，已有 v2 项目不受开关回退影响）。
+- 输入：已确认正文（`script_confirmation`）+ 合格的 model/voice 组合（资格门禁 `narration_selection`）。
+- 输出：`NarrationRecord`（音频 + 供应商原生词级时间戳 timing map + 派生字幕 revision），经 narration bundle 校验后持久化（含 `validation_report`、音频 hash 与时长 probe）。
+- 边界：音频与时间戳一次生成（单 WS 任务、自然段 continue-task，长文不拆独立 TTS）；无 ASR、无按字 fallback；确认口播前不允许生成/更新分镜（缺失时深链回文案页 `reason=narration_required`）。
+- 失效：正文或 TTS 设置变更使已确认口播标记 stale，需重新生成确认。
+
 ## 3. Storyboard v1 阶段
 
 Storyboard v1 已从纯 TBD 收口为第一版可运行阶段。它只消费已经激活的 `ScriptRecord` 及其来源 `TopicPackage` 边界信息，不反向修改 topic/script。
+
+- narration-first 模式附加输入：已确认口播的 `NarrationRecord`（provider_native 词级时间轴），分镜时长切分以它为权威（`narration_reference` 贯穿分镜/资产/合成三处同源）；无已确认口播时新生成分镜被拒绝并回文案页。
+- 以下输入清单描述的是 legacy 默认链路：
 
 输入：
 - active `ScriptRecord`
@@ -248,7 +261,7 @@ Asset Planning v1 消费 active `StoryboardRecord` 及其来源 `ScriptRecord` /
 
 生成边界：
 
-- `tts_audio` 与 `subtitle_track` 任务由本地确定性生成。
+- `tts_audio` 与 `subtitle_track` 任务由本地确定性生成（legacy 链路；narration-first 模式下音频与字幕在 Script 阶段口播产物中生成，资产阶段不再规划 TTS）。
 - LLM 只负责全局 `ProjectArtBible` 和分块 typed 视觉 / SFX / BGM 语义意图；默认模式为 `intent_compiler`。
 - 本地 compiler 负责意图规范化、全局 `task_id`、顺序、策略参数、合法依赖、成本汇总和最终 `AssetPlan` 组装。
 - `ASSET_PLANNING_GENERATION_MODE=legacy` 仍作为显式回滚开关；一次 run 启动时冻结模式，API 不接受客户端传入模式。
@@ -298,7 +311,7 @@ Assets v1 消费 active `AssetPlanRecord` 及其来源 `StoryboardRecord` / `Scr
 
 - `buildInitialAssetManifest` 从执行期 `AssetPlan` 确定性构建：为每个 plan task 创建 `AssetTaskExecution`，为 `render_motion_cue` 创建 inline artifact，为 TTS chunk 创建占位 artifact，构建 `SegmentAssetRoute` 和 `AssetAudioSummary`。
 - `bgm_cue` / `sfx_cue` 第一版只走离线本地媒体库：选择 `approved_for_use` 且 `commercial_use_allowed` 的素材，按显式 `library_item_id` 或 required/mood tags 选中条目，再物化为本地 render-ready WAV artifact。缺失可选 BGM/SFX 只记录 notes/warnings，不阻塞 assets。
-- BGM/SFX 素材库当前为空（`storage/media-library/catalog.json` 不存在时选择器优雅降级、不产出 artifact）；缺失可选 BGM/SFX 只记录 notes/warnings，不阻塞 assets。历史代码中的"默认音频素材库 seed"（`default-audio-library.ts`）已于 2026-08-31 删除：它只是元数据示例集，从未被运行时消费，真实素材必须通过 `catalog.json` import-check 引入（metadata-first / license-evidence-first：保存 `source_url`、license、hash、tags、mood tags、duration 与 approval 状态，真实音频下载或用户提供文件必须替换真实 SHA-256 并保留授权证据）。
+- BGM/SFX 素材库当前为空（`storage/media-library/catalog.json` 不存在时选择器优雅降级、不产出 artifact）；缺失可选 BGM/SFX 只记录 notes/warnings，不阻塞 assets。历史代码中的"默认音频素材库 seed"（`default-audio-library.ts`）已于 2026-09-01 删除：它只是元数据示例集，从未被运行时消费，真实素材必须通过 `catalog.json` import-check 引入（metadata-first / license-evidence-first：保存 `source_url`、license、hash、tags、mood tags、duration 与 approval 状态，真实音频下载或用户提供文件必须替换真实 SHA-256 并保留授权证据）。
 - `BgmPlacement.source_task_id` 是 `bgm_cue` task 到 placement 的稳定关联；compose/renderer 只消费已附着到 placement 的具体 `bgm_audio` artifact。`SegmentAssetRoute.bgm_placement_ids` 在当前 slice 仍保留但不写入，BGM 仍通过 `audio_summary.bgm_placements` 路由。
 - `sfx_cue` 使用 `AssetPlanTask.source_segment_id` 作为 segment route 归属，并只在有明确 tags 或显式素材 ID 时生成 `sfx_audio` artifact，避免无依据地滥用音效。
 - `bgm_audio` / `sfx_audio` artifact metadata 通过 shared schema passthrough 保留素材审计字段，例如 `library_item_id`、`selection_label`、`license_type`、`attribution_required`、`attribution_text`、`required_tags`、`matched_mood_tags` 与 `source_materialized_from`。
@@ -307,8 +320,8 @@ Assets v1 消费 active `AssetPlanRecord` 及其来源 `StoryboardRecord` / `Scr
 - 音色库属于 assets 阶段的全局共享能力，不随单个项目复制。`AssetPlan.global_audio_strategy.voice_intent` 可携带 `VoiceIntent`；assets 执行前会 seed 全局预设音色、用 deterministic matcher 产出 `VoiceMatchResult`，并在没有合适音色时只创建本地 `VoiceProfile` 档案，不立即调用供应商。
 - DashScope TTS 执行时才做供应商音色懒解析：若选中的本地 `VoiceProfile` 已有 `provider_voice_id` 或属于系统音色，则直接用于 TTS；若缺失且 provider 为 `dashscope`，才调用声音设计接口创建 provider voice，并回写本地音色状态。
 - DashScope TTS artifact metadata 同时保留本地 `voice_profile_id` 与供应商 `provider_voice_id`，并记录 `sample_rate`、`format`、`timing_source`、`duration_source`、`estimated_duration_sec` 以及可用的匹配信息。WAV/PCM 可探测时 `duration_sec` 来自音频探测并标记 `audio_probe`；不可探测格式保守回落为 `estimated`。
-- 字幕仍由本地 subtitle provider 基于 TTS chunk 生成，当前为 chunk-level cues；subtitle artifact 会记录来源 chunk artifact ids、总时长、timing source 和 `subtitle_style`，来源混合时标记 `mixed`。`subtitle_style` 第一版写入默认竖屏样式，包含字体、字号、位置、安全区、描边、阴影、最大行数和最大宽度等 renderer-facing 字段。provider timestamp、forced alignment 与 word-level alignment 仍是后续增强，不属于当前默认实现。
-- 全局音色库当前通过 `storage/voice-profiles/voice-profiles.json` 持久化，文档版本为 `voice_profiles_v1`。`runAssetsGeneration()` 会在项目存在 `storageRootDir` 且 db 尚未显式配置时自动接线该库；测试和脚本也可显式配置临时 root。
+- 字幕仍由本地 subtitle provider 基于 TTS chunk 生成，当前为 chunk-level cues；subtitle artifact 会记录来源 chunk artifact ids、总时长、timing source 和 `subtitle_style`，来源混合时标记 `mixed`。`subtitle_style` 第一版写入默认竖屏样式，包含字体、字号、位置、安全区、描边、阴影、最大行数和最大宽度等 renderer-facing 字段。在 assets legacy 链路中，provider timestamp、forced alignment 与 word-level alignment 仍是后续增强；narration-first 模式（见 2.6）的词级 provider 原生时间戳已在 Script 阶段实现并直通下游分镜/资产/合成。
+- 全局音色库自 S2-2B（2026-08）起以 Prisma `VoiceProfile` 表为跨实例权威（owner/visibility 同源授权）；`storage/voice-profiles/voice-profiles.json` 降级为 legacy 写穿文件（启动 seed 与备份用途）。`runAssetsGeneration()` 会在项目存在 `storageRootDir` 且 db 尚未显式配置时自动接线该库；测试和脚本也可显式配置临时 root。
 - 音色库加载后只 seed 缺失预设，不覆盖已存在档案。成功选择/复用音色会回写 `usage_count` 与 `last_used_at`；供应商音色创建成功会回写 `provider_voice_id`、`provider_status`、`preview_audio_uri` 与 `updated_at`。
 - `storage/voice-profiles/voice-profiles.json` 属于需要备份的运营状态，不进入默认 git 提交；清理或迁移 storage 时必须保留该文件，避免丢失真实 provider voice id 后重复创建付费供应商音色。
 - DashScope image-to-video 仍属于 assets 阶段：它消费同 segment 已生成或已登记的 `image` artifact，产出本地 `video` artifact，并把该 segment route 推进为 `visual_route_type=video_clip`。
@@ -373,11 +386,11 @@ Compose v1 消费 active `AssetManifestRecord`，输出可持久化的 `ComposeT
 生成边界：
 
 - `buildComposeTimeline` 从 `AssetManifest` 确定性构建时间轴。
-- 总时长优先来自 merged TTS artifact 的 `metadata.duration_sec`。
+- 总时长优先来自 merged TTS artifact 的 `metadata.duration_sec`（legacy 链路；narration-first 模式下时长与时间轴权威是确认口播的 provider_native narration timing，storyboard/manifest/compose 三处 `narration_reference` 同源，合成按其消费音频与字幕产物）。
 - segment 起止时间优先来自 TTS chunk duration；同一 segment 对应多个 TTS chunks 时会累加这些 chunk 时长。缺失时可用总时长按 segment route 做 fallback，并在 notes 中记录 `compose_chunk_timing_fallback_used`。
 - visual track 来自 `segment_routes` 的主视觉 artifact、fallback 视觉 artifact 与 motion recipe。
-- narration track 来自 `audio_summary.tts_merged_artifact_id`。
-- subtitle track 来自 `audio_summary.subtitle_artifact_id`。
+- narration track 来自 `audio_summary.tts_merged_artifact_id`（legacy）或 narration-first 确认口播音频。
+- subtitle track 来自 `audio_summary.subtitle_artifact_id`（legacy）或 narration-first 字幕 revision。
 - BGM/SFX track 只在 manifest 中已有对应 artifact 时进入时间轴。
 
 本地校验：

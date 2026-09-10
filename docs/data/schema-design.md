@@ -17,7 +17,11 @@
    - storyboard v1
    - asset planning v1
    - assets v1
-5. compose 暂不在本文档里提前拍死。
+   - compose v1
+   - render / export v1
+   - S2-2A 起的生成配置、成本账本与全局音色库（`VoiceProfile` 实体）
+   - narration 口播产物表（narration-first，默认关闭）
+5. 发布、运营后台等未实现阶段不在本文档提前拍死。
 
 ## 2. 当前建议的核心实体
 
@@ -205,6 +209,16 @@
 - 但 `projects.active_script_record_id` 只指向最终当前版本
 - `validation_result_json` 用于保存本地硬校验返回对象
 - `semantic_review_result_json` 用于保存单一语义审校返回对象，第一版允许直接存 JSON
+
+### narration 表（narration-first，默认关闭）
+
+口播前置链路（文案确认 → 生成口播 → 确认口播）的持久化表；发布开关 `NARRATION_FIRST_ENABLED=false`（当前默认）时不写入。表名以 `backend/prisma/schema.prisma` 为准：
+
+- `NarrationRecord`：口播主记录，挂 `generationRunId`（unique）与 `scriptRecordId`，存正文/设置/朗读文本 SHA-256 指纹、provider 调用事实与输出 JSON（`outputJson`）。
+- `NarrationSubtitleRevision`：字幕 revision，存音频/时序 hash、字幕设置快照与 SRT/VTT；`NarrationRecord.initialSubtitleRevisionId` 指向初始 revision。
+- provider 调用事实（`providerTaskId`/`providerRequestId`/`timingSource`）直接存于 `NarrationRecord` 列，不单独建 provider job/fact 表；计费用量仍走 `usage_cost_records`。
+
+字段细节见 [字段设计](field-design.md) 的「口播产物（narration-first，默认关闭）」小节与 `backend/prisma/schema.prisma` 的 `NarrationRecord` / `NarrationSubtitleRevision` 模型。设计真相源见 [口播前置设计](../plans/2026-09-05-narration-first-timing-design.md)。
 
 ### H. `candidate_exposure_logs`（可选但推荐）
 
@@ -484,7 +498,7 @@ Assets v1 已有第一版持久化记录。它是 `AssetPlanRecord` 之后的派
 
 ## VoiceProfile 全局音色库映射（2026-05-19 已实现）
 
-当前 greenfield 后端以 `DbClient.voiceProfiles` 保存全局共享音色库；后续落库时可映射为独立 `voice_profiles` 表。该库属于 assets 能力，不属于某个项目的私有记录。
+S2-2B 起（迁移 `20260821130000_s2_2b_voice_profile`）全局音色库已落库为独立 Prisma `VoiceProfile` 表（`DbClient.voiceProfiles`），是跨实例权威。该库属于 assets 能力，不属于某个项目的私有记录。
 
 建议字段：
 
@@ -523,7 +537,9 @@ Assets v1 已有第一版持久化记录。它是 `AssetPlanRecord` 之后的派
 - `VoiceMatchResult` 不单独建表；当前随 assets execution state 记录，用于解释本次视频任务选中哪个本地音色。
 - 默认测试与默认 provider mode 不调用真实声音设计或真实 TTS；显式 `harness:assets-dashscope-tts-live-check` 可只测低成本 TTS，显式 `harness:assets-dashscope-voice-live-check` 才会创建供应商音色。
 
-### 当前 JSON 持久化实现（2026-05-19）
+### 当前 JSON 持久化实现（2026-05-19；S2-2B 起 legacy 写穿）
+
+以下 JSON backing store 已于 S2-2B 被 Prisma `VoiceProfile` 表取代，现仅作为 legacy 写穿文件（启动 seed 与备份用途），DB 为权威。
 
 第一版已实现本地 JSON backing store：
 
@@ -535,7 +551,7 @@ Assets v1 已有第一版持久化记录。它是 `AssetPlanRecord` 之后的派
 
 `provider_voice_id`、`provider_status`、`preview_audio_uri`、`usage_count`、`last_used_at` 与 `updated_at` 都属于需要保留的运营状态。该文件不保存 API key，也不保存原始 provider request/response。真实 provider voice 创建后，运维迁移或清理 storage 时必须保留该文件，否则可能导致后续重复创建付费供应商音色。
 
-后续数据库化时，`storage/voice-profiles/voice-profiles.json` 应一次性迁移到独立 `voice_profiles` 表，并保持 `voice_profile_id`、provider id 与 provider status 不变；JSON 备份至少保留到一次跨任务 TTS 复用验证通过之后。
+数据库化已完成（迁移 `20260821130000_s2_2b_voice_profile`）：历史 `storage/voice-profiles/voice-profiles.json` 已一次性导入独立 `VoiceProfile` 表（无归属字段的档案导入为 public），并保持 `voice_profile_id`、provider id 与 provider status 不变；JSON 备份至少保留到一次跨任务 TTS 复用验证通过之后。
 
 ## ComposeRecord 持久化映射（2026-05-17 已实现）
 
@@ -645,6 +661,7 @@ Renderer / Export v1 已有第一版持久化记录。它是 `ComposeRecord` 之
 - `generation_cost_quotes`：`operation`、`configuration_hash`、`quote_fingerprint`、`pricing_hash`、`pricing_version_set_json`、`items_json`、`estimated_cost_micros`、`authorization_cost_micros`、`contains_unbounded_item`、`budget_limit_micros`、`over_budget`、`expires_at`、`consumed_at`（BigInt 微元）。**2026-08-23（报价体系移除）：表与列保留（历史数据留档），代码与 API 不再写入/暴露。**
 - `run_configuration_snapshots`：不可变，含 `resolved_configuration_json`、`resolution_trace_json`、quote 绑定字段（成套）。
 - `generation_runs`：`(project_id, operation, idempotency_key)` 唯一、`payload_fingerprint`、`quote_id`（unique nullable）、`run_configuration_snapshot_id`（unique）、`dispatch_payload_json`、`status`、`dispatch_lease_owner/expires_at/claim_count`。
+- quote 绑定字段保留：2026-08-23 报价移除后，新快照/run 的 quote 字段为 null/零，仅历史行留档。
 - `generation_run_events`：append-only（`event_type`、`segment_id` nullable、`event_json`）。
 - `usage_cost_records`：`(run_configuration_snapshot_id, provider_request_key, attempt_index)` 唯一、`capability/provider_key/model_id`、`status`、`unit_type`、`input/output_units`、`estimated/actual_cost_micros`、`cost_basis`、`unit_detail_json`（2026-08-23：图片分辨率/视频画质等规格明细）、`duration_ms`、`asset_provider_job_record_id` / `interaction_id`（可空外键关联）。
 
@@ -658,4 +675,4 @@ Renderer / Export v1 已有第一版持久化记录。它是 `ComposeRecord` 之
 
 - 金额一律整数微元（BigInt），API 边界转十进制字符串；前端不得用 Number 处理超安全整数。
 - snapshot 与 run event 只追加，不提供更新历史 JSON 的 repository 方法。
-- quote 消费、snapshot 创建与 pending run 创建必须在同一数据库事务；provider 外部提交继续依赖既有幂等 job/call-intent 合同。
+- snapshot 创建与 pending_dispatch run 创建必须在同一数据库事务（free 形态；历史 quote 消费语义已随报价体系移除）；provider 外部提交继续依赖既有幂等 job/call-intent 合同。

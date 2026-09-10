@@ -26,6 +26,7 @@ prompts/
   storyboard/
   asset-planning/
   asset/
+  event-library/
   publish/
 ```
 
@@ -36,6 +37,7 @@ prompts/
 - `storyboard`
 - `asset_planning`
 - `assets`
+- `event_library`
 - `compose`
 - `render`
 - `publish`
@@ -44,6 +46,7 @@ prompts/
 
 - `asset-planning/` 目录对应 `stage: asset_planning`。
 - `asset/` 目录当前对应 `stage: assets`，用于素材生成相关 prompt。
+- `event-library/` 目录对应 `stage: event_library`，当前用于事件库条目策划完善（enrich）。
 - `compose`、`render` stage 已被 loader 支持，但当前没有正式 prompt 文件；新增前必须先确认业务确实需要 LLM prompt。
 
 不允许把正式 prompt 散落到：
@@ -101,6 +104,7 @@ prompts/
   topic/
     candidate-builder.prompt.md
     candidate-builder-repair.prompt.md
+    custom-refine.prompt.md
     light-review.prompt.md
     selector.prompt.md
   script/
@@ -113,8 +117,14 @@ prompts/
   asset-planning/
     asset-planner.prompt.md
     asset-structural-repair.prompt.md
+    global-structural-repair.prompt.md
+    segment-intent-planner.prompt.md
+    segment-intent-repair.prompt.md
   asset/
+    narration-audio-review.prompt.md
     prompt-optimizer.prompt.md
+  event-library/
+    enrich.prompt.md
   publish/
     cover-prompt-generator.prompt.md
     cover-prompt-optimizer.prompt.md
@@ -124,7 +134,8 @@ prompts/
 
 说明：
 
-- 这是当前 harness v1 的实际组织方式。
+- 这是当前 harness v1 的实际组织方式，以 `prompts/` 目录实存为准。
+- `asset/narration-audio-review` 服务口播前置的机器听审（对匿名口播录音做质量评审），属于 `stage: assets`。
 - 后续如需新增 prompt，必须先确认其所属 stage、输入输出对象与职责边界。
 - 不允许因为“方便”把不同阶段的 prompt 混放。
 
