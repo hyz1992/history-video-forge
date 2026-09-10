@@ -18,7 +18,7 @@
 截至 2026-09-10：
 
 - **口播前置与真实时间轴已实现（任务 1-12 收敛）**：文案确认后、分镜前生成并确认整篇口播；供应商原生词级时间戳统一派生字幕及镜头时间，`narration_reference` 贯穿分镜/资产/合成三处同源。设计真相源见[口播前置与真实时间轴设计](./plans/2026-09-05-narration-first-timing-design.md)；阶段输入输出见 [Pipeline IO 规范 §2.6](./architecture/pipeline-io-spec.md)。
-- 发布开关 `NARRATION_FIRST_ENABLED=false` 保持关闭：新项目默认仍走 legacy 链路（资产阶段 TTS + 估算/本地字幕时间），已有 v2 项目不受影响；开放前提是 A8 成品级整片验收通过。验收现状见 [A1-A10 标注矩阵](./records/2026-09-10-narration-task12c-acceptance-matrix.md)（A1-A7/A9/A10 已验证，A8 成品级未验证）。
+- **口播前置已是新建项目唯一模式（2026-09-10 起移除 `NARRATION_FIRST_ENABLED` 发布开关与 `DEMO_MODE` 演示开关）**：新建项目一律走口播前置链路（文案确认→生成口播→确认口播，资格不合格时创建入口提供模型/音色选择）；存量 legacy 项目保留可读与可导出，并可经显式升级入口切换；已有 v2 项目不受影响。验收现状见 [A1-A10 标注矩阵](./records/2026-09-10-narration-task12c-acceptance-matrix.md)（A1-A7/A9/A10 已验证，A8 成品级未验证，不再作为功能开关门）。
 - **TTS 模型选型已定**：qwen-audio-3.0-tts-plus（龙翼暮凌）为口播前置唯一合格候选，CosyVoice 两组不合格；资格证据见[工程资格记录](./records/2026-09-06-narration-engineering-qualification.md)。assets legacy 链路模型仍为 qwen3-tts-instruct-flash，两链路并存。
 - 真实浏览器验收（Task12-B）已收敛：三入口 422→选择面板→selection 重试、事件库层叠命中、口播生成/确认主链、深链门禁、legacy 并存、设置项禁用，run13/run14 两轮 0 failed，见[浏览器验收记录](./records/2026-09-09-narration-task12b-browser.md)。
 

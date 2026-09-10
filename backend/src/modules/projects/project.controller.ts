@@ -34,7 +34,6 @@ export const getProjectSnapshotController = guardUserRoute(
       context.app.db,
       context.params.projectId,
       (context.app as any).topicCandidateStore,
-      { demoMode: context.app.env.demoMode },
     );
     if (!snapshot) {
       return {
@@ -59,7 +58,6 @@ export const previewNarrationModeUpgradeController = guardUserRoute(
       const preview = await previewNarrationModeUpgrade(context.app.db, {
         projectId: context.params.projectId,
         user: { userId: user.userId, role: user.role },
-        narrationFirstEnabled: context.app.narrationFirstEnabled,
       });
       return { statusCode: 200, body: preview };
     } catch (error) {
@@ -77,7 +75,6 @@ export const upgradeNarrationModeController = guardUserRoute(
       const result = await upgradeProjectToNarrationFirst(context.app.db, {
         projectId: context.params.projectId,
         user: { userId: user.userId, role: user.role },
-        narrationFirstEnabled: context.app.narrationFirstEnabled,
         actorUserId: user.userId,
         request: context.payload,
       });
@@ -94,13 +91,6 @@ export const upgradeNarrationModeController = guardUserRoute(
 export const deleteProjectController = guardOwnedRoute(
   async (context: RouteContext): Promise<AppResponse> => {
     const projectId = context.params.projectId;
-
-    if (context.app.env.demoMode && context.app.env.protectedProjectIds.has(projectId)) {
-      return {
-        statusCode: 403,
-        body: { error: "protected_project", message: "示例项目不允许删除" },
-      };
-    }
 
     const deleted = await deleteProject(
       context.app.db,

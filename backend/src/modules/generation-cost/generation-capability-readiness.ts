@@ -77,7 +77,7 @@ export interface GenerationCapabilityReadinessInput {
     deploymentScope: DashscopeDeploymentScope;
   };
   environment: {
-    demoMode: boolean;
+
     testEnv: boolean;
   };
 }
@@ -187,7 +187,7 @@ export function evaluateGenerationCapabilityReadiness(
   }
 
   // 2. demo/test 环境强制视频不可真实派发（即使凭据已配置）。
-  if (input.environment.demoMode || input.environment.testEnv) {
+  if (input.environment.testEnv) {
     for (const entry of input.catalog) {
       if (
         (REAL_VIDEO_CAPABILITIES as readonly string[]).includes(entry.capability) &&

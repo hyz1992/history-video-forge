@@ -5,7 +5,6 @@ import type { AppResponse, RouteContext } from "../../app";
 import type { StoredTopicCandidate } from "../topic/topic-confirm.service";
 import { getProjectById } from "../projects/project.repository";
 import { requireUser } from "../../auth/authorization.js";
-import { demoStageGuard } from "../../shared/demo-stage-guard";
 import {
   isProviderContentFilterError,
   recommendTopicCandidatesWithTrace,
@@ -232,9 +231,6 @@ export async function createTopicFromLibraryController(
   if (!project) {
     return { statusCode: 404, body: { error: "project_not_found" } };
   }
-
-  const demoBlock = demoStageGuard(project, context.app.env.demoMode, "选题");
-  if (demoBlock) return demoBlock;
 
   // 2026-08-23（报价体系移除）：事件库入口不再封口，恢复本地直连执行
   // （不建 run/不记账，登记已知限制：辅助入口费用不入项目成本清单）

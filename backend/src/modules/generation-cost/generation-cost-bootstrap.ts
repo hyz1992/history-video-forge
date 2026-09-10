@@ -77,7 +77,7 @@ export interface GenerationCostBootstrapEnvDeps {
   mediaCredentialConfigured: boolean;
   /** DashScope 媒体运行配置（只在凭据已配置时才会被调用）。 */
   readDashscopeMediaConfig: () => DashscopeMediaConfigProjection;
-  demoMode: boolean;
+
   testEnv: boolean;
   /**
    * S2-2C（§7.1）：本轮 LLM 候选声明（缺省 = 不种候选，兼容旧调用方/测试）。
@@ -150,7 +150,7 @@ export function resolveGenerationCostBootstrapInput(
         credentialConfigured: false,
         deploymentScope: "cn-beijing",
       },
-      environment: { demoMode: deps.demoMode, testEnv: deps.testEnv },
+      environment: { testEnv: deps.testEnv },
       mediaAdditionalModels: deps.mediaAdditionalModels ?? [],
     };
   }
@@ -184,7 +184,7 @@ export function resolveGenerationCostBootstrapInput(
       credentialConfigured: true,
       deploymentScope,
     },
-    environment: { demoMode: deps.demoMode, testEnv: deps.testEnv },
+    environment: { testEnv: deps.testEnv },
     mediaAdditionalModels: additionalModels,
   };
 }
@@ -204,7 +204,6 @@ export function resolveGenerationCostBootstrapInputFromEnv(): GenerationCostBoot
         baseUrl: config.baseUrl,
       };
     },
-    demoMode: env.demoMode,
     testEnv: env.nodeEnv === "test",
     llmCandidates: LLM_MODEL_CANDIDATES_V1,
     resolveCandidateModel: (candidate) => {

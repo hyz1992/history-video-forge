@@ -417,9 +417,9 @@ script 摘要第一版建议至少包含：
 - 人工审稿流 API（可进入正式设计）
 - DashScope 图生视频专用 API：图生视频当前只通过 assets generate 的显式 `provider_mode=dashscope` 配置进入
 
-## Narration API（口播前置，2026-09 已实现；发布开关默认关闭）
+## Narration API（口播前置，2026-09 已实现；新建项目默认启用）
 
-仅对 `narration_timing_mode = narration_first_v1` 的项目生效；开关关闭时新项目为 legacy 模式，不产生这些调用。合同细节见 [口播前置设计](../plans/2026-09-05-narration-first-timing-design.md)。
+仅对 `narration_timing_mode = narration_first_v1` 的项目生效（2026-09-10 起新建项目均为该模式）；存量 legacy 项目不产生这些调用，可经显式升级入口切换。合同细节见 [口播前置设计](../plans/2026-09-05-narration-first-timing-design.md)。
 
 - `POST /api/projects/:projectId/script/:scriptRecordId/confirm`：确认正文（生成口播的前置）。
 - `POST /api/projects/:projectId/script/narration/generate`：提交口播生成 run（资格不合格返回 `422 narration_selection_required` 携带候选组合；阶段冲突 `409 project_stage_run_in_progress`）。

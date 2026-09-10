@@ -36,20 +36,6 @@ function readDashscopeTtsFormat(value: unknown) {
     : undefined;
 }
 
-/** DEMO_MODE: check whether visual (image/video) generation is blocked. */
-function checkDemoModeVisualBlock(context: RouteContext, taskTypes: string[]): AppResponse | null {
-  if (!env.demoMode) return null;
-  const hasVisual = taskTypes.some((t) => t === "image_still" || t === "video_clip");
-  if (!hasVisual) return null;
-  return {
-    statusCode: 403,
-    body: {
-      error: "demo_mode_visual_blocked",
-      message: "比赛演示模式下图片和视频生成已关闭，请浏览已有示例项目查看成品效果。",
-    },
-  };
-}
-
 /**
  * S2-2A 任务 6：客户端不得携带 provider 授权信息（provider_mode / dashscope api key）。
  * 发现即明确拒绝，不静默忽略。
@@ -155,7 +141,6 @@ async function generateAssetsController(
     };
   }
 
-  // DEMO_MODE: block if payload includes image/video generation
   const payload = context.payload as Record<string, unknown>;
   const credentialsBlock = rejectClientProviderCredentials(payload);
   if (credentialsBlock) return credentialsBlock;
@@ -186,8 +171,6 @@ async function generateAssetsController(
     // No specific types — assume all types could be included
     targetTaskTypes = ["image_still", "video_clip", "tts_audio"];
   }
-  const demoBlock = checkDemoModeVisualBlock(context, targetTaskTypes);
-  if (demoBlock) return demoBlock;
 
   const executionMode =
     payload.execution_mode as string | undefined
@@ -579,25 +562,7 @@ async function generateTaskController(
     return { statusCode: 404, body: { error: "project_not_found" } };
   }
 
-  // DEMO_MODE: check task type
   const taskId = context.params.taskId;
-  if (env.demoMode && project.activeAssetPlanRecordId) {
-    const planRecord = context.app.db.assetPlanRecords.get(project.activeAssetPlanRecordId);
-    if (planRecord) {
-      const plan = planRecord.planJson as { tasks?: Array<{ task_id: string; task_type: string }> };
-      const task = plan.tasks?.find((t) => t.task_id === taskId);
-      if (task && (task.task_type === "image_still" || task.task_type === "video_clip")) {
-        return {
-          statusCode: 403,
-          body: {
-            error: "demo_mode_visual_blocked",
-            message: "比赛演示模式下图片和视频生成已关闭，请浏览已有示例项目查看成品效果。",
-          },
-        };
-      }
-    }
-  }
-
   const payload = context.payload as Record<string, unknown>;
   const credentialsBlock = rejectClientProviderCredentials(payload);
   if (credentialsBlock) return credentialsBlock;
@@ -662,17 +627,6 @@ async function upgradeSegmentToVideoController(
 
   // 2026-08-23（报价体系移除）：辅助入口不再封口，恢复本地直连执行
   // （不建 run/不记账，登记已知限制：辅助入口费用不入项目成本清单）
-
-  // DEMO_MODE: video upgrade is always visual
-  if (env.demoMode) {
-    return {
-      statusCode: 403,
-      body: {
-        error: "demo_mode_visual_blocked",
-        message: "比赛演示模式下视频生成已关闭，请浏览已有示例项目查看成品效果。",
-      },
-    };
-  }
 
   const segmentId = context.params.segmentId;
   const payload = context.payload as Record<string, unknown>;

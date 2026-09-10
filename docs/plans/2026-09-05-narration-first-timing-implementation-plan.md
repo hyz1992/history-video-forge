@@ -334,6 +334,8 @@ expect(projectVisualIntervals(boundaries, [
 - [ ] 开关关闭时解释不可用，不擅自创建 legacy。项目设置按适用模式展示/禁用模型和音色；WS 音色不触发旧付费 voice.preview，完整口播从 NarrationPanel 试听。
 - [ ] 回跑测试与 `npm run build:frontend`，PASS 后提交 `补齐新项目口播配置选择与创建失败恢复`。
 
+2026-09-10 任务 12 变更补记：按用户决策移除发布开关 `NARRATION_FIRST_ENABLED` 与演示开关 `DEMO_MODE`——新建项目一律走口播前置链路（创建/升级不再有开关分支），存量 legacy 项目保留可读并经显式升级入口切换；A8 成品级整片验收仍为未验证项（待预算授权），不再作为功能开关门。本清单中"发布开关"相关条目以此补记为准。
+
 ### 任务 12：端到端验收、发布开关与正式文档收口
 
 新增：`harness/scripts/runtime/narration-first-runtime-smoke.ts`、`harness/scripts/ui-acceptance/narration-first-acceptance.ts`、`tests/harness/narration-first-runtime-smoke.test.ts`、`docs/records/2026-09-05-narration-first-acceptance.md`（执行时改实际日期）。

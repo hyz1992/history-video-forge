@@ -1,13 +1,11 @@
-import { materializeNarrationConfiguration, narrationPolicyError } from "../narration/narration-model-policy.js";
+import { materializeNarrationConfiguration } from "../narration/narration-model-policy.js";
 import type { DbClient, ProjectGenerationConfigurationRecord, ProjectRecord } from "../../db/client";
 import { DEFAULT_GENERATION_CONFIGURATION, type GenerationConfigurationV1 } from "../../../../shared/src/index.js";
 import { initializeProjectStorage } from "../../runtime/trace/project-storage.js";
 import { deleteProjectStorage, saveProjectMetadata } from "../../db/persistence.js";
-import { getUserGenerationPreference } from "../generation-config/generation-config.repository.js";
 
 export interface CreateProjectInput {
   name: string;
-  narrationFirstEnabled?: boolean;
   narrationSelection?: unknown;
   ownerId?: string;
   createdById?: string;
@@ -19,26 +17,20 @@ export async function createProject(
 ): Promise<ProjectRecord> {
   const now = new Date();
   const effectiveOwnerId = input.ownerId ?? db.firstAggregateWriter?.ownerId ?? "system";
-  if (!input.narrationFirstEnabled && input.narrationSelection !== undefined)
-    throw narrationPolicyError("narration_mode_unavailable", "口播前置模式尚未开放");
-  if (input.narrationFirstEnabled && (
-    (db.narrationPersistence.prismaClient && !db.firstAggregateWriter) ||
+  if ((db.narrationPersistence.prismaClient && !db.firstAggregateWriter) ||
     (db.firstAggregateWriter && !db.firstAggregateWriter.getUserGenerationPreference)
-  )) throw new Error("narration_creation_writer_required");
-  // 新模式不使用带Map fallback的旧读取器；null也是权威状态且拒绝不回写缓存。
-  const source = input.narrationFirstEnabled && db.firstAggregateWriter
+  ) throw new Error("narration_creation_writer_required");
+  // 口播前置已是唯一新建模式（2026-09-10 移除发布开关）；偏好继承走 DB 权威读取器。
+  const source = db.firstAggregateWriter
     ? await db.firstAggregateWriter.getUserGenerationPreference?.(effectiveOwnerId)
     : null;
-  const userPref = input.narrationFirstEnabled && db.firstAggregateWriter
+  const userPref = db.firstAggregateWriter
     ? source && { configuration: source.configurationJson, revision: source.revision }
-    : getUserGenerationPreference(db, effectiveOwnerId);
-  // 新模式仅在无偏好记录时使用默认；已有记录的坏JSON必须交给完整合同拒绝。
-  const inherited = input.narrationFirstEnabled && userPref != null
+    : null;
+  const inherited = userPref != null
     ? userPref.configuration
-    : userPref?.configuration ?? structuredClone(DEFAULT_GENERATION_CONFIGURATION);
-  const frozenConfig: GenerationConfigurationV1 = input.narrationFirstEnabled
-    ? await materializeNarrationConfiguration(db, effectiveOwnerId, inherited, input.narrationSelection)
-    : inherited;
+    : structuredClone(DEFAULT_GENERATION_CONFIGURATION);
+  const frozenConfig: GenerationConfigurationV1 = await materializeNarrationConfiguration(db, effectiveOwnerId, inherited, input.narrationSelection);
   const project: ProjectRecord = {
     id: db.generateId(),
     name: input.name,
@@ -49,7 +41,7 @@ export async function createProject(
     activeScriptRecordId: null,
     activeNarrationRecordId: null,
     activeNarrationSubtitleRevisionId: null,
-    narrationTimingMode: input.narrationFirstEnabled ? "narration_first_v1" : "legacy_estimated",
+    narrationTimingMode: "narration_first_v1",
     activeStoryboardRecordId: null,
     activeAssetPlanRecordId: null,
     activeAssetManifestRecordId: null,
@@ -90,7 +82,7 @@ export async function createProject(
   if (db.firstAggregateWriter) {
     // Prisma 激活态：Project 与冻结配置在同一事务创建（任一失败不留半成品）
     await db.firstAggregateWriter.createProjectWithGenerationConfiguration(project, configRecord,
-      input.narrationFirstEnabled ? { sourceUserPreferenceRevision: userPref?.revision ?? null } : undefined,
+      { sourceUserPreferenceRevision: userPref?.revision ?? null },
     );
   }
   // 内存态（无 writer）不做持久化调用

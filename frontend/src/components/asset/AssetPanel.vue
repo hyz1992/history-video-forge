@@ -13,8 +13,6 @@ import { useStagePolling } from "../../composables/useStagePolling";
 import { useAssetTabPhase } from "../../composables/useAssetTabPhase";
 import { useWorkspaceStore } from "../../stores/workspace";
 import { PIPELINE_STEPS } from "../../stores/workspace";
-import { useDemoMode } from "../../composables/useDemoMode";
-import { useCompetitionGuard } from "../../composables/useCompetitionGuard";
 import StageGenerating from "../workspace/StageGenerating.vue";
 import StageLoadingBar from "../workspace/StageLoadingBar.vue";
 
@@ -32,55 +30,11 @@ const scriptStore = useScriptStore();
 const projectStore = useProjectStore();
 const workspaceStore = useWorkspaceStore();
 const assetSnapshotLoaded = ref(false);
-const demoMode = useDemoMode();
-const { checkStageRollback } = useCompetitionGuard();
 
 const strictDialogOpen = ref(false);
 const strictSegmentId = ref<string | null>(null);
 const strictBusy = ref(false);
 
-
-/* -------------------------------------------------------------------------- */
-/*  Demo mode: block image/video generation                                    */
-/* -------------------------------------------------------------------------- */
-
-const DEMO_MODE_MESSAGE = "比赛演示期间，图片和视频生成功能已关闭，以防 API 成本消耗。\n\n请前往项目列表，查看已有示例项目体验完整生成效果。";
-
-function showDemoModeBlock() {
-  ElMessageBox.alert(
-    DEMO_MODE_MESSAGE,
-    "演示模式",
-    {
-      confirmButtonText: "我知道了",
-      type: "warning",
-    },
-  );
-}
-
-const DEMO_VISUAL_BLOCKED_ERROR = "demo_mode_visual_blocked";
-
-function isDemoVisualBlockedError(error: unknown): boolean {
-  if (!(error instanceof Error)) return false;
-  return error.message === DEMO_VISUAL_BLOCKED_ERROR || error.message.includes(DEMO_VISUAL_BLOCKED_ERROR);
-}
-
-function checkDemoVisualBlock(): boolean {
-  if (demoMode.value) {
-    showDemoModeBlock();
-    return true;
-  }
-  return false;
-}
-
-async function handleDemoGeneratingError(): Promise<boolean> {
-  const err = assetsStore.state.loadError;
-  if (err && (err === DEMO_VISUAL_BLOCKED_ERROR || err.includes(DEMO_VISUAL_BLOCKED_ERROR))) {
-    showDemoModeBlock();
-    await assetsStore.loadProject();
-    return true;
-  }
-  return false;
-}
 
 // 通用轮询：asset plan + assets 两个阶段的 generating 状态
 /** 先 load asset plan，再 load assets，顺序保证依赖关系 */
@@ -1008,7 +962,6 @@ async function handleGenerateBasic() {
 
 async function handleGenerateMissing() {
   if (isAssetsBusy.value) return;
-  if (checkDemoVisualBlock()) return;
   const count = blockedItems.value.length;
   const types = [...new Set(blockedItems.value.map(i => i.type))].join("、");
   const { imgCount, vidSec } = estimateBlockedItemsCost(blockedItems.value);
@@ -1050,7 +1003,6 @@ async function handleGenerateMissing() {
     },
     // B1：成功反馈在确认提交成功后触发（付费路径下用户未确认不得提前提示"完成"）
     onSuccess: async () => {
-      if (await handleDemoGeneratingError()) return;
       if (!assetsStore.state.loadError) {
         ElMessage.success("剩余资产生成完成");
       }
@@ -1062,7 +1014,6 @@ async function handleGenerateMissing() {
 
 async function handleGenerateByType(taskType: string, typeLabel: string) {
   if (isAssetsBusy.value) return;
-  if (checkDemoVisualBlock()) return;
   const taskIds = blockedItems.value
     .filter(i => (taskType === "image_still" && i.type === "分镜图") || (taskType === "video_clip" && i.type === "分镜视频"))
     .map(i => i.taskId);
@@ -1096,7 +1047,6 @@ async function handleGenerateByType(taskType: string, typeLabel: string) {
       });
     },
     onSuccess: async () => {
-      await handleDemoGeneratingError();
       // 提交后启动轮询，让任务进度与完成态自动刷新
       startAssetPolling();
     },
@@ -1105,7 +1055,6 @@ async function handleGenerateByType(taskType: string, typeLabel: string) {
 
 async function handleGenerateSelected() {
   if (isAssetsBusy.value) return;
-  if (checkDemoVisualBlock()) return;
   const ids = selectedBlockedIds.value;
   if (ids.length === 0) return;
   const items = blockedItems.value.filter(i => ids.includes(i.taskId));
@@ -1137,10 +1086,6 @@ async function handleGenerateSelected() {
     },
     // B1：选中项清理在确认提交成功后执行（未确认/取消不得清空选中）
     onSuccess: async () => {
-      if (await handleDemoGeneratingError()) {
-        selectedBlockedIds.value = [];
-        return;
-      }
       selectedBlockedIds.value = [];
       // 提交后启动轮询，让任务进度与完成态自动刷新
       startAssetPolling();
@@ -1244,7 +1189,6 @@ async function resolveGenerationPricingOnce(
 
 async function handleBatchUpgrade() {
   if (isAssetsBusy.value) return;
-  if (checkDemoVisualBlock()) return;
   const count = upgradableSegments.value.length;
   // 升级单价/单条预估跟随项目当前配置模型；解析失败回退通用单价
   let rate = "";
@@ -1283,9 +1227,8 @@ function handleUploadFile(taskId: string, file: File) {
 }
 
 async function handleGenerateTask(taskId: string) {
-  // Demo mode: block image/video task types
   const task = assetTasks.value.find(t => t.task_id === taskId);
-  if (task && (task.task_type === "image_still" || task.task_type === "video_clip") && checkDemoVisualBlock()) return;
+  if (task && (task.task_type === "image_still" || task.task_type === "video_clip")) return;
   // Show cost hint for paid task types
   const taskLabel = task ? (TASK_TYPE_LABELS[task.task_type] ?? task.task_type) : taskId;
   let costHint = task ? getTaskCostHint(task.task_type) : "";
@@ -1333,10 +1276,6 @@ async function handleGenerateTask(taskId: string) {
           startAssetPolling();
         }
       } catch (error) {
-        if (isDemoVisualBlockedError(error)) {
-          showDemoModeBlock();
-          return;
-        }
         const msg = error instanceof Error ? error.message : "生成失败";
         ElMessage.error("单任务生成失败：" + msg);
       }
@@ -1345,7 +1284,6 @@ async function handleGenerateTask(taskId: string) {
 }
 
 async function handleUpgradeVideo(segmentId: string) {
-  if (checkDemoVisualBlock()) return;
   const seg = segments.value.find(s => s.segment_id === segmentId);
   const segLabel = seg ? `#${segments.value.indexOf(seg) + 1}` : segmentId;
   let rate = "";
@@ -1377,10 +1315,6 @@ async function handleUpgradeVideo(segmentId: string) {
     await assetPlanningStore.retryLoad();
     ElMessage.success("已切换为 API 视频模式，可手动生成或上传视频");
   } catch (error) {
-    if (isDemoVisualBlockedError(error)) {
-      showDemoModeBlock();
-      return;
-    }
     const msg = error instanceof Error ? error.message : "升级失败";
     ElMessage.error("视频升级失败：" + msg);
   }
@@ -1396,7 +1330,6 @@ async function handleRefreshGeneratingStatus() {
 }
 
 function handleConfirm() {
-  if (!checkStageRollback("asset")) return;
   if (!canCompose.value) {
     ElMessage.warning(blockedReasonText.value || "资产尚未全部就绪");
     return;
@@ -1409,17 +1342,6 @@ function handleConfirm() {
 
 <template>
   <div class="asset-panel">
-    <!-- Demo mode banner -->
-    <el-alert
-      v-if="demoMode"
-      title="演示模式"
-      description="比赛演示期间，图片和视频生成功能已关闭。您可以浏览已有的示例项目体验完整效果，口播音频、字幕、音效、配乐等非视觉资产生成不受影响。"
-      type="warning"
-      show-icon
-      :closable="false"
-      class="asset-demo-banner"
-    />
-
     <!-- 自动生成中（组件级桥接，覆盖 initialLoadDone=false 期间的空白） -->
     <StageGenerating
       v-if="pendingAutoGenerate"
@@ -1925,10 +1847,6 @@ function handleConfirm() {
   max-width: 1200px;
   margin: 0 auto;
   width: 100%;
-}
-
-.asset-demo-banner {
-  border-radius: var(--radius-card);
 }
 
 /* ---- Error / Loading / Empty ---- */

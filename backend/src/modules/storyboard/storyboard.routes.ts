@@ -1,6 +1,5 @@
 import type { AppInstance, AppResponse, RouteContext } from "../../app";
 import { getProjectById } from "../projects/project.repository";
-import { demoStageGuard } from "../../shared/demo-stage-guard";
 import { submitGenerationRun } from "../generation-run/submit-protocol.js";
 import { getStoryboardRecordById } from "./storyboard-record.repository";
 import { getSegmentOverride, upsertSegmentOverride } from "./storyboard-segment-override.repository";
@@ -32,9 +31,6 @@ async function regenerateSegmentController(
     return { statusCode: 404, body: { error: "project_not_found" } };
   }
 
-  const demoBlock = demoStageGuard(project, context.app.env.demoMode, "分镜");
-  if (demoBlock) return demoBlock;
-
   const payload = (context.payload ?? {}) as Record<string, unknown>;
   // 2026-08-23（报价体系移除）：分段重生与主生成同一 operation，统一走 run 提交协议
   return submitGenerationRun(context, "storyboard.generate", undefined, {
@@ -55,9 +51,6 @@ async function generateStoryboardController(
       },
     };
   }
-
-  const demoBlock = demoStageGuard(project, context.app.env.demoMode, "分镜");
-  if (demoBlock) return demoBlock;
 
   const payload = (context.payload ?? {}) as Record<string, unknown>;
   // 2026-08-23（报价体系移除）：生成统一走 run 提交协议（无需 quote 字段）
@@ -126,7 +119,7 @@ async function updateSegmentStrategyController(
     projectConfiguration: projectConfig.configuration,
     projectConfigurationRevision: projectConfig.revision,
     sourceUserPreferenceRevision: projectConfig.sourceUserPreferenceRevision,
-    systemConstraints: resolveSystemGenerationConstraints(context.app.env.demoMode),
+    systemConstraints: resolveSystemGenerationConstraints(),
     providerModelCatalog: [...context.app.db.providerModelCatalog.values()].map((entry) => ({
       provider_model_id: entry.id,
       capability: entry.capability,

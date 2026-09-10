@@ -65,7 +65,7 @@ async function loadLegacyProject(db: DbClient, projectId: string, user: ServiceU
 }
 
 /** 升级预览：只读；展示将失效的下游产物、当前配置与合格组合，不修改任何状态。缺冻结配置的老项目按默认配置 revision 0 展示，不回填。 */
-export async function previewNarrationModeUpgrade(db: DbClient, input: { projectId: string; user: ServiceUser; narrationFirstEnabled: boolean }): Promise<Preview> {
+export async function previewNarrationModeUpgrade(db: DbClient, input: { projectId: string; user: ServiceUser }): Promise<Preview> {
     const project = await loadLegacyProject(db, input.projectId, input.user);
     const stored = await readProjectConfig(db, input.projectId);
     const config = stored?.configurationJson ?? DEFAULT_GENERATION_CONFIGURATION;
@@ -75,7 +75,7 @@ export async function previewNarrationModeUpgrade(db: DbClient, input: { project
     const scriptRecord = project.activeScriptRecordId ? db.scriptRecords.get(project.activeScriptRecordId) : null;
     return NarrationModeUpgradePreviewV1.parse({
         narration_timing_mode: "legacy_estimated",
-        upgrade_available: input.narrationFirstEnabled,
+        upgrade_available: true,
         policy_version: available.policy_version,
         recommended: recommendedOption ? { provider_model_id: recommendedOption.provider_model_id, voice_profile_id: recommendedOption.voice_profile_id } : null,
         options: available.qualified_options,
@@ -106,8 +106,7 @@ function collectUpgradeConflicts(project: Pick<ProjectRecord, "activeScriptRecor
 
 /** 旧项目显式升级：模式、固定配置、策略依据、下游失效与升级事件在同一事务；任何预期不匹配整笔不写。
  *  预览把缺冻结配置的老项目展示为 revision 0；该分支下所有拒绝判定先于任何写入，配置行在事务内以"缺失"为预期创建（并发创建唯一冲突整笔回滚）。 */
-export async function upgradeProjectToNarrationFirst(db: DbClient, input: { projectId: string; user: ServiceUser; narrationFirstEnabled: boolean; actorUserId?: string | null; request: unknown }): Promise<{ upgraded: true; configuration_revision: number }> {
-    if (!input.narrationFirstEnabled) throw new NarrationUpgradeError(409, { error: "narration_mode_unavailable", reason: "口播前置模式尚未开放，不能升级" });
+export async function upgradeProjectToNarrationFirst(db: DbClient, input: { projectId: string; user: ServiceUser; actorUserId?: string | null; request: unknown }): Promise<{ upgraded: true; configuration_revision: number }> {
     const project = await loadLegacyProject(db, input.projectId, input.user);
     // 鉴权与来源核对先于请求体解析：跨 owner/来源冲突不应被 422 掩盖。
     const request = UpgradeNarrationModeRequest.parse(input.request);

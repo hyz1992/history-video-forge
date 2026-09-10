@@ -180,7 +180,7 @@ export async function resolveQuoteConfiguration(
     sourceUserPreferenceRevision: config.sourceUserPreferenceRevision,
     runOverrides: input.runOverrides ?? undefined,
     segmentOverrides,
-    systemConstraints: resolveSystemGenerationConstraints(env.demoMode),
+    systemConstraints: resolveSystemGenerationConstraints(),
     providerModelCatalog: source.catalog.map((entry) => ({
       provider_model_id: entry.id,
       capability: entry.capability,

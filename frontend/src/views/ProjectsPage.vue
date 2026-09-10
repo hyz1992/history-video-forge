@@ -8,15 +8,11 @@ import {
   type ProjectListItem,
 } from "../stores/project";
 import { useAuthStore } from "../stores/auth";
-import { useDemoMode } from "../composables/useDemoMode";
 import CreateTopicModal from "../components/topic/CreateTopicModal.vue";
-import { useCompetitionGuard } from "../composables/useCompetitionGuard";
 
 const projectStore = useProjectStore();
 const authStore = useAuthStore();
 const router = useRouter();
-const isDemoMode = useDemoMode();
-const { checkCreateProject } = useCompetitionGuard();
 
 async function handleLogout() {
   await authStore.logout();
@@ -156,26 +152,6 @@ const filteredProjects = computed(() => {
     return content.includes(query);
   });
 
-  const demoModeActive = isDemoMode.value;
-
-  if (demoModeActive) {
-    const tagged = filtered.map((item) => ({
-      item,
-      success: isSuccessStatus(item),
-    }));
-
-    tagged.sort((a, b) => {
-      if (a.success !== b.success) return a.success ? -1 : 1;
-      let result = 0;
-      if (sortBy.value === "time") result = new Date(a.item.updated_at).getTime() - new Date(b.item.updated_at).getTime();
-      if (sortBy.value === "name") result = a.item.display_name.localeCompare(b.item.display_name);
-      if (sortBy.value === "dynasty") result = (a.item.dynasty ?? "").localeCompare(b.item.dynasty ?? "");
-      return sortOrder.value === "desc" ? -result : result;
-    });
-
-    return tagged.map((t) => t.item);
-  }
-
   filtered.sort((a, b) => {
     let result = 0;
     if (sortBy.value === "time") result = new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime();
@@ -200,7 +176,6 @@ function formatDateTime(value: string) {
 }
 
 function handleCreateProject() {
-  if (!checkCreateProject()) return;
   showCreateTopicModal.value = true;
 }
 

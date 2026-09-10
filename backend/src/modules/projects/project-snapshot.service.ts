@@ -113,13 +113,12 @@ async function buildStoryboardSnapshotSegment(
   db: DbClient,
   project: import("../../db/client.js").ProjectRecord,
   storyboardRecord: import("../../db/client.js").StoryboardRecord,
-  demoMode: boolean,
 ): Promise<Record<string, unknown>> {
   const decoded = decodeStoredStoryboardPlan(storyboardRecord.planJson);
   const plan = decoded.ok ? decoded.value.plan : null;
 
   // P2：真实系统约束单一来源（demo 态禁用真实视频 provider）
-  const constraints = resolveSystemGenerationConstraints(demoMode);
+  const constraints = resolveSystemGenerationConstraints();
 
   // 解析每段路线（项目配置 + override + suitability）
   let segmentStrategies: Array<Record<string, unknown>> = [];
@@ -194,7 +193,6 @@ export async function getProjectSnapshot(
   db: DbClient,
   projectId: string,
   topicCandidateStore?: Map<string, any>,
-  options?: { demoMode?: boolean },
 ) {
   let project = db.projects.get(projectId);
   if (!project) {
@@ -371,7 +369,7 @@ export async function getProjectSnapshot(
       : null,
     script_history: scriptHistory,
     active_storyboard: storyboardRecord
-      ? await buildStoryboardSnapshotSegment(db, project, storyboardRecord, options?.demoMode ?? false)
+      ? await buildStoryboardSnapshotSegment(db, project, storyboardRecord)
       : null,
     active_asset_plan: assetPlanRecord
       ? {

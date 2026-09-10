@@ -212,7 +212,7 @@
 
 ### narration 表（narration-first，默认关闭）
 
-口播前置链路（文案确认 → 生成口播 → 确认口播）的持久化表；发布开关 `NARRATION_FIRST_ENABLED=false`（当前默认）时不写入。表名以 `backend/prisma/schema.prisma` 为准：
+口播前置链路（文案确认 → 生成口播 → 确认口播）的持久化表（2026-09-10 起新建项目一律写入；存量 legacy 项目不写入）。表名以 `backend/prisma/schema.prisma` 为准：
 
 - `NarrationRecord`：口播主记录，挂 `generationRunId`（unique）与 `scriptRecordId`，存正文/设置/朗读文本 SHA-256 指纹、provider 调用事实与输出 JSON（`outputJson`）。
 - `NarrationSubtitleRevision`：字幕 revision，存音频/时序 hash、字幕设置快照与 SRT/VTT；`NarrationRecord.initialSubtitleRevisionId` 指向初始 revision。

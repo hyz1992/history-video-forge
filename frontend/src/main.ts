@@ -58,12 +58,9 @@ import {
   generationCostStoreKey,
 } from "./stores/generation-cost";
 import { initTheme } from "./composables/useTheme";
-import { initDemoMode } from "./composables/useDemoMode";
-import CompetitionNoticeDialog from "./components/common/CompetitionNoticeDialog.vue";
 import AuthModal from "./components/auth/AuthModal.vue";
 
 initTheme();
-await initDemoMode();
 
 const authStore = createAuthStore();
 await authStore.loadMe().catch(() => undefined);
@@ -104,7 +101,7 @@ const publishStore = createPublishStore({
 });
 
 const app = createApp({
-  render: () => h(Fragment, null, [h(RouterView), h(CompetitionNoticeDialog), h(AuthModal)]),
+  render: () => h(Fragment, null, [h(RouterView), h(AuthModal)]),
 });
 
 app.use(ElementPlus);

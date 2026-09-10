@@ -90,7 +90,6 @@ interface RouteRecord {
 }
 
 export interface AppInstance {
-  narrationFirstEnabled: boolean;
   env: typeof env;
   db: DbClient;
   renderAdapter?: RenderAdapter;
@@ -158,7 +157,6 @@ function matchRoute(pattern: string, url: string): Record<string, string> | null
 
 export interface BuildAppOptions {
   narrationProvider?: NarrationProvider;
-  narrationFirstEnabled?: boolean;
   renderAdapter?: RenderAdapter;
   storageBaseDir?: string;
   skipSnapshotLoad?: boolean;
@@ -243,7 +241,6 @@ export function buildApp(options: BuildAppOptions = {}): AppInstance {
   // S2-2A 任务 8：GenerationRun 事务 repository + 可恢复 dispatcher（单例接线）。
   const generationRunRepository = createGenerationRunRepository(db, prismaClient);
   const app: AppInstance = {
-    narrationFirstEnabled: options.narrationFirstEnabled ?? env.narrationFirstEnabled,
     env,
     db,
     persistenceHealth,
@@ -369,7 +366,6 @@ export function buildApp(options: BuildAppOptions = {}): AppInstance {
       return {
         status: "ok",
         nodeEnv: env.nodeEnv,
-        demoMode: env.demoMode,
       };
     },
   };

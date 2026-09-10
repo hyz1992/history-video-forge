@@ -14,7 +14,6 @@ import { useStagePolling } from "../../composables/useStagePolling";
 import { resolvePipelineStagePhase } from "../../composables/usePipelineStagePhase";
 import StageGenerating from "../workspace/StageGenerating.vue";
 import StageLoadingBar from "../workspace/StageLoadingBar.vue";
-import { useCompetitionGuard } from "../../composables/useCompetitionGuard";
 
 const topicStore = useTopicStore();
 const projectStore = useProjectStore();
@@ -22,7 +21,6 @@ const workspaceStore = useWorkspaceStore();
 const costStore = useGenerationCostStore();
 const route = useRoute();
 const router = useRouter();
-const { checkStageRollback } = useCompetitionGuard();
 
 const SCRIPT_STEP_INDEX = PIPELINE_STEPS.findIndex((s) => s.key === "script");
 
@@ -169,7 +167,6 @@ function toggleHistory() {
 }
 
 async function handleRefreshBatch() {
-  if (!checkStageRollback("topic")) return;
   if (topicStore.state.isGenerating || isRefreshing.value) return;
   isRefreshing.value = true;
   await nextTick();
@@ -193,7 +190,6 @@ async function handleRefreshBatch() {
 }
 
 async function handleRegenerate() {
-  if (!checkStageRollback("topic")) return;
   startPolling();
   await topicStore.generateSystemRecommendations(loadTopicRecommendationFilterDraft());
   if (topicStore.state.loadError) {
@@ -217,7 +213,6 @@ async function handleRefreshGeneratingStatus() {
 }
 
 async function confirmCandidate() {
-  if (!checkStageRollback("topic")) return;
   try {
     await topicStore.confirmSelectedCandidate();
     if (topicStore.state.confirmedTopicPackageId) {

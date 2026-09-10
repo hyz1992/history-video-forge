@@ -51,8 +51,6 @@ import {
 export interface RunAssetPlanningGenerationInput {
   db: DbClient;
   project: ProjectRecord;
-  /** 演示/测试态：与 storyboard 快照一致的真实系统约束来源。 */
-  demoMode: boolean;
   expectedNarrationSource?: unknown;
   /** S2-2A 任务 9B：付费 quote 绑定 run 的计费上下文（LLM 记账）；免 quote 路径不传。 */
   billingContext?: LlmBillingContext;
@@ -817,7 +815,7 @@ export async function runAssetPlanningGeneration(
     projectConfiguration: configResult.configuration,
     projectConfigurationRevision: configResult.revision,
     sourceUserPreferenceRevision: configResult.sourceUserPreferenceRevision,
-    systemConstraints: resolveSystemGenerationConstraints(input.demoMode),
+    systemConstraints: resolveSystemGenerationConstraints(),
     providerModelCatalog: [...input.db.providerModelCatalog.values()].map((entry) => ({
       provider_model_id: entry.id,
       capability: entry.capability,

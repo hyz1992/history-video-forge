@@ -133,7 +133,6 @@ export function createAssetPlanDispatchHandler(): GenerationRunDispatchHandler {
       expectedNarrationSource: run.dispatchPayloadJson.narration_source,
       db: context.db,
       project: context.project,
-      demoMode: env.demoMode,
       billingContext: billing,
       artStylePreset,
     });

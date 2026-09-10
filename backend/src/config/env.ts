@@ -14,11 +14,7 @@ export type AssetPlanningGenerationMode = "legacy" | "intent_compiler";
 
 export interface AppEnv {
   nodeEnv: string;
-  demoMode: boolean;
-  /** 所有真实时间轴消费者完成验收前保持关闭。 */
-  narrationFirstEnabled: boolean;
   allowUnauthenticatedRemote: boolean;
-  protectedProjectIds: Set<string>;
   databaseUrl: string;
   promptAssetsDir: string;
   assetPlanningGenerationMode: AssetPlanningGenerationMode;
@@ -107,20 +103,11 @@ function buildEnv(dotEnvValues: Record<string, string>): AppEnv {
   const structuredDefaults =
     readStrictStructuredModelDefaults(structuredModel);
 
-  const demoModeRaw = readEnvValue("DEMO_MODE", dotEnvValues);
-  const demoMode = demoModeRaw === "true" || demoModeRaw === "1";
   const allowUnauthenticatedRemote = readEnvValue("ALLOW_UNAUTHENTICATED_REMOTE", dotEnvValues) === "true";
-
-  const protectedProjectIds = parseProtectedProjectIds(
-    readEnvValue("PROTECTED_PROJECT_IDS", dotEnvValues),
-  );
 
   return {
     nodeEnv: readEnvValue("NODE_ENV", dotEnvValues) ?? "development",
-    demoMode,
-    narrationFirstEnabled: readEnvValue("NARRATION_FIRST_ENABLED", dotEnvValues) === "true",
     allowUnauthenticatedRemote,
-    protectedProjectIds,
     databaseUrl: readEnvValue("DATABASE_URL", dotEnvValues) ?? "file:./dev.db",
     promptAssetsDir:
       readEnvValue("PROMPT_ASSETS_DIR", dotEnvValues) ??
@@ -343,16 +330,6 @@ function stripQuotes(value: string): string {
   }
 
   return value;
-}
-
-function parseProtectedProjectIds(raw: string | undefined): Set<string> {
-  if (!raw) return new Set();
-  return new Set(
-    raw
-      .split(",")
-      .map((id) => id.trim())
-      .filter((id) => id.length > 0),
-  );
 }
 
 /**

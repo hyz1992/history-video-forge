@@ -341,7 +341,7 @@
 
 ### 口播产物（narration-first，默认关闭）
 
-口播前置链路（文案确认 → 生成口播 → 确认口播）于 2026-09 实现；发布开关 `NARRATION_FIRST_ENABLED=false`（当前默认）时不产生以下产物。设计真相源见 [口播前置设计](../plans/2026-09-05-narration-first-timing-design.md)，字段名以 `backend/prisma/schema.prisma` 为准：
+口播前置链路（文案确认 → 生成口播 → 确认口播）于 2026-09 实现，2026-09-10 起为新建项目唯一模式（发布开关已移除）；存量 legacy 项目不产生以下产物。设计真相源见 [口播前置设计](../plans/2026-09-05-narration-first-timing-design.md)，字段名以 `backend/prisma/schema.prisma` 为准：
 
 | 模型.字段 | 含义 |
 |---|---|

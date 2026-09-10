@@ -168,11 +168,11 @@
 
 - [Script 校验与决策规范](./script-validation-spec.md)
 
-### 2.6 口播产物（narration-first 模式，发布开关默认关闭）
+### 2.6 口播产物（narration-first 模式，2026-09-10 起为新建项目唯一模式）
 
 口播前置改造（2026-09 已实现，任务 1-12 收敛）在 Script 阶段新增口播链路：确认正文 → 生成口播 → 确认口播。设计真相源见 [口播前置与真实时间轴设计](../plans/2026-09-05-narration-first-timing-design.md)，验收矩阵见 [A1-A10 标注矩阵](../records/2026-09-10-narration-task12c-acceptance-matrix.md)。
 
-- 触发条件：项目 `narration_timing_mode = narration_first_v1`（由创建时的 `NARRATION_FIRST_ENABLED` 决定；当前发布开关为 `false`，新项目默认仍走 legacy 链路，已有 v2 项目不受开关回退影响）。
+- 触发条件：项目 `narration_timing_mode = narration_first_v1`。2026-09-10 起新建项目一律为该模式（发布开关已移除）；存量 legacy 项目保留可读并可经显式升级入口切换，不自动降级。
 - 输入：已确认正文（`script_confirmation`）+ 合格的 model/voice 组合（资格门禁 `narration_selection`）。
 - 输出：`NarrationRecord`（音频 + 供应商原生词级时间戳 timing map + 派生字幕 revision），经 narration bundle 校验后持久化（含 `validation_report`、音频 hash 与时长 probe）。
 - 边界：音频与时间戳一次生成（单 WS 任务、自然段 continue-task，长文不拆独立 TTS）；无 ASR、无按字 fallback；确认口播前不允许生成/更新分镜（缺失时深链回文案页 `reason=narration_required`）。

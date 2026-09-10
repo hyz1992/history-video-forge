@@ -12,7 +12,7 @@
 
 - `口播前置与真实时间轴` 实施计划任务 1–11 全部完成并通过独立审查收敛；任务 12 拆分的两个子任务已收敛：Task12-A fake runtime 冒烟（[记录](../records/2026-09-09-narration-task12a-runtime-smoke.md)）与 Task12-B 真实浏览器验收（[记录](../records/2026-09-09-narration-task12b-browser.md)，run13/run14 两轮 0 failed，含三入口 422→面板→重试、事件库层叠命中、口播主链、深链门禁、legacy 并存、设置项禁用与零未处理拒绝）。
 - Task12-C 已完成 [A1–A10 验收标注矩阵](../records/2026-09-10-narration-task12c-acceptance-matrix.md)：A1–A7、A9、A10 已验证（离线/隔离/资格级，缺口逐项留档）；**A8 成品级未验证**（无整片 MP4 与真实音视频 probe、字幕误差人工达标无记录），需另行明确预算授权的整片验收。
-- 发布开关 `NARRATION_FIRST_ENABLED` 保持 `false`（A8 未通过前不开放）；关闭语义、显式升级与回滚方式已验证（开关关闭回到 legacy 新建，v1/v2 读取并存，禁止破坏性 down migration）。
+- 发布开关 `NARRATION_FIRST_ENABLED` 与演示开关 `DEMO_MODE` 已于 2026-09-10 按用户决策移除：新建项目一律走口播前置链路（无开关分支）；存量 legacy 项目保留可读/可导出并经显式升级入口切换（v1/v2 读取并存，禁止破坏性 down migration）。A8 成品级整片验收仍为未验证项（不再作为功能开关门）。
 - 未完成收口项：正式架构文档（pipeline-io-spec / script-stage-design / api-design / field-design / schema-design / harness README）中"字幕纯估算/只能资产阶段 TTS"等过时表述清理为独立后续子任务。
 
 截至 2026-09-05：

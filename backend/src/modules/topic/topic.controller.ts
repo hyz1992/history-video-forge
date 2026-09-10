@@ -4,7 +4,6 @@ import { randomUUID } from "node:crypto";
 import { TopicRecommendationFilterInputSchema } from "../../../../shared/src/index.js";
 import type { AppResponse, RouteContext } from "../../app";
 import { createProject, getProjectById } from "../projects/project.repository";
-import { demoStageGuard } from "../../shared/demo-stage-guard";
 import { normalizeEventInput } from "./event-normalizer";
 import { requireUser } from "../../auth/authorization.js";
 import { LlmOutputError } from "../../runtime/llm/llm-output-error.js";
@@ -198,7 +197,6 @@ export async function createProjectController(
       name: context.payload?.name ?? "Untitled Project",
       ownerId: user.userId,
       createdById: user.userId,
-      narrationFirstEnabled: context.app.narrationFirstEnabled,
       narrationSelection: context.payload?.narration_selection,
     });
   } catch (error) {
@@ -280,9 +278,6 @@ export async function createTopicRecommendationsController(
     };
   }
 
-  const demoBlock = demoStageGuard(project, context.app.env.demoMode, "选题");
-  if (demoBlock) return demoBlock;
-
   const rawPayload = (context.payload ?? {}) as Record<string, unknown>;
   // 2026-08-23（报价体系移除）：生成统一走 run 提交协议（无需 quote 字段，
   // 幂等键可选；快照/记账由提交服务统一创建；dispatch handler 内设置生成状态）
@@ -329,9 +324,6 @@ export async function confirmTopicCandidateController(
       },
     };
   }
-
-  const demoBlock = demoStageGuard(project, context.app.env.demoMode, "选题");
-  if (demoBlock) return demoBlock;
 
   const projectCandidates = context.app.topicCandidateStore.get(project.id)?.candidatesById;
   const candidate = projectCandidates?.get(context.params.candidateId);
@@ -422,9 +414,6 @@ export async function createTopicFromCustomController(
   if (!project) {
     return { statusCode: 404, body: { error: "project_not_found" } };
   }
-
-  const demoBlock = demoStageGuard(project, context.app.env.demoMode, "选题");
-  if (demoBlock) return demoBlock;
 
   // 2026-08-23（报价体系移除）：辅助入口不再封口，恢复本地直连执行
   // （不建 run/不记账，登记已知限制：辅助入口费用不入项目成本清单）

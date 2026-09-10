@@ -298,12 +298,10 @@ import { useRouter } from "vue-router";
 import { useProjectStore } from "../stores/project";
 import { useAuthStore } from "../stores/auth";
 import CreateTopicModal from "../components/topic/CreateTopicModal.vue";
-import { useCompetitionGuard } from "../composables/useCompetitionGuard";
 
 const projectStore = useProjectStore();
 const authStore = useAuthStore();
 const router = useRouter();
-const { checkCreateProject } = useCompetitionGuard();
 
 async function handleLogout() {
   await authStore.logout();
@@ -325,7 +323,6 @@ function goToProjects() {
 
 function handleCreateProject() {
   requireAuth(() => {
-    if (!checkCreateProject()) return;
     showCreateTopicModal.value = true;
   });
 }

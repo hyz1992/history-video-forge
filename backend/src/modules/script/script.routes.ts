@@ -1,6 +1,5 @@
 import type { AppInstance, AppResponse, RouteContext } from "../../app";
 import { getProjectById } from "../projects/project.repository";
-import { demoStageGuard } from "../../shared/demo-stage-guard";
 import { runScriptGeneration } from "./script-run.service";
 import { submitGenerationRun } from "../generation-run/submit-protocol.js";
 import { guardOwnedRoute } from "../../auth/authorization.js";
@@ -17,9 +16,6 @@ async function generateScriptController(
       },
     };
   }
-
-  const demoBlock = demoStageGuard(project, context.app.env.demoMode, "文案");
-  if (demoBlock) return demoBlock;
 
   const payload = (context.payload ?? {}) as Record<string, unknown>;
   // 2026-08-23（报价体系移除）：生成统一走 run 提交协议（无需 quote 字段）
