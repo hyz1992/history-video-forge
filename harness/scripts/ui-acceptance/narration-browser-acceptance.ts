@@ -14,7 +14,7 @@
 import { chromium, type Browser, type Page } from "@playwright/test";
 import { spawn, type ChildProcess } from "node:child_process";
 import { createServer } from "node:http";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, rmSync, copyFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import Database from "better-sqlite3";
@@ -133,6 +133,10 @@ async function startAcceptanceApp(): Promise<Setup> {
 
   const client = await createPrismaClient(dbPath);
   await activateDatabase(client, { mode: "fresh" });
+  // 预置隔离音色库（含 WS 口播音色档案 voice_narration_qwen_longyimuling），否则资格过滤会拒绝重试。
+  const libDir = join(root, "project-storage", "storage", "voice-profiles");
+  mkdirSync(libDir, { recursive: true });
+  copyFileSync(join(process.cwd(), "storage", "voice-profiles", "voice-profiles.json"), join(libDir, "voice-profiles.json"));
 
   await bootstrapAdmin(client, {
     username: "n11-admin",
@@ -151,13 +155,13 @@ async function startAcceptanceApp(): Promise<Setup> {
   });
   // 音色库 JSON 内含 owner_id=browser-admin/browser-owner 的私有档案，FK 需要这两用户先行存在。
   await client.user.create({
-    data: { username: "browser-admin", displayName: "Browser Admin", passwordHash: await hashPassword("browser-admin-password-strong"), role: "USER", status: "ACTIVE", mustChangePassword: false },
+    data: { id: "browser-admin", username: "browser-admin", displayName: "Browser Admin", passwordHash: await hashPassword("browser-admin-password-strong"), role: "USER", status: "ACTIVE", mustChangePassword: false },
   });
   await client.user.create({
     data: { id: "local-migration-owner", username: "local-migration-owner", displayName: "Local Migration Owner", passwordHash: await hashPassword("local-migration-owner-password"), role: "USER", status: "ACTIVE", mustChangePassword: false },
   });
   await client.user.create({
-    data: { username: "browser-owner", displayName: "Browser Owner", passwordHash: await hashPassword("browser-owner-password-strong"), role: "USER", status: "ACTIVE", mustChangePassword: false },
+    data: { id: "browser-owner", username: "browser-owner", displayName: "Browser Owner", passwordHash: await hashPassword("browser-owner-password-strong"), role: "USER", status: "ACTIVE", mustChangePassword: false },
   });
 
   process.env.DATABASE_URL = dbPath;

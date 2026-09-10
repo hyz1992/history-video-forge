@@ -32,6 +32,11 @@
 
 - 用 vitest 诊断测试复现：Prisma 模式下 catalog 表对 capability 有唯一约束，WS 口播目录行无法与 HTTP tts 行同时 active —— 生产 bootstrap（无 dashscope 凭据）会将 WS 行禁用，创建带 selection 时后端按合同 422（fail-closed，属设计行为）。浏览器验收环境需显式回种 WS 行为 active 才能走通重试；已回种后首次 422 面板正常，重试仍 422「组合未通过资格」，根因疑为 WS 音色档案在隔离库中的 owner 可见性/状态不满足 compat 过滤。该调试需继续（下一轮）。
 
+## 补充调试二（同日）
+
+- 隔离库 FK 根因闭环：库内 admin-private/owner-private 两条档案 owner 指向 browser-admin/browser-owner，验收用户建为自动 id 导致 FK 失败；已改为显式 id 建用户 + 预置隔离音色库，voiceProfile seed FK 通过。
+- topic 页 confirm-candidate 仍不出现：原因与 stub 推荐生成的触发时机有关（系统入口 fire-and-forget 的候选在整页跳转后由后端候选库承载，页面加载路径上另有 better-sqlite3 目录打开错误未处理拒绝使进程退出）。需下一轮定位后端该 sqlite 打开点。
+
 ## 处置
 
 - Task11C 候选 f27a6c3a 的层叠修复（代码级）维持已修判定；浏览器命中验证标注为未验证，归 Task12 后续。
