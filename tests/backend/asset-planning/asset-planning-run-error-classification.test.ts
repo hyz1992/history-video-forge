@@ -11,7 +11,7 @@ vi.mock("../../../backend/src/modules/asset-planning/asset-planning-generation.s
 }));
 
 import { createDbClient } from "../../../backend/src/db/client.js";
-import { createProject } from "../../../backend/src/modules/projects/project.repository.js";
+import { createLegacyProject as createProject } from "../projects/legacy-project.fixture.js";
 import { saveScriptRecord } from "../../../backend/src/modules/script/script-record.repository.js";
 import { saveStoryboardRecord } from "../../../backend/src/modules/storyboard/storyboard-record.repository.js";
 import { saveTopicPackage } from "../../../backend/src/modules/topic/topic-package.repository.js";
@@ -184,7 +184,7 @@ describe("runAssetPlanningGeneration error classification", () => {
       const db = createDbClient();
       const { project } = await prepareActiveStoryboard(db);
 
-      const response = await runAssetPlanningGeneration({ db, project, demoMode: false });
+      const response = await runAssetPlanningGeneration({ db, project });
 
       expect(response.statusCode).toBe(500);
       expect(response.body).toEqual({
@@ -262,7 +262,7 @@ describe("runAssetPlanningGeneration error classification", () => {
       const db = createDbClient();
       const { project } = await prepareActiveStoryboard(db);
 
-      const response = await runAssetPlanningGeneration({ db, project, demoMode: false });
+      const response = await runAssetPlanningGeneration({ db, project });
 
       expect(response.statusCode).toBe(500);
       expect(response.body).not.toHaveProperty("message");
@@ -345,7 +345,7 @@ describe("runAssetPlanningGeneration error classification", () => {
     });
     const { project } = await prepareActiveStoryboard(db);
 
-    const run = runAssetPlanningGeneration({ db, project, demoMode: false });
+    const run = runAssetPlanningGeneration({ db, project });
     await progressSaveStarted.promise;
     await new Promise<void>((resolveImmediate) => setImmediate(resolveImmediate));
     releaseProgressSave.resolve();
@@ -391,7 +391,7 @@ describe("runAssetPlanningGeneration error classification", () => {
       const db = createDbClient();
       const { project } = await prepareActiveStoryboard(db);
 
-      const response = await runAssetPlanningGeneration({ db, project, demoMode: false });
+      const response = await runAssetPlanningGeneration({ db, project });
 
       expect(response.statusCode).toBe(500);
       expect(response.body).toEqual({
@@ -449,7 +449,7 @@ describe("runAssetPlanningGeneration error classification", () => {
     const db = createDbClient();
     const { project } = await prepareActiveStoryboard(db);
 
-    const response = await runAssetPlanningGeneration({ db, project, demoMode: false });
+    const response = await runAssetPlanningGeneration({ db, project });
 
     expect(response.statusCode).toBe(500);
     expect(response.body).not.toHaveProperty("message");
@@ -488,7 +488,7 @@ describe("runAssetPlanningGeneration error classification", () => {
     project.activeAssetPlanRecordId = previousActiveId;
     project.status = "asset_plan_ready";
 
-    const response = await runAssetPlanningGeneration({ db, project, demoMode: false });
+    const response = await runAssetPlanningGeneration({ db, project });
 
     expect(response.statusCode).toBe(500);
     expect(response.body).toMatchObject({ error: "asset_segment_intent_invalid" });
@@ -513,7 +513,7 @@ describe("runAssetPlanningGeneration error classification", () => {
     const db = createDbClient();
     const { project } = await prepareActiveStoryboard(db);
 
-    const response = await runAssetPlanningGeneration({ db, project, demoMode: false });
+    const response = await runAssetPlanningGeneration({ db, project });
 
     expect(response.statusCode).toBe(500);
     expect(response.body).toMatchObject({
@@ -539,7 +539,7 @@ describe("runAssetPlanningGeneration error classification", () => {
     const db = createDbClient();
     const { project } = await prepareActiveStoryboard(db);
 
-    const response = await runAssetPlanningGeneration({ db, project, demoMode: false });
+    const response = await runAssetPlanningGeneration({ db, project });
 
     expect(response.statusCode).toBe(500);
     expect(response.body).toMatchObject({ error: "internal_server_error" });
@@ -583,7 +583,7 @@ describe("runAssetPlanningGeneration error classification", () => {
     const db = createDbClient();
     const { project } = await prepareActiveStoryboard(db);
 
-    const response = await runAssetPlanningGeneration({ db, project, demoMode: false });
+    const response = await runAssetPlanningGeneration({ db, project });
 
     expect(response.statusCode).toBe(500);
     expect(response.body).toMatchObject({

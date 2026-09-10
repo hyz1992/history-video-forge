@@ -67,7 +67,7 @@ async function prepared(projectSettingsHash?: string, options: NativeFixtureOpti
                         ] })) } }] }).plan;
     return { ...f, record, storyboard, revision: bundle.initialSubtitleRevision, assetPlan: plan, assetPlanRecordId: "ap", storageRootDir: f.path };
 }
-import { createProject } from "../../../backend/src/modules/projects/project.repository.js";
+import { createLegacyProject as createProject } from "../projects/legacy-project.fixture.js";
 import { runAssetsGeneration } from "../../../backend/src/modules/assets/assets-run.service.js";
 import { projectTtsHash } from "../../../backend/src/modules/narration/narration-invalidation.js";
 import { buildPricingCatalogSeed } from "../../../backend/src/modules/generation-cost/pricing-catalog.seed.js";

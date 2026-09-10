@@ -195,9 +195,6 @@ async function startAcceptanceApp(): Promise<Setup> {
   // trace 写盘与 topic 候选库在 VITEST 下按 STORAGE_ROOT_DIR 兜底取根（否则落到
   // process.cwd()，验收数据会写进用户真实 storage/，含共享的候选库索引）。
   process.env.STORAGE_ROOT_DIR = join(root, "project-storage");
-  // 冒烟/验收经 buildApp 选项注入 narrationFirstEnabled，但 createProject 路由读 env——
-  // 422 资格拒绝只在模式开启时发生，这里显式打开。
-  process.env.NARRATION_FIRST_ENABLED = "true";
 
   const calls = { count: 0 };
   const firstWriter = await PrismaFirstAggregateWriter.create(client, "local-migration-owner");
@@ -208,7 +205,6 @@ async function startAcceptanceApp(): Promise<Setup> {
     thirdAggregateWriter: new PrismaThirdAggregateWriter(client),
     skipSnapshotLoad: true,
     storageBaseDir: join(root, "project-storage"),
-    narrationFirstEnabled: true,
     narrationProvider: syntheticProvider(calls),
   });
 
@@ -483,17 +479,20 @@ async function main(): Promise<void> {
       record("settings: 未找到设置入口（跳过，留 Task12 复验）", false, "entry missing");
     }
 
-    // 6) legacy 并存：narration 开启时普通创建（无 selection）按设计被资格门禁拒绝；
-    //    以开关关闭语义直造 legacy 项目，验证其分镜深链不受口播门禁影响。
+    // 6) legacy 并存：普通创建（无 selection）按资格门禁拒绝；创建后降写模式
+    //    模拟存量 legacy 项目（口播前置定版后创建路径不再产生 legacy），验证其
+    //    分镜深链不受口播门禁影响。
     const legacyGateResp = await page.request.post(`${base}api/projects`, { data: { name: "legacy-gate-浏览器" } });
-    record("legacy: 开关开启时无 selection 创建被拒（设计门禁）", legacyGateResp.status() === 422, `status=${legacyGateResp.status()}`);
+    record("legacy: 无 selection 创建被拒（设计门禁）", legacyGateResp.status() === 422, `status=${legacyGateResp.status()}`);
     const legacyProject = await createProject(setup.app.db, {
       name: "legacy-浏览器",
       ownerId: setup.browserUserId,
       createdById: setup.browserUserId,
-      narrationFirstEnabled: false,
-      narrationSelection: undefined,
+      narrationSelection: QUALIFIED_SELECTION,
     });
+    legacyProject.narrationTimingMode = "legacy_estimated";
+    legacyProject.activeNarrationRecordId = null;
+    legacyProject.activeNarrationSubtitleRevisionId = null;
     await setup.client.project.upsert({
       where: { id: legacyProject.id },
       create: { id: legacyProject.id, ownerId: legacyProject.ownerId, createdById: legacyProject.createdById, name: legacyProject.name, status: legacyProject.status, storageKey: legacyProject.id, storageDisplayName: legacyProject.storageDisplayName || legacyProject.name },
@@ -509,7 +508,6 @@ async function main(): Promise<void> {
       name: "fresh-n11",
       ownerId: setup.browserUserId,
       createdById: setup.browserUserId,
-      narrationFirstEnabled: true,
       narrationSelection: QUALIFIED_SELECTION,
     });
     await setup.client.project.upsert({

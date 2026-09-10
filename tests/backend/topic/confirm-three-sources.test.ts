@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { randomUUID } from "node:crypto";
 import { createDbClient } from "../../../backend/src/db/client.js";
 import { createProvisionalEvent } from "../../../backend/src/modules/events/event-registry.repository.js";
-import { createProject } from "../../../backend/src/modules/projects/project.repository.js";
+import { createLegacyProject as createProject } from "../projects/legacy-project.fixture.js";
 import { confirmTopicCandidate, type StoredTopicCandidate } from "../../../backend/src/modules/topic/topic-confirm.service.js";
 import { buildScriptInputBundle } from "../../../backend/src/modules/script/script-input-bundle.builder.js";
 import { buildApp } from "../../../backend/src/app.js";
@@ -257,13 +257,8 @@ describe("confirm HTTP route — sourceMode 校验", () => {
       userId: "u-confirm", username: "u-confirm", displayName: "U", role: "ADMIN", sessionId: "s",
     });
 
-    const p = await app.inject({
-      method: "POST",
-      url: "/api/projects",
-      payload: { name: "Confirm Compat" },
-      auth,
-    });
-    const projectId = p.json().project_id as string;
+    const p = await createProject(app.db, { name: 'Confirm Compat', ownerId: "test-user", createdById: "test-user" });
+const projectId = p.id;
 
     const rec = await app.inject({
       method: "POST",
@@ -298,13 +293,8 @@ describe("confirm HTTP route — sourceMode 校验", () => {
       userId: "u-confirm2", username: "u-confirm2", displayName: "U2", role: "ADMIN", sessionId: "s",
     });
 
-    const p = await app.inject({
-      method: "POST",
-      url: "/api/projects",
-      payload: { name: "Confirm Invalid Mode" },
-      auth,
-    });
-    const projectId = p.json().project_id as string;
+    const p = await createProject(app.db, { name: 'Confirm Invalid Mode', ownerId: "test-user", createdById: "test-user" });
+const projectId = p.id;
 
     const rec = await app.inject({
       method: "POST",
@@ -340,13 +330,8 @@ describe("confirm HTTP route — sourceMode 校验", () => {
       userId: "u-confirm3", username: "u-confirm3", displayName: "U3", role: "ADMIN", sessionId: "s",
     });
 
-    const p = await app.inject({
-      method: "POST",
-      url: "/api/projects",
-      payload: { name: "Confirm Mismatch" },
-      auth,
-    });
-    const projectId = p.json().project_id as string;
+    const p = await createProject(app.db, { name: 'Confirm Mismatch', ownerId: "test-user", createdById: "test-user" });
+const projectId = p.id;
 
     const rec = await app.inject({
       method: "POST",
@@ -383,13 +368,8 @@ describe("confirm HTTP route — sourceMode 校验", () => {
       userId: "u-confirm4", username: "u-confirm4", displayName: "U4", role: "ADMIN", sessionId: "s",
     });
 
-    const p = await app.inject({
-      method: "POST",
-      url: "/api/projects",
-      payload: { name: "Confirm Ref Mismatch" },
-      auth,
-    });
-    const projectId = p.json().project_id as string;
+    const p = await createProject(app.db, { name: 'Confirm Ref Mismatch', ownerId: "test-user", createdById: "test-user" });
+const projectId = p.id;
 
     const rec = await app.inject({
       method: "POST",
@@ -426,13 +406,8 @@ describe("confirm HTTP route — sourceMode 校验", () => {
       userId: "u-confirm5", username: "u-confirm5", displayName: "U5", role: "ADMIN", sessionId: "s",
     });
 
-    const p = await app.inject({
-      method: "POST",
-      url: "/api/projects",
-      payload: { name: "Confirm Ref Order" },
-      auth,
-    });
-    const projectId = p.json().project_id as string;
+    const p = await createProject(app.db, { name: 'Confirm Ref Order', ownerId: "test-user", createdById: "test-user" });
+const projectId = p.id;
 
     const candidateId = randomUUID();
     const storedCandidate: StoredTopicCandidate = {

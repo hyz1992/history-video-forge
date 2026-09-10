@@ -3,11 +3,19 @@ import { describe, expect, it } from "vitest";
 import { buildApp } from "../../../backend/src/app.js";
 import { seedGenerationCatalog } from "../helpers/seed-generation-catalog.js";
 import { buildTestAuth } from "../auth/test-utils.js";
+import { buildPricingCatalogSeed } from "../../../backend/src/modules/generation-cost/pricing-catalog.seed.js";
+import { seedGlobalVoiceProfiles } from "../../../backend/src/modules/assets/voice/voice-profile.repository.js";
+import { createLegacyProject } from "../projects/legacy-project.fixture.js";
 
 describe("topic api", () => {
   it("creates a project", async () => {
     const app = buildApp();
     seedGenerationCatalog(app);
+    // 口播前置定版（2026-09-10）：新建项目一律走口播资格物化，需 seed 合格 WS 目录与音色
+    for (const m of buildPricingCatalogSeed({ llm: { mode: "stub" }, media: { deploymentScope: "cn-beijing" } })) {
+      if (!app.db.providerModelCatalog.has(m.id)) app.db.providerModelCatalog.set(m.id, m);
+    }
+    await seedGlobalVoiceProfiles(app.db);
 
     const response = await app.inject({
       method: "POST",
@@ -29,15 +37,8 @@ describe("topic api", () => {
     const app = buildApp();
     seedGenerationCatalog(app);
     const auth = buildTestAuth();
-    const projectResponse = await app.inject({
-      method: "POST",
-      url: "/api/projects",
-      payload: {
-        name: "Recommendation Flow",
-      },
-      auth,
-    });
-    const projectId = projectResponse.json().project_id as string;
+    const project = await createLegacyProject(app.db, { name: "Recommendation Flow", ownerId: "test-user", createdById: "test-user" });
+    const projectId = project.id;
 
     const response = await app.inject({
       method: "POST",
@@ -70,15 +71,8 @@ describe("topic api", () => {
     const app = buildApp();
     seedGenerationCatalog(app);
     const auth = buildTestAuth();
-    const projectResponse = await app.inject({
-      method: "POST",
-      url: "/api/projects",
-      payload: {
-        name: "Confirm Flow",
-      },
-      auth,
-    });
-    const projectId = projectResponse.json().project_id as string;
+    const project = await createLegacyProject(app.db, { name: "Confirm Flow", ownerId: "test-user", createdById: "test-user" });
+    const projectId = project.id;
 
     const recommendationResponse = await app.inject({
       method: "POST",

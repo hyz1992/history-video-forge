@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 
 import { createDbClient } from "../../../backend/src/db/client.js";
-import { createProject } from "../../../backend/src/modules/projects/project.repository.js";
+import { createLegacyProject as createProject } from "../projects/legacy-project.fixture.js";
 import { recommendTopicCandidatesWithTrace } from "../../../backend/src/modules/topic/topic-recommendation.service.js";
 import type { TopicCandidateLibraryRepository } from "../../../backend/src/modules/topic/topic-candidate-library.repository.js";
 import type { LlmGateway } from "../../../backend/src/runtime/llm/llm-gateway.js";

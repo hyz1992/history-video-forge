@@ -87,6 +87,7 @@ vi.mock("../../../backend/src/runtime/llm/tier-aware-provider-factory.js", () =>
 }));
 
 import { buildApp } from "../../../backend/src/app.js";
+import { createLegacyProject } from "../projects/legacy-project.fixture.js";
 import { buildTestAuth } from "../auth/test-utils.js";
 import { seedQuotableCatalog, buildQuotableReadinessInput } from "../cost/quote-test-context.js";
 
@@ -119,14 +120,8 @@ describe("topic api runtime", () => {
     ]);
 
     const app = await buildTopicRuntimeApp();
-    const projectResponse = await app.inject({ auth,
-      method: "POST",
-      url: "/api/projects",
-      payload: {
-        name: "Runtime Recommendation Flow",
-      },
-    });
-    const projectId = projectResponse.json().project_id as string;
+    const projectResponse = await createLegacyProject(app.db, { name: 'Runtime Recommendation Flow', ownerId: "owner-1", createdById: "owner-1" });
+const projectId = projectResponse.id;
 
     const response = await app.inject({ auth,
       method: "POST",
@@ -199,14 +194,8 @@ describe("topic api runtime", () => {
     });
 
     const app = await buildTopicRuntimeApp();
-    const projectResponse = await app.inject({ auth,
-      method: "POST",
-      url: "/api/projects",
-      payload: {
-        name: "Runtime Content Filter Retry",
-      },
-    });
-    const projectId = projectResponse.json().project_id as string;
+    const projectResponse = await createLegacyProject(app.db, { name: 'Runtime Content Filter Retry', ownerId: "owner-1", createdById: "owner-1" });
+const projectId = projectResponse.id;
 
     const response = await app.inject({ auth,
       method: "POST",
@@ -252,14 +241,8 @@ describe("topic api runtime", () => {
     );
 
     const app = await buildTopicRuntimeApp();
-    const projectResponse = await app.inject({ auth,
-      method: "POST",
-      url: "/api/projects",
-      payload: {
-        name: "Runtime Provider Failure",
-      },
-    });
-    const projectId = projectResponse.json().project_id as string;
+    const projectResponse = await createLegacyProject(app.db, { name: 'Runtime Provider Failure', ownerId: "owner-1", createdById: "owner-1" });
+const projectId = projectResponse.id;
 
     const response = await app.inject({ auth,
       method: "POST",
@@ -300,14 +283,8 @@ describe("topic api runtime", () => {
     );
 
     const app = await buildTopicRuntimeApp();
-    const projectResponse = await app.inject({ auth,
-      method: "POST",
-      url: "/api/projects",
-      payload: {
-        name: "Runtime Content Filter Failure",
-      },
-    });
-    const projectId = projectResponse.json().project_id as string;
+    const projectResponse = await createLegacyProject(app.db, { name: 'Runtime Content Filter Failure', ownerId: "owner-1", createdById: "owner-1" });
+const projectId = projectResponse.id;
 
     const response = await app.inject({ auth,
       method: "POST",
@@ -369,14 +346,8 @@ describe("topic api runtime", () => {
     ]);
 
     const app = await buildTopicRuntimeApp();
-    const projectResponse = await app.inject({ auth,
-      method: "POST",
-      url: "/api/projects",
-      payload: {
-        name: "Must Cover Preview Flow",
-      },
-    });
-    const projectId = projectResponse.json().project_id as string;
+    const projectResponse = await createLegacyProject(app.db, { name: 'Must Cover Preview Flow', ownerId: "owner-1", createdById: "owner-1" });
+const projectId = projectResponse.id;
 
     const recommendationResponse = await app.inject({ auth,
       method: "POST",
@@ -423,14 +394,8 @@ describe("topic api runtime", () => {
     ]);
 
     const app = await buildTopicRuntimeApp();
-    const projectResponse = await app.inject({ auth,
-      method: "POST",
-      url: "/api/projects",
-      payload: {
-        name: "Runtime Recommendation Flow",
-      },
-    });
-    const projectId = projectResponse.json().project_id as string;
+    const projectResponse = await createLegacyProject(app.db, { name: 'Runtime Recommendation Flow', ownerId: "owner-1", createdById: "owner-1" });
+const projectId = projectResponse.id;
 
     const response = await app.inject({ auth,
       method: "POST",
@@ -473,14 +438,8 @@ describe("topic api runtime", () => {
     ]);
 
     const app = await buildTopicRuntimeApp();
-    const projectResponse = await app.inject({ auth,
-      method: "POST",
-      url: "/api/projects",
-      payload: {
-        name: "Topic Round History",
-      },
-    });
-    const projectId = projectResponse.json().project_id as string;
+    const projectResponse = await createLegacyProject(app.db, { name: 'Topic Round History', ownerId: "owner-1", createdById: "owner-1" });
+const projectId = projectResponse.id;
 
     await app.inject({ auth,
       method: "POST",

@@ -9,7 +9,7 @@ vi.mock("../../../backend/src/modules/storyboard/storyboard-generation.service.j
 import { buildApp } from "../../../backend/src/app.js";
 import { seedGenerationCatalog } from "../helpers/seed-generation-catalog.js";
 import { buildTestAuth } from "../auth/test-utils.js";
-import { createProject } from "../../../backend/src/modules/projects/project.repository.js";
+import { createLegacyProject as createProject } from "../projects/legacy-project.fixture.js";
 import { getProjectSnapshot } from "../../../backend/src/modules/projects/project-snapshot.service.js";
 import { saveScriptRecord } from "../../../backend/src/modules/script/script-record.repository.js";
 import { saveTopicPackage } from "../../../backend/src/modules/topic/topic-package.repository.js";
@@ -518,66 +518,6 @@ describe("storyboard api", () => {
     expect(segments[0]).not.toHaveProperty("visual_strategy_override");
     expect(segments[0]).not.toHaveProperty("visual_strategy_preference");
     expect(segments[0]).toHaveProperty("api_video_suitability");
-  });
-
-  // P1：演示态禁用 API 视频时，PATCH 响应必须给出降级原因（reason_code →
-  // unavailable_reason 统一映射），不能置空。
-  it("PATCH strategy in demo mode returns unavailable_reason for provider-disabled downgrade", async () => {
-    const app = buildApp();
-    seedGenerationCatalog(app);
-    // 注入演示态（env.demoMode=true → apiVideoProviderEnabled=false）
-    (app.env as { demoMode: boolean }).demoMode = true;
-    // seed 完整 catalog（resolver 需要每 capability 一个 active 默认项才能成功解析，
-    // 从而走到 provider-disabled 降级而非 catalog 缺失错误）
-    const now = new Date();
-    const catalogSeed: Array<[string, string]> = [
-      ["llm.smart", "dashscope.qwen-max"],
-      ["llm.flash", "dashscope.qwen-flash"],
-      ["image.generate", "dashscope.wanx-v1"],
-      ["video.image_to_video", "dashscope.video-v1"],
-      ["tts.synthesize", "dashscope.tts"],
-    ];
-    for (const [capability, id] of catalogSeed) {
-      app.db.providerModelCatalog.set(id, {
-        id,
-        capability: capability as never,
-        providerKey: "dashscope",
-        modelId: id,
-        modelVersion: null,
-        displayName: id,
-        qualityTier: null,
-        speedTier: null,
-        parameterCapabilitiesJson: {},
-        pricingVersion: "v1",
-        pricingJson: { bounded: true },
-        status: "active",
-        isDefault: true,
-        createdAt: now,
-        updatedAt: now,
-      });
-    }
-    const { prepared } = await prepareActiveStoryboard(app);
-
-    const response = await app.inject({
-      auth,
-      method: "PATCH",
-      url: `/api/projects/${prepared.project.id}/storyboard/strategy`,
-      payload: {
-        segment_id: "sb_001",
-        visual_strategy_override: "api_video",
-        expected_revision: null,
-      },
-    });
-
-    expect(response.statusCode).toBe(200);
-    const body = response.json();
-    // 用户覆盖选择 api_video，但演示态强制降级 Remotion
-    expect(body.strategy_override).toBe("api_video");
-    expect(body.resolved_route).toBe("remotion");
-    expect(body.reason_code).toBe("api_video_provider_disabled");
-    // 关键：降级原因必须可见，不能 null
-    expect(body.unavailable_reason).not.toBeNull();
-    expect(body.unavailable_reason).toContain("禁用真实视频 API");
   });
 
   it("PATCH strategy with stale revision returns 409 storyboard_segment_override_revision_conflict", async () => {

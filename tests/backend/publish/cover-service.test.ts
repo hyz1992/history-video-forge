@@ -3,7 +3,7 @@ import { rmSync } from "node:fs";
 
 import { createDbClient } from "../../../backend/src/db/client.js";
 import { saveAssetManifestRecord } from "../../../backend/src/modules/assets/asset-manifest-record.repository.js";
-import { createProject } from "../../../backend/src/modules/projects/project.repository.js";
+import { createLegacyProject as createProject } from "../projects/legacy-project.fixture.js";
 import { generateCoverImage } from "../../../backend/src/modules/publish/cover-generate.service.js";
 import { initializeCoverFromStoryboard, buildCoverPromptContext, generateCoverPromptDraft } from "../../../backend/src/modules/publish/cover.service.js";
 import { saveTopicPackage } from "../../../backend/src/modules/topic/topic-package.repository.js";

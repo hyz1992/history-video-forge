@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { buildApp, type AppInstance } from "../../../backend/src/app";
+import { createLegacyProject } from "../../../tests/backend/projects/legacy-project.fixture.js";
 import type { ProjectRecord } from "../../../backend/src/db/client";
 import { saveAssetPlanRecord } from "../../../backend/src/modules/asset-planning/asset-plan-record.repository";
 import { loadLightweightBgmCatalogItems } from "../../../backend/src/modules/assets/lightweight-audio-catalog-loader";
@@ -760,13 +761,9 @@ export async function seedProductAcceptanceProject(input: {
   const app = buildApp(
     input.renderAdapter ? { renderAdapter: input.renderAdapter } : undefined,
   );
-  const projectBody = await injectOrThrow({
-    app,
-    method: "POST",
-    url: "/api/projects",
-    payload: { name: `Product Acceptance - ${input.source.topicPackage.title}` },
-  });
-  const project = app.db.projects.get(projectBody.project_id as string);
+  // 口播前置定版后创建入口为 narration 模式；本脚本驱动 legacy 全链路，经夹具直造
+  const legacyProject = await createLegacyProject(app.db, { name: `Product Acceptance - ${input.source.topicPackage.title}`, ownerId: "acceptance-owner" });
+  const project = app.db.projects.get(legacyProject.id);
   if (!project) {
     throw new Error("acceptance_project_missing_after_create");
   }

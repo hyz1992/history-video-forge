@@ -12,7 +12,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { SHARED_VOICE_PROFILE_SEEDS } from "../../../backend/src/modules/assets/voice/voice-presets.js";
 import { createDbClient } from "../../../backend/src/db/client.js";
-import { createProject } from "../../../backend/src/modules/projects/project.repository.js";
+import { createLegacyProject as createProject } from "../projects/legacy-project.fixture.js";
 import { runAssetsGeneration } from "../../../backend/src/modules/assets/assets-run.service.js";
 import { saveMediaLibraryItem } from "../../../backend/src/modules/assets/media-library.repository.js";
 import { listAssetProviderJobRecordsByManifest } from "../../../backend/src/modules/assets/asset-provider-job.repository.js";

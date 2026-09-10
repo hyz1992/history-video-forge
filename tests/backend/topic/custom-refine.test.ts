@@ -11,7 +11,7 @@ import { describe, expect, it, vi } from "vitest";
 import { buildApp } from "../../../backend/src/app.js";
 import { createPrismaClient } from "../../../backend/src/db/prisma-client.js";
 import { createAuthenticatedAuthContext } from "../../../backend/src/auth/auth-context.js";
-import { createProject } from "../../../backend/src/modules/projects/project.repository.js";
+import { createLegacyProject as createProject } from "../projects/legacy-project.fixture.js";
 import { applyAllDatabaseMigrations } from "../db/migration-test-utils.js";
 
 // Mock refineCustomTopic to return a deterministic result
@@ -45,15 +45,6 @@ describe("custom refine API", () => {
       });
       const app = buildApp({ storageBaseDir: root, prismaClient: client, skipSnapshotLoad: true });
       const project = await createProject(app.db, { name: "CustomTest", ownerId: user.id, createdById: user.id });
-
-      // Prisma project for FK
-      await client.project.create({
-        data: {
-          id: project.id, ownerId: user.id, createdById: user.id,
-          name: "CustomTest", status: "topic_pending",
-          storageKey: project.id, storageDisplayName: "CustomTest",
-        },
-      });
 
       const auth = createAuthenticatedAuthContext({
         userId: user.id, username: user.username, displayName: user.displayName,
@@ -103,14 +94,6 @@ describe("custom refine API", () => {
       });
       const app = buildApp({ storageBaseDir: root, prismaClient: client, skipSnapshotLoad: true });
       const project = await createProject(app.db, { name: "ShortTest", ownerId: user.id, createdById: user.id });
-      await client.project.create({
-        data: {
-          id: project.id, ownerId: user.id, createdById: user.id,
-          name: "ShortTest", status: "topic_pending",
-          storageKey: project.id, storageDisplayName: "ShortTest",
-        },
-      });
-
       const auth = createAuthenticatedAuthContext({
         userId: user.id, username: user.username, displayName: user.displayName,
         role: "ADMIN", sessionId: "s",
@@ -146,14 +129,6 @@ describe("custom refine API", () => {
       });
       const app = buildApp({ storageBaseDir: root, prismaClient: client, skipSnapshotLoad: true });
       const project = await createProject(app.db, { name: "MissingTest", ownerId: user.id, createdById: user.id });
-      await client.project.create({
-        data: {
-          id: project.id, ownerId: user.id, createdById: user.id,
-          name: "MissingTest", status: "topic_pending",
-          storageKey: project.id, storageDisplayName: "MissingTest",
-        },
-      });
-
       const auth = createAuthenticatedAuthContext({
         userId: user.id, username: user.username, displayName: user.displayName,
         role: "ADMIN", sessionId: "s",

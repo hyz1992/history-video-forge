@@ -1,6 +1,6 @@
 import { buildApp } from "../../../backend/src/app.js";
 import type { DbClient, ProjectRecord } from "../../../backend/src/db/client.js";
-import { createProject } from "../../../backend/src/modules/projects/project.repository.js";
+import { createLegacyProject as createProject } from "../projects/legacy-project.fixture.js";
 import { applyProviderModelCatalogSeed } from "../../../backend/src/modules/generation-cost/provider-model-catalog.repository.js";
 import {
   buildPricingCatalogSeed,
@@ -32,7 +32,7 @@ export function buildQuotableReadinessInput(
   return {
     llm,
     media: CN_BEIJING_MEDIA_READINESS,
-    environment: { demoMode: false, testEnv: false },
+    environment: { testEnv: false },
   };
 }
 

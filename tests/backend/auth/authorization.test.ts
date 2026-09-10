@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { buildApp } from "../../../backend/src/app.js";
+import { createLegacyProject } from "../projects/legacy-project.fixture.js";
 import { createAnonymousAuthContext, createAuthenticatedAuthContext } from "../../../backend/src/auth/auth-context.js";
 import { guardUserRoute, guardAdminRoute, requireUser, requireAdmin, AuthorizationError, handleControllerAuthError } from "../../../backend/src/auth/authorization.js";
 import type { RouteContext, AppResponse } from "../../../backend/src/app.js";
 
 function buildRouteContext(overrides: Partial<RouteContext> = {}): RouteContext {
   return {
-    app: { env: { demoMode: false, protectedProjectIds: new Set() }, db: {} as any, topicCandidateStore: new Map() } as any,
+    app: { env: { protectedProjectIds: new Set() }, db: {} as any, topicCandidateStore: new Map() } as any,
     params: {},
     payload: {},
     auth: createAnonymousAuthContext(),
@@ -194,8 +195,9 @@ describe("cross-user owner isolation", () => {
     const userA = createAuthenticatedAuthContext({ userId: "user-a", username: "a", displayName: "A", role: "USER", sessionId: "s-a" });
     const userB = createAuthenticatedAuthContext({ userId: "user-b", username: "b", displayName: "B", role: "USER", sessionId: "s-b" });
 
-    const created = await app.inject({ method: "POST", url: "/api/projects", payload: { name: "A项目" }, auth: userA });
-    const projectId = created.json().project_id as string;
+    // 口播前置定版后创建入口要求口播资格选择；本组验证 owner 隔离，经 legacy 夹具直造
+    const created = await createLegacyProject(app.db, { name: "A项目", ownerId: "user-a" });
+    const projectId = created.id;
 
     const bAccess = await app.inject({ method: "GET", url: `/api/projects/${projectId}`, auth: userB });
     expect(bAccess.statusCode).toBe(404);
@@ -210,8 +212,9 @@ describe("cross-user owner isolation", () => {
     const userA = createAuthenticatedAuthContext({ userId: "user-a", username: "a", displayName: "A", role: "USER", sessionId: "s-a" });
     const userB = createAuthenticatedAuthContext({ userId: "user-b", username: "b", displayName: "B", role: "USER", sessionId: "s-b" });
 
-    const created = await app.inject({ method: "POST", url: "/api/projects", payload: { name: "A项目" }, auth: userA });
-    const projectId = created.json().project_id as string;
+    // 口播前置定版后创建入口要求口播资格选择；本组验证 owner 隔离，经 legacy 夹具直造
+    const created = await createLegacyProject(app.db, { name: "A项目", ownerId: "user-a" });
+    const projectId = created.id;
 
     const bList = await app.inject({ method: "GET", url: "/api/projects", auth: userB });
     const bProjects = bList.json() as Array<{ project_id: string }>;
@@ -227,8 +230,9 @@ describe("cross-user owner isolation", () => {
     const userA = createAuthenticatedAuthContext({ userId: "user-a", username: "a", displayName: "A", role: "USER", sessionId: "s-a" });
     const admin = createAuthenticatedAuthContext({ userId: "admin-x", username: "admin", displayName: "Admin", role: "ADMIN", sessionId: "s-admin" });
 
-    const created = await app.inject({ method: "POST", url: "/api/projects", payload: { name: "A项目" }, auth: userA });
-    const projectId = created.json().project_id as string;
+    // 口播前置定版后创建入口要求口播资格选择；本组验证 owner 隔离，经 legacy 夹具直造
+    const created = await createLegacyProject(app.db, { name: "A项目", ownerId: "user-a" });
+    const projectId = created.id;
 
     const adminAccess = await app.inject({ method: "GET", url: `/api/projects/${projectId}`, auth: admin });
     expect(adminAccess.statusCode).toBe(200);
@@ -239,8 +243,9 @@ describe("cross-user owner isolation", () => {
     const userA = createAuthenticatedAuthContext({ userId: "user-a", username: "a", displayName: "A", role: "USER", sessionId: "s-a" });
     const userB = createAuthenticatedAuthContext({ userId: "user-b", username: "b", displayName: "B", role: "USER", sessionId: "s-b" });
 
-    const created = await app.inject({ method: "POST", url: "/api/projects", payload: { name: "A项目" }, auth: userA });
-    const projectId = created.json().project_id as string;
+    // 口播前置定版后创建入口要求口播资格选择；本组验证 owner 隔离，经 legacy 夹具直造
+    const created = await createLegacyProject(app.db, { name: "A项目", ownerId: "user-a" });
+    const projectId = created.id;
 
     const bAttempt = await app.inject({ method: "POST", url: `/api/projects/${projectId}/script/generate`, payload: {}, auth: userB });
     expect(bAttempt.statusCode).toBe(404);
@@ -254,8 +259,9 @@ describe("generation cost owner isolation (S2-2A 任务 8)", () => {
     const userA = createAuthenticatedAuthContext({ userId: "user-a", username: "a", displayName: "A", role: "USER", sessionId: "s-a" });
     const userB = createAuthenticatedAuthContext({ userId: "user-b", username: "b", displayName: "B", role: "USER", sessionId: "s-b" });
 
-    const created = await app.inject({ method: "POST", url: "/api/projects", payload: { name: "A项目" }, auth: userA });
-    const projectId = created.json().project_id as string;
+    // 口播前置定版后创建入口要求口播资格选择；本组验证 owner 隔离，经 legacy 夹具直造
+    const created = await createLegacyProject(app.db, { name: "A项目", ownerId: "user-a" });
+    const projectId = created.id;
 
     // 其他用户即使猜到 quote/run/snapshot/cost id 也只能得到 404
     for (const url of [
@@ -273,8 +279,9 @@ describe("generation cost owner isolation (S2-2A 任务 8)", () => {
   it("anonymous user cannot create quotes or read costs", async () => {
     const app = buildApp({ skipSnapshotLoad: true, storageBaseDir: process.cwd() });
     const userA = createAuthenticatedAuthContext({ userId: "user-a", username: "a", displayName: "A", role: "USER", sessionId: "s-a" });
-    const created = await app.inject({ method: "POST", url: "/api/projects", payload: { name: "A项目" }, auth: userA });
-    const projectId = created.json().project_id as string;
+    // 口播前置定版后创建入口要求口播资格选择；本组验证 owner 隔离，经 legacy 夹具直造
+    const created = await createLegacyProject(app.db, { name: "A项目", ownerId: "user-a" });
+    const projectId = created.id;
 
     const summary = await app.inject({ method: "GET", url: `/api/projects/${projectId}/costs/summary` });
     expect(summary.statusCode).toBe(401);

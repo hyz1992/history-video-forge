@@ -2,6 +2,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { buildApp } from "../../../backend/src/app";
+import { createLegacyProject } from "../../../tests/backend/projects/legacy-project.fixture";
 import {
   createAuthenticatedAuthContext,
 } from "../../../backend/src/auth/auth-context";
@@ -76,16 +77,10 @@ export async function runTopicScriptSmoke(
     sessionId: `topic-script-smoke-${sample.sample_id}`,
   });
 
-  const projectResponse = await app.inject({
-    auth,
-    method: "POST",
-    url: "/api/projects",
-    payload: {
-      name: sample.project_name,
-    },
-  });
-  const projectBody = projectResponse.json();
-  const projectId = projectBody.project_id as string;
+  // 口播前置定版后，真实创建入口要求口播资格选择；本冒烟验证 legacy topic→script
+  // 链路，直接经 legacy 测试夹具创建项目（与生产 legacy 项目同语义）。
+  const project = await createLegacyProject(app.db, { name: sample.project_name, ownerId: "topic-script-smoke-user" });
+  const projectId = project.id;
 
   const recommendationResponse = await app.inject({
     auth,

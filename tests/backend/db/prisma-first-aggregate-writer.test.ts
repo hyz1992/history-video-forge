@@ -5,6 +5,8 @@ import Database from "better-sqlite3";
 import { describe, expect, it } from "vitest";
 
 import { buildApp } from "../../../backend/src/app.js";
+import { buildPricingCatalogSeed } from "../../../backend/src/modules/generation-cost/pricing-catalog.seed.js";
+import { seedGlobalVoiceProfiles } from "../../../backend/src/modules/assets/voice/voice-profile.repository.js";
 import { createAuthenticatedAuthContext } from "../../../backend/src/auth/auth-context.js";
 import { createDbClient } from "../../../backend/src/db/client.js";
 import { createPrismaClient } from "../../../backend/src/db/prisma-client.js";
@@ -12,7 +14,7 @@ import { hydrateFirstAggregates } from "../../../backend/src/db/repositories/pri
 import { PrismaFirstAggregateWriter } from "../../../backend/src/db/repositories/prisma-first-aggregate-writer.js";
 import { recordProjectRecommendationRound, saveCachedCandidate } from "../../../backend/src/modules/cache/candidate-cache.repository.js";
 import { createProvisionalEvent } from "../../../backend/src/modules/events/event-registry.repository.js";
-import { createProject } from "../../../backend/src/modules/projects/project.repository.js";
+import { createLegacyProject as createProject } from "../projects/legacy-project.fixture.js";
 import { confirmTopicCandidate } from "../../../backend/src/modules/topic/topic-confirm.service.js";
 import { normalizeEventInput } from "../../../backend/src/modules/topic/event-normalizer.js";
 import { applyAllDatabaseMigrations } from "./migration-test-utils.js";
@@ -27,6 +29,11 @@ describe("Prisma first aggregate writer", () => {
       const writer = await PrismaFirstAggregateWriter.create(client, owner.id);
       const app = buildApp({ storageBaseDir: root, skipSnapshotLoad: true, firstAggregateWriter: writer });
       const authUser = createAuthenticatedAuthContext({ userId: owner.id, username: "owner", displayName: "Owner", role: "ADMIN", sessionId: "s" });
+      // 口播前置定版（2026-09-10）：创建走口播资格物化，seed 合格目录与音色后 201
+      for (const m of buildPricingCatalogSeed({ llm: { mode: "stub" }, media: { deploymentScope: "cn-beijing" } })) {
+        if (!app.db.providerModelCatalog.has(m.id)) app.db.providerModelCatalog.set(m.id, m);
+      }
+      await seedGlobalVoiceProfiles(app.db);
       const httpCreated = await app.inject({ method: "POST", url: "/api/projects", payload: { name: "HTTP project" }, auth: authUser });
       expect(httpCreated.statusCode).toBe(201);
       await expect(client.project.count({ where: { ownerId: owner.id } })).resolves.toBe(1);

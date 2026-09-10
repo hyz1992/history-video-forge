@@ -8,7 +8,7 @@ import { seedGenerationCatalog } from "../helpers/seed-generation-catalog.js";
 import { TopicCandidateCard } from "../../../shared/src/index.js";
 import { buildTestAuth } from "../auth/test-utils.js";
 import { createDbClient } from "../../../backend/src/db/client.js";
-import { createProject } from "../../../backend/src/modules/projects/project.repository.js";
+import { createLegacyProject as createProject } from "../projects/legacy-project.fixture.js";
 import * as topicRecommendationServiceModule from "../../../backend/src/modules/topic/topic-recommendation.service.js";
 import { saveCachedCandidate } from "../../../backend/src/modules/cache/candidate-cache.repository.js";
 import { normalizeEventInput } from "../../../backend/src/modules/topic/event-normalizer.js";
@@ -615,15 +615,8 @@ describe("topic runtime recommendation", () => {
     const app = buildApp();
     seedGenerationCatalog(app);
     const auth = buildTestAuth();
-    const projectResponse = await app.inject({
-      method: "POST",
-      url: "/api/projects",
-      payload: {
-        name: "Malformed Recommendation Payload",
-      },
-      auth,
-    });
-    const projectId = projectResponse.json().project_id as string;
+    const projectResponse = await createProject(app.db, { name: 'Malformed Recommendation Payload', ownerId: "test-user", createdById: "test-user" });
+const projectId = projectResponse.id;
 
     const response = await app.inject({
       method: "POST",
@@ -673,15 +666,8 @@ describe("topic runtime recommendation", () => {
     const app = buildApp();
     seedGenerationCatalog(app);
     const auth = buildTestAuth();
-    const projectResponse = await app.inject({
-      method: "POST",
-      url: "/api/projects",
-      payload: {
-        name: "Candidate Event Identity",
-      },
-      auth,
-    });
-    const projectId = projectResponse.json().project_id as string;
+    const projectResponse = await createProject(app.db, { name: 'Candidate Event Identity', ownerId: "test-user", createdById: "test-user" });
+const projectId = projectResponse.id;
 
     const response = await app.inject({
       method: "POST",

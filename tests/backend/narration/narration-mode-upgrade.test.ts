@@ -31,6 +31,10 @@ const legacyV1Plan = (scriptRecordId: string) => ({ plan_version: "storyboard_v1
 
 async function seedLegacyProject(db: DbClient, options?: { withConfig?: boolean }) {
   const project = await prepareQuoteProject(db, "u");
+  // 口播前置定版后新建即 narration 模式；升级测试的存量 legacy 项目以降写模式模拟。
+  project.narrationTimingMode = "legacy_estimated";
+  project.activeNarrationRecordId = null;
+  project.activeNarrationSubtitleRevisionId = null;
   const script = await saveScriptRecord(db, { projectId: project.id, topicPackageId: "topic", scriptText: "他打开城门。", openingSpan: "他打开城门。", endingSpan: "他打开城门。", estimatedDurationSec: 2, beatTraceJson: [], quoteTraceJson: [], reviewStatus: "pass", validationResultJson: null, semanticReviewResultJson: null, executionStateJson: null });
   project.activeScriptRecordId = script.id;
   for (const key of downstreamPointers) project[key] = "old";
@@ -41,8 +45,8 @@ async function seedLegacyProject(db: DbClient, options?: { withConfig?: boolean 
   return { project, script };
 }
 
-function mapFixture(enabled = true) {
-  const app = buildApp({ skipSnapshotLoad: true, narrationFirstEnabled: enabled });
+function mapFixture() {
+  const app = buildApp({ skipSnapshotLoad: true });
   for (const m of buildPricingCatalogSeed({ llm: { mode: "stub" }, media: { deploymentScope: "cn-beijing" } })) app.db.providerModelCatalog.set(m.id, m);
   return { app, db: app.db };
 }
@@ -67,7 +71,7 @@ describe("Task11B 旧项目升级预览", () => {
     const { app, db } = mapFixture();
     await seedGlobalVoiceProfiles(db);
     const { project } = await seedLegacyProject(db);
-    const preview = await previewNarrationModeUpgrade(db, { projectId: project.id, user: { userId: "u", role: "USER" }, narrationFirstEnabled: true });
+    const preview = await previewNarrationModeUpgrade(db, { projectId: project.id, user: { userId: "u", role: "USER" } });
     expect(preview.narration_timing_mode).toBe("legacy_estimated");
     expect(preview.upgrade_available).toBe(true);
     expect(preview.policy_version).toBe(policy.policy_version);
@@ -86,17 +90,9 @@ describe("Task11B 旧项目升级预览", () => {
     const { db } = mapFixture();
     const { project } = await seedLegacyProject(db);
     project.narrationTimingMode = "narration_first_v1";
-    await expect(previewNarrationModeUpgrade(db, { projectId: project.id, user: { userId: "u", role: "USER" }, narrationFirstEnabled: true })).rejects.toMatchObject({ body: { error: "narration_upgrade_not_legacy" } });
+    await expect(previewNarrationModeUpgrade(db, { projectId: project.id, user: { userId: "u", role: "USER" } })).rejects.toMatchObject({ body: { error: "narration_upgrade_not_legacy" } });
   });
-  it("发布开关关闭时预览标记不可升级且升级拒绝", async () => {
-    const { app, db } = mapFixture(false);
-    await seedGlobalVoiceProfiles(db);
-    const { project } = await seedLegacyProject(db);
-    const preview = await previewNarrationModeUpgrade(db, { projectId: project.id, user: { userId: "u", role: "USER" }, narrationFirstEnabled: false });
-    expect(preview.upgrade_available).toBe(false);
-    await expect(upgradeProjectToNarrationFirst(db, { projectId: project.id, user: { userId: "u", role: "USER" }, narrationFirstEnabled: false, request: { expected_active_script_record_id: project.activeScriptRecordId, expected_configuration_revision: 1, expected_downstream: { storyboard_record_id: "old", asset_plan_record_id: "old", asset_manifest_record_id: "old", compose_record_id: "old", render_job_record_id: "old", publish_package_record_id: "old" }, narration_selection: selection(), confirm_invalidation: true } })).rejects.toMatchObject({ body: { error: "narration_mode_unavailable" } });
-    expect(findProjectConfigRecord(db, project.id)?.revision).toBe(1);
-  });
+
 });
 
 describe("Task11B 旧项目升级事务（Map）", () => {
@@ -104,7 +100,7 @@ describe("Task11B 旧项目升级事务（Map）", () => {
     const { app, db } = mapFixture();
     await seedGlobalVoiceProfiles(db);
     const { project, script } = await seedLegacyProject(db);
-    const result = await upgradeProjectToNarrationFirst(db, { projectId: project.id, user: { userId: "u", role: "USER" }, narrationFirstEnabled: true, request: { expected_active_script_record_id: script.id, expected_configuration_revision: 1, expected_downstream: { storyboard_record_id: "old", asset_plan_record_id: "old", asset_manifest_record_id: "old", compose_record_id: "old", render_job_record_id: "old", publish_package_record_id: "old" }, narration_selection: selection(), confirm_invalidation: true } });
+    const result = await upgradeProjectToNarrationFirst(db, { projectId: project.id, user: { userId: "u", role: "USER" }, request: { expected_active_script_record_id: script.id, expected_configuration_revision: 1, expected_downstream: { storyboard_record_id: "old", asset_plan_record_id: "old", asset_manifest_record_id: "old", compose_record_id: "old", render_job_record_id: "old", publish_package_record_id: "old" }, narration_selection: selection(), confirm_invalidation: true } });
     expect(result).toMatchObject({ upgraded: true, configuration_revision: 2 });
     expect(project.narrationTimingMode).toBe("narration_first_v1");
     expect(project.activeNarrationRecordId ?? null).toBeNull();
@@ -129,7 +125,7 @@ describe("Task11B 旧项目升级事务（Map）", () => {
     project.activeScriptRecordId = "concurrent";
     const before = captureState({ db, project });
     try {
-      await upgradeProjectToNarrationFirst(db, { projectId: project.id, user: { userId: "u", role: "USER" }, narrationFirstEnabled: true, request: { expected_active_script_record_id: script.id, expected_configuration_revision: 1, expected_downstream: { storyboard_record_id: "old", asset_plan_record_id: "old", asset_manifest_record_id: "old", compose_record_id: "old", render_job_record_id: "old", publish_package_record_id: "old" }, narration_selection: selection(), confirm_invalidation: true } });
+      await upgradeProjectToNarrationFirst(db, { projectId: project.id, user: { userId: "u", role: "USER" }, request: { expected_active_script_record_id: script.id, expected_configuration_revision: 1, expected_downstream: { storyboard_record_id: "old", asset_plan_record_id: "old", asset_manifest_record_id: "old", compose_record_id: "old", render_job_record_id: "old", publish_package_record_id: "old" }, narration_selection: selection(), confirm_invalidation: true } });
       throw new Error("should_reject");
     } catch (error) {
       await expectZeroWrite({ db, project }, before, error, "narration_upgrade_conflict", 409);
@@ -142,7 +138,7 @@ describe("Task11B 旧项目升级事务（Map）", () => {
     project.activeAssetPlanRecordId = "newer";
     const before = captureState({ db, project });
     try {
-      await upgradeProjectToNarrationFirst(db, { projectId: project.id, user: { userId: "u", role: "USER" }, narrationFirstEnabled: true, request: { expected_active_script_record_id: project.activeScriptRecordId!, expected_configuration_revision: 1, expected_downstream: { storyboard_record_id: "old", asset_plan_record_id: "old", asset_manifest_record_id: "old", compose_record_id: "old", render_job_record_id: "old", publish_package_record_id: "old" }, narration_selection: selection(), confirm_invalidation: true } });
+      await upgradeProjectToNarrationFirst(db, { projectId: project.id, user: { userId: "u", role: "USER" }, request: { expected_active_script_record_id: project.activeScriptRecordId!, expected_configuration_revision: 1, expected_downstream: { storyboard_record_id: "old", asset_plan_record_id: "old", asset_manifest_record_id: "old", compose_record_id: "old", render_job_record_id: "old", publish_package_record_id: "old" }, narration_selection: selection(), confirm_invalidation: true } });
       throw new Error("should_reject");
     } catch (error) {
       await expectZeroWrite({ db, project }, before, error, "narration_upgrade_conflict", 409);
@@ -155,7 +151,7 @@ describe("Task11B 旧项目升级事务（Map）", () => {
     findProjectConfigRecord(db, project.id)!.revision = 2;
     const before = captureState({ db, project });
     try {
-      await upgradeProjectToNarrationFirst(db, { projectId: project.id, user: { userId: "u", role: "USER" }, narrationFirstEnabled: true, request: { expected_active_script_record_id: project.activeScriptRecordId!, expected_configuration_revision: 1, expected_downstream: { storyboard_record_id: "old", asset_plan_record_id: "old", asset_manifest_record_id: "old", compose_record_id: "old", render_job_record_id: "old", publish_package_record_id: "old" }, narration_selection: selection(), confirm_invalidation: true } });
+      await upgradeProjectToNarrationFirst(db, { projectId: project.id, user: { userId: "u", role: "USER" }, request: { expected_active_script_record_id: project.activeScriptRecordId!, expected_configuration_revision: 1, expected_downstream: { storyboard_record_id: "old", asset_plan_record_id: "old", asset_manifest_record_id: "old", compose_record_id: "old", render_job_record_id: "old", publish_package_record_id: "old" }, narration_selection: selection(), confirm_invalidation: true } });
       throw new Error("should_reject");
     } catch (error) {
       await expectZeroWrite({ db, project }, before, error, "project_generation_configuration_revision_conflict", 409);
@@ -167,14 +163,14 @@ describe("Task11B 旧项目升级事务（Map）", () => {
     const { project } = await seedLegacyProject(db);
     const request = (sel: Record<string, string>) => ({ expected_active_script_record_id: project.activeScriptRecordId!, expected_configuration_revision: 1, expected_downstream: { storyboard_record_id: "old", asset_plan_record_id: "old", asset_manifest_record_id: "old", compose_record_id: "old", render_job_record_id: "old", publish_package_record_id: "old" }, narration_selection: sel, confirm_invalidation: true });
     try {
-      await upgradeProjectToNarrationFirst(db, { projectId: project.id, user: { userId: "u", role: "USER" }, narrationFirstEnabled: true, request: request({ provider_model_id: "unknown-model", voice_profile_id: "unknown-voice", policy_version: policy.policy_version }) });
+      await upgradeProjectToNarrationFirst(db, { projectId: project.id, user: { userId: "u", role: "USER" }, request: request({ provider_model_id: "unknown-model", voice_profile_id: "unknown-voice", policy_version: policy.policy_version }) });
       throw new Error("should_reject");
     } catch (error) {
       expect((error as { body?: { error?: string } }).body?.error).toBe("narration_selection_required");
     }
     const before = captureState({ db, project });
     try {
-      await upgradeProjectToNarrationFirst(db, { projectId: project.id, user: { userId: "u", role: "USER" }, narrationFirstEnabled: true, request: request({ ...selection(), policy_version: "narration-first-old-v0" }) });
+      await upgradeProjectToNarrationFirst(db, { projectId: project.id, user: { userId: "u", role: "USER" }, request: request({ ...selection(), policy_version: "narration-first-old-v0" }) });
       throw new Error("should_reject");
     } catch (error) {
       expect((error as { body?: { error?: string } }).body?.error).toBe("narration_policy_changed");
@@ -189,7 +185,7 @@ describe("Task11B 旧项目升级事务（Map）", () => {
     project.narrationTimingMode = "narration_first_v1";
     const before = captureState({ db, project });
     try {
-      await upgradeProjectToNarrationFirst(db, { projectId: project.id, user: { userId: "u", role: "USER" }, narrationFirstEnabled: true, request: { expected_active_script_record_id: project.activeScriptRecordId!, expected_configuration_revision: 1, expected_downstream: { storyboard_record_id: "old", asset_plan_record_id: "old", asset_manifest_record_id: "old", compose_record_id: "old", render_job_record_id: "old", publish_package_record_id: "old" }, narration_selection: selection(), confirm_invalidation: true } });
+      await upgradeProjectToNarrationFirst(db, { projectId: project.id, user: { userId: "u", role: "USER" }, request: { expected_active_script_record_id: project.activeScriptRecordId!, expected_configuration_revision: 1, expected_downstream: { storyboard_record_id: "old", asset_plan_record_id: "old", asset_manifest_record_id: "old", compose_record_id: "old", render_job_record_id: "old", publish_package_record_id: "old" }, narration_selection: selection(), confirm_invalidation: true } });
       throw new Error("should_reject");
     } catch (error) {
       await expectZeroWrite({ db, project }, before, error, "narration_upgrade_not_legacy", 409);
@@ -256,7 +252,7 @@ describe("Task11B SQLite 单事务", () => {
   it("确认升级单事务生效且历史保留", async () => {
     const f = await sqliteFixture();
     try {
-      const result = await upgradeProjectToNarrationFirst(f.db, { projectId: f.project.id, user: { userId: "u", role: "USER" }, narrationFirstEnabled: true, request: upgradeRequest(f.project) });
+      const result = await upgradeProjectToNarrationFirst(f.db, { projectId: f.project.id, user: { userId: "u", role: "USER" }, request: upgradeRequest(f.project) });
       expect(result).toMatchObject({ upgraded: true, configuration_revision: 2 });
       const row = await f.client.project.findUnique({ where: { id: f.project.id } });
       expect(row).toMatchObject({ narrationTimingMode: "narration_first_v1", activeScriptRecordId: f.script.id, activeNarrationRecordId: null, activeNarrationSubtitleRevisionId: null, activeStoryboardRecordId: null, activeAssetPlanRecordId: null, activeAssetManifestRecordId: null, activeComposeRecordId: null, activeRenderJobRecordId: null, activePublishPackageRecordId: null, latestStoryboardRunTraceJson: null });
@@ -265,7 +261,7 @@ describe("Task11B SQLite 单事务", () => {
       expect((config?.configurationJson as { capabilities: { "tts.synthesize": { mode: string } } }).capabilities["tts.synthesize"].mode).toBe("fixed");
       expect(await f.client.auditLog.count({ where: { projectId: f.project.id, action: "narration_mode_upgraded" } })).toBe(1);
       expect(await f.client.storyboardRecord.count()).toBe(1);
-      const snapshot = await getProjectSnapshot(f.db, f.project.id, f.app.topicCandidateStore, { demoMode: false });
+      const snapshot = await getProjectSnapshot(f.db, f.project.id, f.app.topicCandidateStore, {  });
       expect(snapshot?.narration_readiness).toMatchObject({ ready: false, reason: "script_not_confirmed" });
     } finally { await f.close(); }
   });
@@ -274,7 +270,7 @@ describe("Task11B SQLite 单事务", () => {
     try {
       await f.second.saveScript({ ...f.script, id: "concurrent", scriptText: "他关闭城门！" });
       await f.client.project.update({ where: { id: f.project.id }, data: { activeScriptRecordId: "concurrent" } });
-      await expect(upgradeProjectToNarrationFirst(f.db, { projectId: f.project.id, user: { userId: "u", role: "USER" }, narrationFirstEnabled: true, request: upgradeRequest(f.project) })).rejects.toMatchObject({ body: { error: "narration_upgrade_conflict" } });
+      await expect(upgradeProjectToNarrationFirst(f.db, { projectId: f.project.id, user: { userId: "u", role: "USER" }, request: upgradeRequest(f.project) })).rejects.toMatchObject({ body: { error: "narration_upgrade_conflict" } });
       const row = await f.client.project.findUnique({ where: { id: f.project.id } });
       expect(row).toMatchObject({ narrationTimingMode: "legacy_estimated", activeStoryboardRecordId: "old" });
       expect(await f.client.projectGenerationConfiguration.findUnique({ where: { projectId: f.project.id } })).toMatchObject({ revision: 1 });
@@ -285,7 +281,7 @@ describe("Task11B SQLite 单事务", () => {
     const f = await sqliteFixture();
     try {
       await f.client.projectGenerationConfiguration.updateMany({ data: { revision: 5 } });
-      await expect(upgradeProjectToNarrationFirst(f.db, { projectId: f.project.id, user: { userId: "u", role: "USER" }, narrationFirstEnabled: true, request: upgradeRequest(f.project) })).rejects.toMatchObject({ body: { error: "project_generation_configuration_revision_conflict" } });
+      await expect(upgradeProjectToNarrationFirst(f.db, { projectId: f.project.id, user: { userId: "u", role: "USER" }, request: upgradeRequest(f.project) })).rejects.toMatchObject({ body: { error: "project_generation_configuration_revision_conflict" } });
       expect(await f.client.projectGenerationConfiguration.findUnique({ where: { projectId: f.project.id } })).toMatchObject({ revision: 5 });
       const row = await f.client.project.findUnique({ where: { id: f.project.id } });
       expect(row).toMatchObject({ narrationTimingMode: "legacy_estimated", activeStoryboardRecordId: "old" });
@@ -301,7 +297,7 @@ describe("Task11B 无冻结配置的老项目", () => {
     const { project } = await seedLegacyProject(db, { withConfig: false });
     const seeded = findProjectConfigRecord(db, project.id);
     if (seeded) db.projectGenerationConfigurations.delete(seeded.id);
-    const preview = await previewNarrationModeUpgrade(db, { projectId: project.id, user: { userId: "u", role: "USER" }, narrationFirstEnabled: true });
+    const preview = await previewNarrationModeUpgrade(db, { projectId: project.id, user: { userId: "u", role: "USER" } });
     expect(preview.current_configuration).toMatchObject({ revision: 0, tts_mode: "auto", provider_model_id: null, voice_profile_id: null });
     expect(findProjectConfigRecord(db, project.id)).toBeNull();
     expect(db.auditLogs.size).toBe(0);
@@ -312,7 +308,7 @@ describe("Task11B 无冻结配置的老项目", () => {
     const { project } = await seedLegacyProject(db, { withConfig: false });
     const seeded = findProjectConfigRecord(db, project.id);
     if (seeded) db.projectGenerationConfigurations.delete(seeded.id);
-    const result = await upgradeProjectToNarrationFirst(db, { projectId: project.id, user: { userId: "u", role: "USER" }, narrationFirstEnabled: true, request: { expected_active_script_record_id: project.activeScriptRecordId!, expected_configuration_revision: 0, expected_downstream: { storyboard_record_id: "old", asset_plan_record_id: "old", asset_manifest_record_id: "old", compose_record_id: "old", render_job_record_id: "old", publish_package_record_id: "old" }, narration_selection: selection(), confirm_invalidation: true } });
+    const result = await upgradeProjectToNarrationFirst(db, { projectId: project.id, user: { userId: "u", role: "USER" }, request: { expected_active_script_record_id: project.activeScriptRecordId!, expected_configuration_revision: 0, expected_downstream: { storyboard_record_id: "old", asset_plan_record_id: "old", asset_manifest_record_id: "old", compose_record_id: "old", render_job_record_id: "old", publish_package_record_id: "old" }, narration_selection: selection(), confirm_invalidation: true } });
     expect(result).toMatchObject({ upgraded: true, configuration_revision: 1 });
     const record = findProjectConfigRecord(db, project.id)!;
     expect(record.revision).toBe(1);
@@ -329,7 +325,7 @@ describe("Task11B 无冻结配置的老项目", () => {
     const originalScriptId = project.activeScriptRecordId!;
     project.activeScriptRecordId = "concurrent";
     try {
-      await upgradeProjectToNarrationFirst(db, { projectId: project.id, user: { userId: "u", role: "USER" }, narrationFirstEnabled: true, request: { expected_active_script_record_id: originalScriptId, expected_configuration_revision: 0, expected_downstream: { storyboard_record_id: "old", asset_plan_record_id: "old", asset_manifest_record_id: "old", compose_record_id: "old", render_job_record_id: "old", publish_package_record_id: "old" }, narration_selection: selection(), confirm_invalidation: true } });
+      await upgradeProjectToNarrationFirst(db, { projectId: project.id, user: { userId: "u", role: "USER" }, request: { expected_active_script_record_id: originalScriptId, expected_configuration_revision: 0, expected_downstream: { storyboard_record_id: "old", asset_plan_record_id: "old", asset_manifest_record_id: "old", compose_record_id: "old", render_job_record_id: "old", publish_package_record_id: "old" }, narration_selection: selection(), confirm_invalidation: true } });
       throw new Error("should_reject");
     } catch (error) {
       expect((error as { body?: { error?: string } }).body?.error).toBe("narration_upgrade_conflict");
@@ -344,7 +340,7 @@ describe("Task11B 无冻结配置的老项目", () => {
     const { project } = await seedLegacyProject(db);
     const before = captureState({ db, project });
     try {
-      await upgradeProjectToNarrationFirst(db, { projectId: project.id, user: { userId: "u", role: "USER" }, narrationFirstEnabled: true, request: { expected_active_script_record_id: project.activeScriptRecordId!, expected_configuration_revision: 0, expected_downstream: { storyboard_record_id: "old", asset_plan_record_id: "old", asset_manifest_record_id: "old", compose_record_id: "old", render_job_record_id: "old", publish_package_record_id: "old" }, narration_selection: selection(), confirm_invalidation: true } });
+      await upgradeProjectToNarrationFirst(db, { projectId: project.id, user: { userId: "u", role: "USER" }, request: { expected_active_script_record_id: project.activeScriptRecordId!, expected_configuration_revision: 0, expected_downstream: { storyboard_record_id: "old", asset_plan_record_id: "old", asset_manifest_record_id: "old", compose_record_id: "old", render_job_record_id: "old", publish_package_record_id: "old" }, narration_selection: selection(), confirm_invalidation: true } });
       throw new Error("should_reject");
     } catch (error) {
       await expectZeroWrite({ db, project }, before, error, "project_generation_configuration_revision_conflict", 409);

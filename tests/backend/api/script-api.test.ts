@@ -1,21 +1,15 @@
 import { describe, expect, it } from "vitest";
 
 import { buildApp } from "../../../backend/src/app.js";
+import { createLegacyProject } from "../projects/legacy-project.fixture.js";
 import { seedGenerationCatalog } from "../helpers/seed-generation-catalog.js";
 import { buildTestAuth } from "../auth/test-utils.js";
 import type { AuthenticatedAuthContext } from "../../../backend/src/auth/auth-context.js";
 
 describe("script api", () => {
   async function prepareConfirmedTopic(app: ReturnType<typeof buildApp>, auth: AuthenticatedAuthContext) {
-    const projectResponse = await app.inject({
-      method: "POST",
-      url: "/api/projects",
-      payload: {
-        name: "Script API Flow",
-      },
-      auth,
-    });
-    const projectId = projectResponse.json().project_id as string;
+    const projectResponse = await createLegacyProject(app.db, { name: 'Script API Flow', ownerId: "test-user", createdById: "test-user" });
+const projectId = projectResponse.id;
 
     const recommendationResponse = await app.inject({
       method: "POST",

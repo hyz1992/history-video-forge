@@ -112,7 +112,7 @@ describe("Task9B 执行派发来源闸门",()=>{
   });
 });
 
-import { createProject } from "../../../backend/src/modules/projects/project.repository.js";
+import { createLegacyProject as createProject } from "../projects/legacy-project.fixture.js";
 import { runAssetsGeneration } from "../../../backend/src/modules/assets/assets-run.service.js";
 import { projectTtsHash } from "../../../backend/src/modules/narration/narration-invalidation.js";
 import { buildPricingCatalogSeed } from "../../../backend/src/modules/generation-cost/pricing-catalog.seed.js";

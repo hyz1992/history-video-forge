@@ -15,6 +15,7 @@ import Database from "better-sqlite3";
 import { describe, expect, it, vi } from "vitest";
 
 import { buildApp } from "../../../backend/src/app.js";
+import { createLegacyProject } from "../projects/legacy-project.fixture.js";
 import { createPrismaClient } from "../../../backend/src/db/prisma-client.js";
 import { createAuthenticatedAuthContext } from "../../../backend/src/auth/auth-context.js";
 import { applyAllDatabaseMigrations } from "../db/migration-test-utils.js";
@@ -68,16 +69,9 @@ describe("custom refine controller chain (real /api/projects)", () => {
         skipSnapshotLoad: true,
       });
 
-      // 通过 POST /api/projects 创建项目（真实 UI 路径，验证 Prisma Project 同步）
-      const createRes = await app.inject({
-        method: "POST",
-        url: "/api/projects",
-        payload: { name: "FullStubApiTest" },
-        auth,
-      });
-
-      expect(createRes.statusCode).toBe(201);
-      const projectId = createRes.json().project_id;
+      // 口播前置定版后创建入口要求口播资格选择；经 legacy 夹具直造
+      const project = await createLegacyProject(app.db, { name: "FullStubApiTest", ownerId: user.id, createdById: user.id });
+      const projectId = project.id;
 
       // 通过 POST /topic/from-custom 生成候选
       const r = await app.inject({

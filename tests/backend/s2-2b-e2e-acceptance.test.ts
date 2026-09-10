@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { buildApp } from "../../backend/src/app.js";
-import { createProject } from "../../backend/src/modules/projects/project.repository.js";
+import { createLegacyProject as createProject } from "./projects/legacy-project.fixture.js";
 import { saveAssetPlanRecord } from "../../backend/src/modules/asset-planning/asset-plan-record.repository.js";
 import { saveScriptRecord } from "../../backend/src/modules/script/script-record.repository.js";
 import { saveStoryboardRecord } from "../../backend/src/modules/storyboard/storyboard-record.repository.js";

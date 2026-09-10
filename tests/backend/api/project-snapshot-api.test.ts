@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { buildApp } from "../../../backend/src/app.js";
+import { createLegacyProject } from "../projects/legacy-project.fixture.js";
 import { seedGenerationCatalog } from "../helpers/seed-generation-catalog.js";
 import { buildTestAuth } from "../auth/test-utils.js";
 import type { AuthenticatedAuthContext } from "../../../backend/src/auth/auth-context.js";
@@ -12,15 +13,8 @@ const rootDir = resolve(fileURLToPath(new URL("../../..", import.meta.url)));
 
 describe("project snapshot api", () => {
   async function prepareProjectWithScript(app: ReturnType<typeof buildApp>, auth: AuthenticatedAuthContext) {
-    const projectResponse = await app.inject({
-      method: "POST",
-      url: "/api/projects",
-      payload: {
-        name: "Snapshot API Flow",
-      },
-      auth,
-    });
-    const projectId = projectResponse.json().project_id as string;
+    const projectResponse = await createLegacyProject(app.db, { name: 'Snapshot API Flow', ownerId: "test-user", createdById: "test-user" });
+const projectId = projectResponse.id;
 
     const recommendationResponse = await app.inject({
       method: "POST",
@@ -106,15 +100,8 @@ describe("project snapshot api", () => {
     seedGenerationCatalog(app);
     const auth = buildTestAuth();
 
-    const projectResponse = await app.inject({
-      method: "POST",
-      url: "/api/projects",
-      payload: {
-        name: "Restore Metadata Flow",
-      },
-      auth,
-    });
-    const projectId = projectResponse.json().project_id as string;
+    const projectResponse = await createLegacyProject(app.db, { name: 'Restore Metadata Flow', ownerId: "test-user", createdById: "test-user" });
+const projectId = projectResponse.id;
 
     const draftSnapshot = await app.inject({
       method: "GET",
@@ -181,15 +168,8 @@ describe("project snapshot api", () => {
     seedGenerationCatalog(app);
     const auth = buildTestAuth();
 
-    const projectResponse = await app.inject({
-      method: "POST",
-      url: "/api/projects",
-      payload: {
-        name: "Snapshot Trace Flow",
-      },
-      auth,
-    });
-    const projectId = projectResponse.json().project_id as string;
+    const projectResponse = await createLegacyProject(app.db, { name: 'Snapshot Trace Flow', ownerId: "test-user", createdById: "test-user" });
+const projectId = projectResponse.id;
 
     const firstRecommendation = await app.inject({
       method: "POST",

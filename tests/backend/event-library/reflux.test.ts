@@ -25,7 +25,7 @@ import { buildApp } from "../../../backend/src/app.js";
 import { seedQuotableCatalog } from "../cost/quote-test-context.js";
 import { createPrismaClient } from "../../../backend/src/db/prisma-client.js";
 import { createAuthenticatedAuthContext } from "../../../backend/src/auth/auth-context.js";
-import { createProject } from "../../../backend/src/modules/projects/project.repository.js";
+import { createLegacyProject as createProject } from "../projects/legacy-project.fixture.js";
 import { applyAllDatabaseMigrations } from "../db/migration-test-utils.js";
 
 /** 等待 setImmediate 异步 draft 写入完成 */
@@ -50,21 +50,8 @@ describe("event-library recommendation reflux", () => {
       });
       const app = buildApp({ storageBaseDir: root, prismaClient: client, skipSnapshotLoad: true });
       await seedQuotableCatalog(app);
-    await seedQuotableCatalog(app);
       const project = await createProject(app.db, { name: "RefluxTest", ownerId: user.id, createdById: user.id });
 
-      // 在 Prisma DB 中创建 project（EventLibraryDraft 有 FK 到 Project）
-      await client.project.create({
-        data: {
-          id: project.id,
-          ownerId: user.id,
-          createdById: user.id,
-          name: "RefluxTest",
-          status: "topic_pending",
-          storageKey: project.id,
-          storageDisplayName: "RefluxTest",
-        },
-      });
       const auth = createAuthenticatedAuthContext({
         userId: user.id,
         username: user.username,
@@ -129,21 +116,8 @@ describe("event-library recommendation reflux", () => {
       });
       const app = buildApp({ storageBaseDir: root, prismaClient: client, skipSnapshotLoad: true });
       await seedQuotableCatalog(app);
-    await seedQuotableCatalog(app);
       const project = await createProject(app.db, { name: "RefluxDupTest", ownerId: user.id, createdById: user.id });
 
-      // 在 Prisma DB 中创建 project
-      await client.project.create({
-        data: {
-          id: project.id,
-          ownerId: user.id,
-          createdById: user.id,
-          name: "RefluxDupTest",
-          status: "topic_pending",
-          storageKey: project.id,
-          storageDisplayName: "RefluxDupTest",
-        },
-      });
       const auth = createAuthenticatedAuthContext({
         userId: user.id,
         username: user.username,
@@ -215,17 +189,6 @@ describe("event-library recommendation reflux", () => {
       // draft 写入失败（mock createDraft 抛错），但推荐响应不应受影响
       createDraftMock.mockRejectedValueOnce(new Error("db write failed"));
       const project = await createProject(app.db, { name: "RefluxFail", ownerId: user.id, createdById: user.id });
-      await client.project.create({
-        data: {
-          id: project.id,
-          ownerId: user.id,
-          createdById: user.id,
-          name: "RefluxFail",
-          status: "topic_pending",
-          storageKey: project.id,
-          storageDisplayName: "RefluxFail",
-        },
-      });
 
       const auth = createAuthenticatedAuthContext({
         userId: user.id,

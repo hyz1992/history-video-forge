@@ -9,9 +9,8 @@ import {
  * S2-2A 任务 4 第三轮整改：系统约束单一来源 + reason_code → 不可用原因映射。
  */
 describe("system constraints", () => {
-  it("demo mode disables real video provider", () => {
-    expect(resolveSystemGenerationConstraints(true).apiVideoProviderEnabled).toBe(false);
-    expect(resolveSystemGenerationConstraints(false).apiVideoProviderEnabled).toBe(true);
+  it("2026-09-10 起系统约束恒启用真实视频 provider（演示模式已移除）", () => {
+    expect(resolveSystemGenerationConstraints().apiVideoProviderEnabled).toBe(true);
   });
 
   it("maps provider-disabled downgrade to a visible unavailable reason", () => {

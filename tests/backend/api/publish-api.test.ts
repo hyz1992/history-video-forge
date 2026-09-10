@@ -5,7 +5,7 @@ import { seedGenerationCatalog } from "../helpers/seed-generation-catalog.js";
 import { buildTestAuth } from "../auth/test-utils.js";
 import { saveAssetManifestRecord } from "../../../backend/src/modules/assets/asset-manifest-record.repository.js";
 import { saveComposeRecord } from "../../../backend/src/modules/compose/compose-record.repository.js";
-import { createProject } from "../../../backend/src/modules/projects/project.repository.js";
+import { createLegacyProject as createProject } from "../projects/legacy-project.fixture.js";
 import {
   getPublishPackageRecordById,
 } from "../../../backend/src/modules/publish/publish-record.repository.js";

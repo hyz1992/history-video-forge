@@ -6,6 +6,8 @@ import { join } from "node:path";
 import Database from "better-sqlite3";
 
 import { buildApp } from "../../backend/src/app.js";
+import { buildPricingCatalogSeed } from "../../backend/src/modules/generation-cost/pricing-catalog.seed.js";
+import { seedGlobalVoiceProfiles } from "../../backend/src/modules/assets/voice/voice-profile.repository.js";
 import { createHttpServer, startServer } from "../../backend/src/server.js";
 import { buildTestAuth } from "./auth/test-utils.js";
 import { resolveServerHost } from "../../backend/src/server.js";
@@ -79,6 +81,12 @@ describe("backend http server", () => {
   it("accepts JSON requests for the existing API routes", async () => {
     const app = buildApp();
     const auth = buildTestAuth();
+
+    // 口播前置定版（2026-09-10）：创建走口播资格物化，seed 合格 WS 目录与音色后 201
+    for (const m of buildPricingCatalogSeed({ llm: { mode: "stub" }, media: { deploymentScope: "cn-beijing" } })) {
+      if (!app.db.providerModelCatalog.has(m.id)) app.db.providerModelCatalog.set(m.id, m);
+    }
+    await seedGlobalVoiceProfiles(app.db);
 
     const response = await app.inject({
       method: "POST",

@@ -25,6 +25,7 @@ vi.mock(
 );
 
 import { buildApp } from "../../../backend/src/app.js";
+import { createLegacyProject } from "../projects/legacy-project.fixture.js";
 import { seedGenerationCatalog } from "../helpers/seed-generation-catalog.js";
 import { buildTestAuth } from "../auth/test-utils.js";
 
@@ -55,15 +56,9 @@ const meaningfulFilters = {
 };
 
 async function createProject(app: ReturnType<typeof buildApp>) {
-  const response = await app.inject({
-    method: "POST",
-    url: "/api/projects",
-    payload: { name: "S2-4 API Filter Test" },
-    auth: buildTestAuth(),
-  });
-
-  expect(response.statusCode).toBe(201);
-  return response.json().project_id as string;
+  // 口播前置定版后创建入口要求口播资格选择；经 legacy 夹具直造
+  const project = await createLegacyProject(app.db, { name: "S2-4 API Filter Test", ownerId: "test-user", createdById: "test-user" });
+  return project.id;
 }
 
 describe("topic recommendation filter HTTP chain", () => {

@@ -3,7 +3,7 @@ import { isAbsolute } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { createDbClient } from "../../../backend/src/db/client.js";
-import { createProject } from "../../../backend/src/modules/projects/project.repository.js";
+import { createLegacyProject as createProject } from "../projects/legacy-project.fixture.js";
 import { createProjectRunInteractionLogWriter, createProjectStorageProfile } from "../../../backend/src/runtime/trace/project-storage.js";
 
 function workspaceProjectEntries(): string[] {

@@ -27,7 +27,7 @@ describe("任务2B项目口播固定策略", () => {
     });
     it("新模式auto物化fixed模型和音色，用户偏好零写入", async () => {
         const db = await fixture();
-        const project = await createProject(db, { name: "口播", ownerId: "u", narrationFirstEnabled: true });
+        const project = await createProject(db, { name: "口播", ownerId: "u" });
         const cfg = [...db.projectGenerationConfigurations.values()][0];
         expect(project.narrationTimingMode).toBe("narration_first_v1");
         expect(cfg.configurationJson.capabilities["tts.synthesize"]).toEqual({ mode: "fixed", provider_model_id: modelId });
@@ -35,32 +35,11 @@ describe("任务2B项目口播固定策略", () => {
         expect(cfg.configurationJson.narration_policy).toMatchObject({ selection_reason: "recommended_auto" });
         expect(db.userGenerationPreferences.size).toBe(0);
     });
-    it.each(["auto", "fixed"] as const)("legacy %s沿用原配置", async (mode) => {
-        const db = await fixture();
-        const configuration = structuredClone(DEFAULT_GENERATION_CONFIGURATION);
-        if (mode === "fixed")
-            configuration.capabilities["tts.synthesize"] = { mode, provider_model_id: "old-model" };
-        const now = new Date();
-        db.userGenerationPreferences.set("pref", { id: "pref", userId: "u", schemaVersion: "generation_configuration_v1", revision: 3, configurationJson: configuration, createdAt: now, updatedAt: now });
-        const project = await createProject(db, { name: "旧项目", ownerId: "u" });
-        expect(project.narrationTimingMode).toBe("legacy_estimated");
-        expect([...db.projectGenerationConfigurations.values()][0].configurationJson).toEqual(configuration);
-    });
-    it("不合格继承fixed拒绝且没有半个项目", async () => {
-        const db = await fixture();
-        const configuration = structuredClone(DEFAULT_GENERATION_CONFIGURATION);
-        configuration.capabilities["tts.synthesize"] = { mode: "fixed", provider_model_id: "old-model" };
-        const now = new Date();
-        db.userGenerationPreferences.set("pref", { id: "pref", userId: "u", schemaVersion: "generation_configuration_v1", revision: 3, configurationJson: configuration, createdAt: now, updatedAt: now });
-        await expect(createProject(db, { name: "拒绝", ownerId: "u", narrationFirstEnabled: true })).rejects.toThrow("narration_selection_required");
-        expect(db.projects.size).toBe(0);
-        expect(db.projectGenerationConfigurations.size).toBe(0);
-    });
 });
 describe("配置保存与策略生命周期", () => {
     it("新模式保存auto一次物化fixed并保留其它偏好", async () => {
         const db = await fixture();
-        const project = await createProject(db, { name: "保存", ownerId: "u", narrationFirstEnabled: true });
+        const project = await createProject(db, { name: "保存", ownerId: "u" });
         const input = structuredClone(DEFAULT_GENERATION_CONFIGURATION);
         input.video.strategy = "prefer_api_video";
         const result = await upsertProjectGenerationConfiguration(db, project.id, { expected_revision: 1, configuration: input }, "u");
@@ -71,7 +50,7 @@ describe("配置保存与策略生命周期", () => {
     });
     it("fixed保留；不兼容保存及过期revision均保持旧配置", async () => {
         const db = await fixture();
-        const project = await createProject(db, { name: "固定", ownerId: "u", narrationFirstEnabled: true });
+        const project = await createProject(db, { name: "固定", ownerId: "u" });
         const current = [...db.projectGenerationConfigurations.values()][0];
         const fixed = structuredClone(current.configurationJson);
         const ok = await upsertProjectGenerationConfiguration(db, project.id, { expected_revision: 1, configuration: fixed }, "u");
@@ -85,7 +64,7 @@ describe("配置保存与策略生命周期", () => {
     });
     it("策略更新只影响显式解析，既有配置与历史音频引用不追改", async () => {
         const db = await fixture();
-        const project = await createProject(db, { name: "历史", ownerId: "u", narrationFirstEnabled: true });
+        const project = await createProject(db, { name: "历史", ownerId: "u" });
         const hash = "a".repeat(64), now = "2026-09-06T10:00:00.000Z";
         const ref = (file: string) => ({ uri: "narration-runs/history-run/" + file, sha256: hash });
         const history = NarrationRecord.parse({
@@ -122,7 +101,7 @@ describe("配置保存与策略生命周期", () => {
         expect(original).toEqual(DEFAULT_GENERATION_CONFIGURATION);
     });
 });
-function bootInput(scope: "cn-beijing" | "singapore" | "unknown", credentialConfigured = true) { return { llm: { mode: "stub" as const }, media: { deploymentScope: scope, credentialConfigured, registeredModels: [{ capability: "tts.synthesize" as const, providerKey: "dashscope", modelId: "qwen3-tts-instruct-flash" }] }, environment: { demoMode: false, testEnv: false } }; }
+function bootInput(scope: "cn-beijing" | "singapore" | "unknown", credentialConfigured = true) { return { llm: { mode: "stub" as const }, media: { deploymentScope: scope, credentialConfigured, registeredModels: [{ capability: "tts.synthesize" as const, providerKey: "dashscope", modelId: "qwen3-tts-instruct-flash" }] }, environment: { testEnv: false } }; }
 describe("真实bootstrap独立WS目录", () => {
     it("北京保留合格非默认WS，但旧HTTP readiness仍拒绝派发", async () => {
         const db = createDbClient();
@@ -168,13 +147,13 @@ it.each([false, true])("重复与重排目录不能替代正式fixed身份：rev
 });
 it("移除再重建模型沿用冻结配置身份，不追改项目", async () => {
     const db = await fixture();
-    const project = await createProject(db, { name: "移除", ownerId: "u", narrationFirstEnabled: true });
+    const project = await createProject(db, { name: "移除", ownerId: "u" });
     const config = structuredClone([...db.projectGenerationConfigurations.values()][0]);
     const original = db.providerModelCatalog.get(modelId)!;
     db.providerModelCatalog.delete(modelId);
-    await expect(createProject(db, { name: "不可创建", ownerId: "u", narrationFirstEnabled: true })).rejects.toThrow("narration_selection_required");
+    await expect(createProject(db, { name: "不可创建", ownerId: "u" })).rejects.toThrow("narration_selection_required");
     db.providerModelCatalog.set(modelId, { ...original });
-    const next = await createProject(db, { name: "恢复创建", ownerId: "u", narrationFirstEnabled: true });
+    const next = await createProject(db, { name: "恢复创建", ownerId: "u" });
     expect(next.narrationTimingMode).toBe("narration_first_v1");
     expect(db.projects.get(project.id)?.narrationTimingMode).toBe("narration_first_v1");
     expect(db.projectGenerationConfigurations.get(config.id)).toEqual(config);
@@ -200,6 +179,6 @@ it("owner不可见的正式私有档案不出现在创建错误选项", async ()
     const db = await fixture();
     const voice = db.voiceProfiles.get(voiceId)!;
     Object.assign(voice, { kind: "generated", visibility: "private", owner_id: "other" });
-    await expect(createProject(db, { name: "不可见", ownerId: "u", narrationFirstEnabled: true })).rejects.toMatchObject({ body: { options: [] } });
+    await expect(createProject(db, { name: "不可见", ownerId: "u" })).rejects.toMatchObject({ body: { options: [] } });
     expect(db.projects.size).toBe(0);
 });

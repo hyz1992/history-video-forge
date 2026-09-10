@@ -16,7 +16,7 @@ import { runStoryboardGeneration, runStoryboardSegmentRegeneration } from "../..
 const cleanup: Array<() => Promise<void> | void> = [];
 afterEach(async () => { vi.restoreAllMocks(); assetPlanner.mockReset(); planner.mockReset(); segmentPlanner.mockReset(); scriptGraph.mockReset(); for (const close of cleanup.splice(0).reverse()) await close(); });
 import { createDbClient } from "../../../backend/src/db/client.js";
-import { createProject } from "../../../backend/src/modules/projects/project.repository.js";
+import { createLegacyProject as createProject } from "../projects/legacy-project.fixture.js";
 import { activateScriptRecord, saveScriptRecord } from "../../../backend/src/modules/script/script-record.repository.js";
 import { DEFAULT_GENERATION_CONFIGURATION, hashProjectNarrationTtsSettings } from "../../../shared/src/index.js";
 import { buildPricingCatalogSeed } from "../../../backend/src/modules/generation-cost/pricing-catalog.seed.js";
@@ -788,7 +788,7 @@ describe("Task9A 资产规划来源门禁", () => {
     const f = mode === "map" ? await readyFixture() : await sqliteFixture();
     for (const row of buildPricingCatalogSeed({ llm: { mode: "stub" }, media: { deploymentScope: "cn-beijing" } })) f.db.providerModelCatalog.set(row.id, row);
     assetPlanner.mockResolvedValue(task9Plan(f));
-    const result = await runAssetPlanningGeneration({ db: f.db, project: f.project, demoMode: true });
+    const result = await runAssetPlanningGeneration({ db: f.db, project: f.project });
     expect(result.statusCode, JSON.stringify(result.body)).toBe(200);
     expect(assetPlanner).toHaveBeenCalledTimes(1);
     expect(assetPlanner.mock.calls[0]![0].narrationTiming).toEqual(f.narrationTiming);
@@ -799,7 +799,7 @@ describe("Task9A 资产规划来源门禁", () => {
   it("冷实例数据库已变更正文确认时零派发", async () => {
     const f = await sqliteFixture();
     await f.client.scriptRecord.update({ where: { id: f.script.id }, data: { scriptText: "新正文。" } });
-    const result = await runAssetPlanningGeneration({ db: f.db, project: f.project, demoMode: true });
+    const result = await runAssetPlanningGeneration({ db: f.db, project: f.project });
     expect(result.statusCode, JSON.stringify(result.body)).toBe(409); expect(assetPlanner).not.toHaveBeenCalled();
   });
   it.each(["map", "sqlite"])("%s已派发结果在来源变化后不能激活或回滚active", async mode => {
@@ -811,7 +811,7 @@ describe("Task9A 资产规划来源门禁", () => {
       else Object.assign(f.project, { activeNarrationRecordId: null, activeAssetPlanRecordId: null, status: "script_ready" });
       return plan;
     });
-    const result = await runAssetPlanningGeneration({ db: f.db, project: f.project, demoMode: true });
+    const result = await runAssetPlanningGeneration({ db: f.db, project: f.project });
     if (result.statusCode === 500) await assetPlanner.mock.results[0]!.value;
     expect(result.statusCode, JSON.stringify(result.body)).toBe(409); expect(assetPlanner).toHaveBeenCalledTimes(1);
     const current = "client" in f ? await f.client.project.findUniqueOrThrow({ where: { id: f.project.id } }) : f.project;
@@ -826,13 +826,13 @@ describe("Task9A 排队身份与最后激活窗口", () => {
     expect(fingerprint(state.identity)).not.toBe(fingerprint({ ...state.identity, activeStoryboardRecordId: "new" }));
     expect(fingerprint(state.identity)).not.toBe(fingerprint({ ...state.identity, timingHash: "b".repeat(64) }));
     assetPlanner.mockResolvedValue(task9Plan(f));
-    const result = await runAssetPlanningGeneration({ db: f.db, project: f.project, demoMode: true, expectedNarrationSource: { ...state.identity, activeStoryboardRecordId: "new" } });
+    const result = await runAssetPlanningGeneration({ db: f.db, project: f.project, expectedNarrationSource: { ...state.identity, activeStoryboardRecordId: "new" } });
     expect(result.statusCode).toBe(409); expect(assetPlanner).not.toHaveBeenCalled();
   });
   it("冷实例口播已取消，即使缓存仍旧ready也零派发", async () => {
     const f = await sqliteFixture();
     await f.client.project.update({ where: { id: f.project.id }, data: { activeNarrationRecordId: null, activeNarrationSubtitleRevisionId: null } });
-    const result = await runAssetPlanningGeneration({ db: f.db, project: f.project, demoMode: true });
+    const result = await runAssetPlanningGeneration({ db: f.db, project: f.project });
     expect(result.statusCode).toBe(409); expect(assetPlanner).not.toHaveBeenCalled();
   });
   it("候选持久化后来源再变化，最终事务仍拒绝激活", async () => {
@@ -844,7 +844,7 @@ describe("Task9A 排队身份与最后激活窗口", () => {
       await save(record); writes++;
       if (writes === 2) await f.client.project.update({ where: { id: f.project.id }, data: { activeNarrationRecordId: null, activeNarrationSubtitleRevisionId: null, activeAssetPlanRecordId: null, status: "script_ready" } });
     });
-    const result = await runAssetPlanningGeneration({ db: f.db, project: f.project, demoMode: true });
+    const result = await runAssetPlanningGeneration({ db: f.db, project: f.project });
     expect(result.statusCode, JSON.stringify(result.body)).toBe(409); expect(writes).toBeGreaterThanOrEqual(2);
     expect(assetPlanner).toHaveBeenCalledTimes(1);
     const current = await f.client.project.findUniqueOrThrow({ where: { id: f.project.id } });
@@ -892,7 +892,7 @@ describe("Task9A R1 新口播替换冷缓存", () => {
     await f.client.project.update({ where: { id: f.project.id }, data: { activeNarrationRecordId: "narration-new", activeNarrationSubtitleRevisionId: "subtitle-new" } });
     expect(f.project.activeNarrationRecordId).toBe("narration");
     expect((await captureStoryboardNarrationSource(f.db, f.project.id, f.project.ownerId)).identity!.narrationRecordId).toBe("narration-new");
-    const result = await runAssetPlanningGeneration({ db: f.db, project: f.project, demoMode: true, expectedNarrationSource: expected });
+    const result = await runAssetPlanningGeneration({ db: f.db, project: f.project, expectedNarrationSource: expected });
     expect(result.statusCode, JSON.stringify(result.body)).toBe(409); expect(assetPlanner).not.toHaveBeenCalled();
   });
 });
@@ -903,7 +903,7 @@ describe("Task9B 数据库资产来源门禁", () => {
     const f = await sqliteFixture();
     for (const row of buildPricingCatalogSeed({ llm: { mode: "stub" }, media: { deploymentScope: "cn-beijing" } })) f.db.providerModelCatalog.set(row.id, row);
     assetPlanner.mockResolvedValue(task9Plan(f));
-    expect((await runAssetPlanningGeneration({ db: f.db, project: f.project, demoMode: true })).statusCode).toBe(200);
+    expect((await runAssetPlanningGeneration({ db: f.db, project: f.project })).statusCode).toBe(200);
     const captured = await captureNarrationAssetsSource(f.db, f.project.id, f.project.ownerId);
     if (change === "script") await f.client.scriptRecord.update({ where: { id: f.script.id }, data: { scriptText: "已变化的正文。" } });
     if (change === "plan") await f.client.project.update({ where: { id: f.project.id }, data: { activeAssetPlanRecordId: null } });

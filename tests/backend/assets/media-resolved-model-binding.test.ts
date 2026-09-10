@@ -58,7 +58,7 @@ import type { DbClient, GenerationRunRecord, ProjectRecord } from "../../../back
 import { createPrismaClient } from "../../../backend/src/db/prisma-client.js";
 import { PrismaThirdAggregateWriter } from "../../../backend/src/db/repositories/prisma-third-aggregate-writer.js";
 import { applyAllDatabaseMigrations } from "../db/migration-test-utils.js";
-import { createProject } from "../../../backend/src/modules/projects/project.repository.js";
+import { createLegacyProject as createProject } from "../projects/legacy-project.fixture.js";
 import { buildProviderRegistry, createAssetsDispatchHandler } from "../../../backend/src/modules/assets/assets-run.service.js";
 import { buildPricingCatalogSeed } from "../../../backend/src/modules/generation-cost/pricing-catalog.seed.js";
 import { createGenerationRunRepository } from "../../../backend/src/modules/generation-run/generation-run.repository.js";
@@ -300,7 +300,7 @@ function buildFrozenMediaReadiness(): GenerationCapabilityReadinessInput {
       credentialConfigured: true,
       deploymentScope: "cn-beijing",
     },
-    environment: { demoMode: false, testEnv: false },
+    environment: { testEnv: false },
   };
 }
 

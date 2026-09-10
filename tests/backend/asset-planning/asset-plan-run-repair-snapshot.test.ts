@@ -20,7 +20,7 @@ const { generateAssetPlanMock, factoryOptionsMock } = vi.hoisted(() => ({
 vi.mock("../../../backend/src/config/env.js", () => {
   const env = {
     nodeEnv: "test",
-    demoMode: false,
+
     promptAssetsDir: process.cwd().replace(/\\/g, "/") + "/prompts",
     assetPlanningGenerationMode: "legacy",
     llm: {
@@ -64,7 +64,7 @@ vi.mock("../../../backend/src/runtime/llm/tier-aware-provider-factory.js", () =>
 }));
 
 import { createDbClient } from "../../../backend/src/db/client.js";
-import { createProject } from "../../../backend/src/modules/projects/project.repository.js";
+import { createLegacyProject as createProject } from "../projects/legacy-project.fixture.js";
 import { saveScriptRecord } from "../../../backend/src/modules/script/script-record.repository.js";
 import { saveStoryboardRecord } from "../../../backend/src/modules/storyboard/storyboard-record.repository.js";
 import { saveTopicPackage } from "../../../backend/src/modules/topic/topic-package.repository.js";
@@ -406,7 +406,7 @@ describe("asset-planning run-service 快照派生：repair 可达分支（S2-2C 
     const response = await runAssetPlanningGeneration({
       db,
       project,
-      demoMode: false,
+
       billingContext: billingContext as never,
     });
     // repair 的 gateway 探针抛错 → run service 失败响应；repair 分支确实被执行
@@ -427,7 +427,7 @@ describe("asset-planning run-service 快照派生：repair 可达分支（S2-2C 
         topicPackageId: topicPackage.id,
       }),
     );
-    const response = await runAssetPlanningGeneration({ db, project, demoMode: false });
+    const response = await runAssetPlanningGeneration({ db, project });
     expect(response.statusCode).toBeGreaterThanOrEqual(400);
     expect(factoryOptionsMock).toHaveBeenCalledWith(undefined);
   });

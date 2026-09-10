@@ -11,7 +11,7 @@ import { describe, expect, it } from "vitest";
 import { buildApp } from "../../../backend/src/app.js";
 import { createPrismaClient } from "../../../backend/src/db/prisma-client.js";
 import { createAuthenticatedAuthContext } from "../../../backend/src/auth/auth-context.js";
-import { createProject } from "../../../backend/src/modules/projects/project.repository.js";
+import { createLegacyProject as createProject } from "../projects/legacy-project.fixture.js";
 import { syncEventLibraryFromFiles } from "../../../backend/src/modules/event-library/event-library-sync.service.js";
 import { applyAllDatabaseMigrations } from "../db/migration-test-utils.js";
 

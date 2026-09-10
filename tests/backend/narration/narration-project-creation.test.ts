@@ -30,7 +30,7 @@ afterEach(async () => {
     }
 });
 function requireSeparator() { return process.platform === "win32" ? "\\" : "/"; }
-async function fixture(enabled = true) {
+async function fixture() {
     const directory = mkdtempSync(join(tmpdir(), "narration-task2b-"));
     directories.push(directory);
     const path = join(directory, "test.db"), sql = new Database(path);
@@ -40,7 +40,7 @@ async function fixture(enabled = true) {
     clients.push(client);
     await client.user.create({ data: { id: "u", username: "u", displayName: "U", passwordHash: "h", role: "USER" } });
     const writer = await PrismaFirstAggregateWriter.create(client, "u");
-    const app = buildApp({ firstAggregateWriter: writer, prismaClient: client, skipSnapshotLoad: true, storageBaseDir: join(directory, "storage"), narrationFirstEnabled: enabled });
+    const app = buildApp({ firstAggregateWriter: writer, prismaClient: client, skipSnapshotLoad: true, storageBaseDir: join(directory, "storage") });
     for (const m of buildPricingCatalogSeed({ llm: { mode: "stub" }, media: { deploymentScope: "cn-beijing" } }))
         app.db.providerModelCatalog.set(m.id, m);
     await seedGlobalVoiceProfiles(app.db);
@@ -179,17 +179,12 @@ describe("真实POST创建事务", () => {
         expect(app.db.projects.size).toBe(0);
         expect(app.db.projectGenerationConfigurations.size).toBe(0);
     });
-    it("策略版本过期409与关闭开关selection拒绝均零创建", async () => {
+    it("策略版本过期409零创建", async () => {
         const { app, client } = await fixture();
         const stale = await app.inject({ method: "POST", url: "/api/projects", auth, payload: { name: "过期", narration_selection: { ...selected(), policy_version: "old" } } });
         expect(stale.statusCode).toBe(409);
         expect(stale.json().error).toBe("narration_policy_changed");
         expect(await client.project.count()).toBe(0);
-        const off = await fixture(false);
-        const unavailable = await off.app.inject({ method: "POST", url: "/api/projects", auth, payload: { name: "关闭", narration_selection: selected() } });
-        expect(unavailable.statusCode).toBe(409);
-        expect(unavailable.json().error).toBe("narration_mode_unavailable");
-        expect(await off.client.project.count()).toBe(0);
     });
 });
 it("真实writer第二次写失败回滚mode/config，metadata与Map不发布", async () => {
@@ -231,7 +226,7 @@ it("真实项目配置PATCH物化auto、拒绝不合格且revision冲突零写",
 });
 it("Prisma上下文缺实际writer不得静默退回Map创建", async () => {
     const { client, app: seeded } = await fixture();
-    const app = buildApp({ prismaClient: client, narrationFirstEnabled: true, skipSnapshotLoad: true });
+    const app = buildApp({ prismaClient: client, skipSnapshotLoad: true });
     app.db.providerModelCatalog = seeded.db.providerModelCatalog;
     await seedGlobalVoiceProfiles(app.db);
     await expect(app.inject({ method: "POST", url: "/api/projects", auth, payload: { name: "配置错误" } })).rejects.toThrow("narration_creation_writer_required");

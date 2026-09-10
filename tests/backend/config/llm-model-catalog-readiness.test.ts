@@ -45,7 +45,7 @@ const MEDIA_READY = {
   deploymentScope: "cn-beijing" as const,
 };
 
-const NORMAL_ENVIRONMENT = { demoMode: false, testEnv: false };
+const NORMAL_ENVIRONMENT = { testEnv: false };
 
 function readinessInput(
   overrides: Partial<GenerationCapabilityReadinessInput> & {
@@ -224,7 +224,7 @@ describe("候选预解析（S2-2C §7.1 bootstrap 层）", () => {
       readDashscopeMediaConfig: () => {
         throw new Error("must not be called without credentials");
       },
-      demoMode: false,
+
       testEnv: false,
       llmCandidates: LLM_MODEL_CANDIDATES_V1,
       resolveCandidateModel: (candidate) =>
@@ -243,7 +243,7 @@ describe("候选预解析（S2-2C §7.1 bootstrap 层）", () => {
       readDashscopeMediaConfig: () => {
         throw new Error("must not be called without credentials");
       },
-      demoMode: false,
+
       testEnv: false,
       llmCandidates: LLM_MODEL_CANDIDATES_V1,
       resolveCandidateModel: () => ({ ok: true }),

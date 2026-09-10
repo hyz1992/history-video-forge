@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { buildApp } from "../../../backend/src/app.js";
-import { createProject } from "../../../backend/src/modules/projects/project.repository.js";
+import { createLegacyProject as createProject } from "../projects/legacy-project.fixture.js";
 
 describe("workspace voice profile persistence root", () => {
   it("does not derive the global voice root from the first project", async () => {

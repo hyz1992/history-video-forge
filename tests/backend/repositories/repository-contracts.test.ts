@@ -6,8 +6,8 @@ import { describe, expect, it } from "vitest";
 import { buildApp } from "../../../backend/src/app.js";
 import { env } from "../../../backend/src/config/env.js";
 import { createDbClient } from "../../../backend/src/db/client.js";
+import { createLegacyProject as createProject } from "../projects/legacy-project.fixture.js";
 import {
-  createProject,
   getProjectById,
 } from "../../../backend/src/modules/projects/project.repository.js";
 import {

@@ -6,6 +6,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { buildApp } from "../../../backend/src/app";
+import { createLegacyProject } from "../../../tests/backend/projects/legacy-project.fixture.js";
 import { saveAssetPlanRecord } from "../../../backend/src/modules/asset-planning/asset-plan-record.repository";
 import type { AssetPlan } from "../../../shared/src/index.js";
 
@@ -267,15 +268,10 @@ export async function runComposeRuntimeSmoke(
   const app = buildApp({storageBaseDir:resolve(finalOutputDir,"app"),skipSnapshotLoad:true});
   for(const row of buildPricingCatalogSeed({llm:{mode:"stub"},media:{deploymentScope:"cn-beijing"}}))app.db.providerModelCatalog.set(row.id,row);
   await seedGlobalVoiceProfiles(app.db);
-  const projectBody = await injectOrThrow({
-    app,
-    method: "POST",
-    url: "/api/projects",
-    payload: {
-      name: "Compose Runtime Smoke",
-    },
-  });
-  const projectId = projectBody.project_id as string;
+  // 口播前置定版后创建入口为 narration 模式；本冒烟驱动 legacy 资产生成→合成链路，
+  // 经 legacy 测试夹具直造项目。
+  const legacyProject = await createLegacyProject(app.db, { name: "Compose Runtime Smoke", ownerId: "smoke-owner" });
+  const projectId = legacyProject.id;
   const project = app.db.projects.get(projectId);
   if (!project) {
     throw new Error("project_missing_after_create");

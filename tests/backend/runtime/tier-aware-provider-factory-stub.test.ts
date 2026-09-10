@@ -17,7 +17,7 @@ const { factoryOptionsMock } = vi.hoisted(() => ({ factoryOptionsMock: vi.fn() }
 vi.mock("../../../backend/src/config/env.js", () => {
   const env = {
     nodeEnv: "test",
-    demoMode: false,
+
     promptAssetsDir: process.cwd().replace(/\\/g, "/") + "/prompts",
     llm: {
       provider: "stub",

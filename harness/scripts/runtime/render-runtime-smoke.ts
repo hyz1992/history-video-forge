@@ -6,6 +6,7 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { buildApp } from "../../../backend/src/app";
+import { createLegacyProject } from "../../../tests/backend/projects/legacy-project.fixture.js";
 import { saveAssetPlanRecord } from "../../../backend/src/modules/asset-planning/asset-plan-record.repository";
 import { loadLightweightBgmCatalogItems } from "../../../backend/src/modules/assets/lightweight-audio-catalog-loader";
 import { saveMediaLibraryItem } from "../../../backend/src/modules/assets/media-library.repository";
@@ -617,15 +618,9 @@ export async function runRenderRuntimeSmoke(
     }
   }
   await seedGlobalVoiceProfiles(app.db);
-  const projectBody = await injectOrThrow({
-    app,
-    method: "POST",
-    url: "/api/projects",
-    payload: {
-      name: "Render Runtime Smoke",
-    },
-  });
-  const projectId = projectBody.project_id as string;
+  // 口播前置定版后创建入口为 narration 模式；本脚本驱动 legacy 全链路，经夹具直造
+  const legacyProject = await createLegacyProject(app.db, { name: "Render Runtime Smoke", ownerId: "smoke-owner" });
+  const projectId = legacyProject.id;
   const project = app.db.projects.get(projectId);
   if (!project) {
     throw new Error("project_missing_after_create");

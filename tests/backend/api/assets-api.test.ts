@@ -15,7 +15,7 @@ vi.mock("../../../backend/src/modules/assets/assets-local-validator.js", () => (
 
 import { buildApp } from "../../../backend/src/app.js";
 import { seedGenerationCatalog } from "../helpers/seed-generation-catalog.js";
-import { createProject } from "../../../backend/src/modules/projects/project.repository.js";
+import { createLegacyProject as createProject } from "../projects/legacy-project.fixture.js";
 import { saveAssetPlanRecord } from "../../../backend/src/modules/asset-planning/asset-plan-record.repository.js";
 import { saveScriptRecord } from "../../../backend/src/modules/script/script-record.repository.js";
 import { saveStoryboardRecord } from "../../../backend/src/modules/storyboard/storyboard-record.repository.js";
@@ -1613,13 +1613,8 @@ describe("PATCH prompt update", () => {
     projectId: string;
     taskId: string;
   }> {
-    const projectRes = await app.inject({
-      method: "POST",
-      url: "/api/projects",
-      payload: { name: "Prompt Test" },
-      auth,
-    });
-    const projectId = (projectRes.json() as Record<string, unknown>).project_id as string;
+    const project = await createLegacyProject(app.db, { name: "Prompt Test", ownerId: "owner-1" });
+    const projectId = project.id;
 
     // Create a minimal asset plan with one task
     const assetPlanRecord = await import(
@@ -1720,13 +1715,8 @@ describe("PATCH prompt update", () => {
   });
 
   it("returns 409 when no active asset plan", async () => {
-    const projectRes = await app.inject({
-      method: "POST",
-      url: "/api/projects",
-      payload: { name: "No Plan Project" },
-      auth,
-    });
-    const projectId = (projectRes.json() as Record<string, unknown>).project_id as string;
+    const project = await createLegacyProject(app.db, { name: "No Plan Project", ownerId: "owner-1" });
+    const projectId = project.id;
 
     const res = await app.inject({
       method: "PATCH",
@@ -1752,13 +1742,8 @@ describe("POST prompt optimize", () => {
     projectId: string;
     taskId: string;
   }> {
-    const projectRes = await app.inject({
-      method: "POST",
-      url: "/api/projects",
-      payload: { name: "Opt Test" },
-      auth,
-    });
-    const projectId = (projectRes.json() as Record<string, unknown>).project_id as string;
+    const project = await createLegacyProject(app.db, { name: "Opt Test", ownerId: "owner-1" });
+    const projectId = project.id;
 
     const planId = app.db.generateId();
     const plan = {
@@ -1794,8 +1779,8 @@ describe("POST prompt optimize", () => {
       createdAt: new Date(),
     });
 
-    const project = app.db.projects.get(projectId)!;
-    project.activeAssetPlanRecordId = planId;
+    const projectRef = app.db.projects.get(projectId)!;
+    projectRef.activeAssetPlanRecordId = planId;
 
     return { projectId, taskId: "task_img_001" };
   }
@@ -1840,13 +1825,8 @@ describe("POST prompt optimize", () => {
   });
 
   it("returns 409 when no active asset plan", async () => {
-    const projectRes = await app.inject({
-      method: "POST",
-      url: "/api/projects",
-      payload: { name: "No Plan" },
-      auth,
-    });
-    const projectId = (projectRes.json() as Record<string, unknown>).project_id as string;
+    const project = await createLegacyProject(app.db, { name: "No Plan", ownerId: "owner-1" });
+    const projectId = project.id;
 
     const res = await app.inject({
       method: "POST",

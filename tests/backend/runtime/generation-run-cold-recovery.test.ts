@@ -25,7 +25,7 @@ vi.mock("../../../backend/src/config/env.js", () => {
     nodeEnv: "test",
     databaseUrl: "file:./test.db",
     promptAssetsDir: process.cwd().replace(/\\/g, "/") + "/prompts",
-    demoMode: false,
+
     generation: {
       mediaCredentialConfigured: true,
     },
@@ -59,7 +59,7 @@ import type { GenerationRunRecord } from "../../../backend/src/db/client.js";
 import { createPrismaClient } from "../../../backend/src/db/prisma-client.js";
 import { PrismaThirdAggregateWriter } from "../../../backend/src/db/repositories/prisma-third-aggregate-writer.js";
 import { applyAllDatabaseMigrations } from "../db/migration-test-utils.js";
-import { createProject } from "../../../backend/src/modules/projects/project.repository.js";
+import { createLegacyProject as createProject } from "../projects/legacy-project.fixture.js";
 import { seedQuotableCatalog, buildQuotableReadinessInput } from "../cost/quote-test-context.js";
 import { createGenerationRunRepository } from "../../../backend/src/modules/generation-run/generation-run.repository.js";
 import type { GenerationRunRepository } from "../../../backend/src/modules/generation-run/generation-run.repository.js";

@@ -21,6 +21,7 @@ vi.mock("../../../backend/src/modules/script/script-generation.service.js", () =
 }));
 
 import { buildApp } from "../../../backend/src/app.js";
+import { createLegacyProject } from "../projects/legacy-project.fixture.js";
 import { seedGenerationCatalog } from "../helpers/seed-generation-catalog.js";
 import { buildTestAuth } from "../auth/test-utils.js";
 
@@ -28,14 +29,8 @@ describe("script generate api runtime", () => {
   const auth = buildTestAuth({ userId: "owner-1" });
 
   async function prepareConfirmedTopic(app: ReturnType<typeof buildApp>) {
-    const projectResponse = await app.inject({ auth,
-      method: "POST",
-      url: "/api/projects",
-      payload: {
-        name: "Script Runtime API Flow",
-      },
-    });
-    const projectId = projectResponse.json().project_id as string;
+    const projectResponse = await createLegacyProject(app.db, { name: 'Script Runtime API Flow', ownerId: "owner-1", createdById: "owner-1" });
+const projectId = projectResponse.id;
 
     const recommendationResponse = await app.inject({ auth,
       method: "POST",

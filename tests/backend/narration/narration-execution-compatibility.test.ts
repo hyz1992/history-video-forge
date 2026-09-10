@@ -14,7 +14,7 @@ import { executeVoicePreview } from "../../../backend/src/modules/assets/voice/v
 import { checkProviderDispatchGate } from "../../../backend/src/modules/generation-cost/provider-dispatch-gate.js";
 import { createDashscopeTtsProvider } from "../../../backend/src/modules/assets/providers/dashscope/dashscope-tts-provider.js";
 import { listPublicGenerationCapabilities, upsertProjectGenerationConfiguration } from "../../../backend/src/modules/generation-config/generation-config.repository.js";
-import { createProject } from "../../../backend/src/modules/projects/project.repository.js";
+import { createLegacyProject as createProject } from "../projects/legacy-project.fixture.js";
 import { DEFAULT_GENERATION_CONFIGURATION, type AssetPlan, type VoiceProfile } from "../../../shared/src/index.js";
 const wsModel = "qwen-audio-3.0-tts-plus";
 const wsVoice = "qwen-audio-3.0-tts-plus-longyimuling";
@@ -201,7 +201,7 @@ describe("项目和目录入口", () => {
         registeredModels: [...db.providerModelCatalog.values()].map(e => ({
           capability: "tts.synthesize", providerKey: e.providerKey, modelId: e.modelId
         })), credentialConfigured: true, deploymentScope: "cn-beijing"
-      }, environment: { demoMode: false, testEnv: false }
+      }, environment: { testEnv: false }
     });
     expect(result.items[ws.id]).toMatchObject({ realDispatchAllowed: false, issues: expect.arrayContaining(["media_execution_protocol_incompatible"]) });
     expect(external).toHaveBeenCalledTimes(0);

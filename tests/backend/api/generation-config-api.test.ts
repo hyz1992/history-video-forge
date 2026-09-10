@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { buildApp } from "../../../backend/src/app.js";
+import { createLegacyProject } from "../projects/legacy-project.fixture.js";
 import { buildTestAuth } from "../auth/test-utils.js";
 import { DEFAULT_GENERATION_CONFIGURATION } from "../../../shared/src/index.js";
 import type { AuthenticatedAuthContext } from "../../../backend/src/auth/auth-context.js";
@@ -19,8 +20,9 @@ describe("generation-config API", () => {
     a: AuthenticatedAuthContext,
     name = "Test Project",
   ): Promise<string> {
-    const res = await app.inject({ method: "POST", url: "/api/projects", payload: { name }, auth: a });
-    return res.json().project_id as string;
+    // 口播前置定版后创建入口要求口播资格选择；本组验证生成配置，经 legacy 夹具直造
+    const project = await createLegacyProject(app.db, { name, ownerId: a.userId, createdById: a.userId });
+    return project.id;
   }
 
   describe("GET/PATCH /api/me/generation-preferences", () => {

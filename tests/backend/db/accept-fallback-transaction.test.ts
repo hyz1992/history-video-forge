@@ -9,7 +9,7 @@ import { createPrismaClient } from "../../../backend/src/db/prisma-client.js";
 import { PrismaThirdAggregateWriter } from "../../../backend/src/db/repositories/prisma-third-aggregate-writer.js";
 import { applyAllDatabaseMigrations } from "./migration-test-utils.js";
 import { createDbClient } from "../../../backend/src/db/client.js";
-import { createProject } from "../../../backend/src/modules/projects/project.repository.js";
+import { createLegacyProject as createProject } from "../projects/legacy-project.fixture.js";
 import { acceptSegmentFallback } from "../../../backend/src/modules/assets/assets-run.service.js";
 import type {
   AssetManifestRecord,

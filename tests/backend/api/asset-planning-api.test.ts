@@ -31,7 +31,7 @@ vi.mock("../../../backend/src/modules/asset-planning/asset-planning-structural-r
 
 import { buildApp } from "../../../backend/src/app.js";
 import { LegacyChunkResilienceError } from "../../../backend/src/modules/asset-planning/legacy-chunk-resilience.js";
-import { createProject } from "../../../backend/src/modules/projects/project.repository.js";
+import { createLegacyProject as createProject } from "../projects/legacy-project.fixture.js";
 import { getProjectSnapshot } from "../../../backend/src/modules/projects/project-snapshot.service.js";
 import { saveScriptRecord } from "../../../backend/src/modules/script/script-record.repository.js";
 import { saveStoryboardRecord } from "../../../backend/src/modules/storyboard/storyboard-record.repository.js";

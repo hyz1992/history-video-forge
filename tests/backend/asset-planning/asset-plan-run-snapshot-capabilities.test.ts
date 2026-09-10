@@ -16,7 +16,7 @@ const { generateAssetPlanMock } = vi.hoisted(() => ({
 vi.mock("../../../backend/src/config/env.js", () => {
   const env = {
     nodeEnv: "test",
-    demoMode: false,
+
     promptAssetsDir: process.cwd().replace(/\\/g, "/") + "/prompts",
     assetPlanningGenerationMode: "intent_compiler",
     llm: {
@@ -44,7 +44,7 @@ vi.mock(
 );
 
 import { createDbClient } from "../../../backend/src/db/client.js";
-import { createProject } from "../../../backend/src/modules/projects/project.repository.js";
+import { createLegacyProject as createProject } from "../projects/legacy-project.fixture.js";
 import { saveScriptRecord } from "../../../backend/src/modules/script/script-record.repository.js";
 import { saveStoryboardRecord } from "../../../backend/src/modules/storyboard/storyboard-record.repository.js";
 import { saveTopicPackage } from "../../../backend/src/modules/topic/topic-package.repository.js";
@@ -237,7 +237,7 @@ describe("asset-planning run-service 快照派生：planner 透传（S2-2C 复�
     await runAssetPlanningGeneration({
       db,
       project,
-      demoMode: false,
+
       billingContext: billingContext as never,
     });
     expect(generateAssetPlanMock).toHaveBeenCalledWith(
@@ -250,7 +250,7 @@ describe("asset-planning run-service 快照派生：planner 透传（S2-2C 复�
   it("无 billingContext（免 quote 本地路径）→ generateAssetPlan 收到 undefined", async () => {
     generateAssetPlanMock.mockImplementation(async () => ({ plan_version: "asset_plan_v1" }));
     const { db, project } = await prepareActiveStoryboard();
-    await runAssetPlanningGeneration({ db, project, demoMode: false });
+    await runAssetPlanningGeneration({ db, project });
     expect(generateAssetPlanMock).toHaveBeenCalledWith(
       expect.objectContaining({
         snapshotCapabilities: undefined,

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { createDbClient } from "../../../backend/src/db/client.js";
 import { createProvisionalEvent } from "../../../backend/src/modules/events/event-registry.repository.js";
-import { createProject } from "../../../backend/src/modules/projects/project.repository.js";
+import { createLegacyProject as createProject } from "../projects/legacy-project.fixture.js";
 import { confirmTopicCandidate } from "../../../backend/src/modules/topic/topic-confirm.service.js";
 import { assessTopicPackageScriptSufficiency } from "../../../backend/src/modules/topic/topic-package-script-sufficiency.js";
 import type { TopicPackage } from "../../../shared/src/index.js";

@@ -75,7 +75,7 @@ const CONFIGURED_MEDIA_INPUT = {
   deploymentScope: "cn-beijing" as const,
 };
 
-const NORMAL_ENVIRONMENT = { demoMode: false, testEnv: false };
+const NORMAL_ENVIRONMENT = { testEnv: false };
 
 async function createBootstrappedContext() {
   const databasePath = createMigratedDatabase();
@@ -138,12 +138,12 @@ describe("generation cost catalog bootstrap (prisma)", () => {
     expect(totalRows).toBe(12); // 5 占位 + 6旧seed + 1口播专用非默认WS
   });
 
-  it("persists readiness-materialized disables for demo environments", async () => {
+  it("persists readiness-materialized disables for test environments", async () => {
     const { client, db } = await createBootstrappedContext();
     const result = await bootstrapGenerationCostCatalog(db, {
       llm: RESOLVED_LLM_INPUT,
       media: CONFIGURED_MEDIA_INPUT,
-      environment: { demoMode: true, testEnv: false },
+      environment: { testEnv: true },
     });
     expect(result.readiness.ok).toBe(false);
     expect(result.disabledProviderModelIds).toEqual([

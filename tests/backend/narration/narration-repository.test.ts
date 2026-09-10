@@ -6,7 +6,7 @@ import Database from "better-sqlite3";
 import { describe, expect, it, vi } from "vitest";
 import { applyAllDatabaseMigrations } from "../db/migration-test-utils.js";
 import { createDbClient } from "../../../backend/src/db/client.js";
-import { createProject } from "../../../backend/src/modules/projects/project.repository.js";
+import { createLegacyProject as createProject } from "../projects/legacy-project.fixture.js";
 import { getProjectSnapshot } from "../../../backend/src/modules/projects/project-snapshot.service.js";
 
 describe("narration persistence", () => {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { buildApp } from "../../../backend/src/app";
+import { createLegacyProject } from "../projects/legacy-project.fixture.js";
 import { createAuthenticatedAuthContext } from "../../../backend/src/auth/auth-context";
 
 describe("project delete permission (guardOwnedRoute)", () => {
@@ -10,13 +11,8 @@ describe("project delete permission (guardOwnedRoute)", () => {
       userId: "user-a", username: "a", displayName: "A", role: "USER", sessionId: "s-a",
     });
 
-    const created = await app.inject({
-      method: "POST",
-      url: "/api/projects",
-      payload: { name: "A项目" },
-      auth: userA,
-    });
-    const projectId = created.json().project_id as string;
+    const created = await createLegacyProject(app.db, { name: 'A项目', ownerId: userA.userId, createdById: userA.userId });
+const projectId = created.id;
 
     const deleted = await app.inject({
       method: "DELETE",
@@ -38,13 +34,8 @@ describe("project delete permission (guardOwnedRoute)", () => {
       userId: "user-b", username: "b", displayName: "B", role: "USER", sessionId: "s-b",
     });
 
-    const created = await app.inject({
-      method: "POST",
-      url: "/api/projects",
-      payload: { name: "A项目" },
-      auth: userA,
-    });
-    const projectId = created.json().project_id as string;
+    const created = await createLegacyProject(app.db, { name: 'A项目', ownerId: userA.userId, createdById: userA.userId });
+const projectId = created.id;
 
     const deleted = await app.inject({
       method: "DELETE",
@@ -67,13 +58,8 @@ describe("project delete permission (guardOwnedRoute)", () => {
       userId: "admin-x", username: "admin", displayName: "Admin", role: "ADMIN", sessionId: "s-admin",
     });
 
-    const created = await app.inject({
-      method: "POST",
-      url: "/api/projects",
-      payload: { name: "A项目" },
-      auth: userA,
-    });
-    const projectId = created.json().project_id as string;
+    const created = await createLegacyProject(app.db, { name: 'A项目', ownerId: userA.userId, createdById: userA.userId });
+const projectId = created.id;
 
     const deleted = await app.inject({
       method: "DELETE",

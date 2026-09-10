@@ -14,7 +14,7 @@ const { factoryOptionsMock } = vi.hoisted(() => ({ factoryOptionsMock: vi.fn() }
 vi.mock("../../../backend/src/config/env.js", () => {
   const env = {
     nodeEnv: "test",
-    demoMode: false,
+
     promptAssetsDir: process.cwd().replace(/\\/g, "/") + "/prompts",
     llm: {
       provider: "openai",
@@ -47,7 +47,7 @@ vi.mock("../../../backend/src/runtime/llm/tier-aware-provider-factory.js", () =>
 }));
 
 import { createDbClient } from "../../../backend/src/db/client.js";
-import { createProject } from "../../../backend/src/modules/projects/project.repository.js";
+import { createLegacyProject as createProject } from "../projects/legacy-project.fixture.js";
 import { runTopicRecommendationWithStore } from "../../../backend/src/modules/topic/topic-recommendation-flow.service.js";
 import type { ResolvedCapabilityMap } from "../../../shared/src/index.js";
 

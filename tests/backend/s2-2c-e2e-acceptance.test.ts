@@ -80,7 +80,7 @@ beforeAll(async () => {
 
   const appModule = await import("../../backend/src/app.js");
   buildApp = appModule.buildApp;
-  createProject = (await import("../../backend/src/modules/projects/project.repository.js")).createProject;
+  createProject = (await import("./projects/legacy-project.fixture.js")).createLegacyProject;
   saveTopicPackage = (await import("../../backend/src/modules/topic/topic-package.repository.js")).saveTopicPackage;
   buildPricingCatalogSeed = (await import("../../backend/src/modules/generation-cost/pricing-catalog.seed.js")).buildPricingCatalogSeed;
   applyProviderModelCatalogSeed = (await import("../../backend/src/modules/generation-cost/provider-model-catalog.repository.js")).applyProviderModelCatalogSeed;

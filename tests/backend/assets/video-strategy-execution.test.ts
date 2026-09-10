@@ -6,7 +6,7 @@ import { createAssetProviderRegistry } from "../../../backend/src/modules/assets
 import { acceptSegmentFallback } from "../../../backend/src/modules/assets/assets-run.service.js";
 import { validateAssetsManifest } from "../../../backend/src/modules/assets/assets-local-validator.js";
 import { saveAssetManifestRecord } from "../../../backend/src/modules/assets/asset-manifest-record.repository.js";
-import { createProject } from "../../../backend/src/modules/projects/project.repository.js";
+import { createLegacyProject as createProject } from "../projects/legacy-project.fixture.js";
 import type { AssetProviderAdapter } from "../../../backend/src/modules/assets/assets-provider-adapter.js";
 import type {
   AssetManifest,

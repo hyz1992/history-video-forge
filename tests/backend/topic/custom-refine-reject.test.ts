@@ -11,7 +11,7 @@ import { describe, expect, it, vi } from "vitest";
 import { buildApp } from "../../../backend/src/app.js";
 import { createPrismaClient } from "../../../backend/src/db/prisma-client.js";
 import { createAuthenticatedAuthContext } from "../../../backend/src/auth/auth-context.js";
-import { createProject } from "../../../backend/src/modules/projects/project.repository.js";
+import { createLegacyProject as createProject } from "../projects/legacy-project.fixture.js";
 import { LlmOutputError } from "../../../backend/src/runtime/llm/llm-output-error.js";
 import { applyAllDatabaseMigrations } from "../db/migration-test-utils.js";
 
@@ -34,14 +34,6 @@ async function setupAuthApp() {
   });
   const app = buildApp({ storageBaseDir: root, prismaClient: client, skipSnapshotLoad: true });
   const project = await createProject(app.db, { name: "RejTest", ownerId: user.id, createdById: user.id });
-  await client.project.create({
-    data: {
-      id: project.id, ownerId: user.id, createdById: user.id,
-      name: "RejTest", status: "topic_pending",
-      storageKey: project.id, storageDisplayName: "RejTest",
-    },
-  });
-
   const auth = createAuthenticatedAuthContext({
     userId: user.id, username: user.username, displayName: user.displayName,
     role: "ADMIN", sessionId: "s",

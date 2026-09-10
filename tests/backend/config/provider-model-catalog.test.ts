@@ -48,7 +48,7 @@ const REAL_TIER_INPUT = {
     credentialConfigured: true,
     deploymentScope: "cn-beijing" as const,
   },
-  environment: { demoMode: false, testEnv: false },
+  environment: { testEnv: false },
 };
 
 const STUB_TIER_INPUT = {
@@ -403,23 +403,15 @@ describe("generation capability readiness", () => {
     }
   });
 
-  it("forces video catalog entries non-dispatchable in demo, test and unconfigured environments", () => {
+  it("forces video catalog entries non-dispatchable in test and unconfigured environments", () => {
     const seed = buildPricingCatalogSeed(REAL_TIER_INPUT);
 
-    const demoResult = evaluateGenerationCapabilityReadiness(
-      readinessInput({
-        catalog: seed,
-        environment: { demoMode: true, testEnv: false },
-      }),
-    );
     const videoEntry = seed.find((e) => e.capability === "video.image_to_video")!;
-    expect(demoResult.items[videoEntry.id]?.realDispatchAllowed).toBe(false);
-    expect(demoResult.items[videoEntry.id]?.issues).toContain("real_video_dispatch_disabled");
 
     const testResult = evaluateGenerationCapabilityReadiness(
       readinessInput({
         catalog: seed,
-        environment: { demoMode: false, testEnv: true },
+        environment: { testEnv: true },
       }),
     );
     expect(testResult.items[videoEntry.id]?.realDispatchAllowed).toBe(false);
@@ -603,10 +595,10 @@ describe("generation cost bootstrap", () => {
 
   it("materializes non-quotable entries as disabled catalog rows so the public catalog hides them", async () => {
     const db = createDbClient();
-    // demo 环境强制视频不可真实派发 → 视频目录行物化为 disabled，公开目录不再展示。
+    // test 环境强制视频不可真实派发 → 视频目录行物化为 disabled，公开目录不再展示。
     const result = await bootstrapGenerationCostCatalog(db, {
       ...REAL_TIER_INPUT,
-      environment: { demoMode: true, testEnv: false },
+      environment: { testEnv: true },
     });
     expect(result.readiness.ok).toBe(false);
     const videoEntry = listProviderModelCatalog(db).find(
@@ -662,13 +654,13 @@ describe("generation cost bootstrap", () => {
     expect(listProviderModelCatalog(db).length).toBe(7);
   });
 
-  it("restores active catalog rows when the environment recovers (demo then non-demo restart)", async () => {
-    // 物化 disabled 是环境态：demo 启动禁视频 → 恢复正常环境重启后，
+  it("restores active catalog rows when the environment recovers (test then production restart)", async () => {
+    // 物化 disabled 是环境态：test 启动禁视频 → 恢复正常环境重启后，
     // seed 重新以 active upsert，视频目录项自动恢复。
     const db = createDbClient();
     await bootstrapGenerationCostCatalog(db, {
       ...REAL_TIER_INPUT,
-      environment: { demoMode: true, testEnv: false },
+      environment: { testEnv: true },
     });
     const demoVideoIds = listProviderModelCatalog(db)
       .filter((e) => e.capability === "video.image_to_video")
@@ -705,7 +697,7 @@ describe("resolve generation cost bootstrap input", () => {
       readDashscopeMediaConfig: () => {
         throw new Error("must not be called without credentials");
       },
-      demoMode: false,
+
       testEnv: false,
     });
     expect(input.llm).toEqual({ mode: "stub" });
@@ -728,7 +720,7 @@ describe("resolve generation cost bootstrap input", () => {
           ttsModel: "qwen3-tts-instruct-flash",
           baseUrl: "https://dashscope.aliyuncs.com",
         }) as never,
-      demoMode: false,
+
       testEnv: false,
     });
     expect(input.llm).toEqual({
@@ -761,7 +753,7 @@ describe("resolve generation cost bootstrap input", () => {
           ttsModel: "qwen3-tts-instruct-flash",
           baseUrl,
         }) as never,
-      demoMode: false,
+
       testEnv: false,
     });
 
@@ -791,12 +783,12 @@ describe("resolve generation cost bootstrap input", () => {
       readDashscopeMediaConfig: () => {
         throw new Error("must not be called without credentials");
       },
-      demoMode: false,
+
       testEnv: true,
     });
     expect(input.llm).toEqual({ mode: "resolution_failed" });
     expect(input.media.registeredModels).toEqual([]);
-    expect(input.environment).toEqual({ demoMode: false, testEnv: true });
+    expect(input.environment).toEqual({ testEnv: true });
   });
 });
 

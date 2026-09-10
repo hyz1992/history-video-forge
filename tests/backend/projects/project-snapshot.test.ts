@@ -5,7 +5,7 @@ import type {
   AssetPlanningValidationResult,
 } from "../../../shared/src/index.js";
 import { createDbClient } from "../../../backend/src/db/client.js";
-import { createProject } from "../../../backend/src/modules/projects/project.repository.js";
+import { createLegacyProject as createProject } from "./legacy-project.fixture.js";
 import { getProjectSnapshot } from "../../../backend/src/modules/projects/project-snapshot.service.js";
 import { saveAssetPlanRecord } from "../../../backend/src/modules/asset-planning/asset-plan-record.repository.js";
 import {

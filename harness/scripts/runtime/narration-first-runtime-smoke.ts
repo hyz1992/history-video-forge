@@ -4,7 +4,7 @@ import { join, resolve } from "node:path";
 import { buildApp } from "../../../backend/src/app";
 import { buildPricingCatalogSeed } from "../../../backend/src/modules/generation-cost/pricing-catalog.seed.js";
 import { seedGlobalVoiceProfiles } from "../../../backend/src/modules/assets/voice/voice-profile.repository.js";
-import { createProject as createLegacyProject } from "../../../backend/src/modules/projects/project.repository.js";
+import { createLegacyProject } from "../../../tests/backend/projects/legacy-project.fixture.js";
 import { saveScriptRecord } from "../../../backend/src/modules/script/script-record.repository.js";
 import { saveAssetPlanRecord } from "../../../backend/src/modules/asset-planning/asset-plan-record.repository.js";
 import { narrationTextHash } from "../../../backend/src/modules/narration/narration-readiness.js";
@@ -182,7 +182,7 @@ export async function runNarrationFirstRuntimeSmoke(input: { outputDir?: string 
   const storageBaseDir = join(outputDir, "storage");
   mkdirSync(storageBaseDir, { recursive: true });
   const calls = { count: 0 };
-  const app = buildApp({ skipSnapshotLoad: true, storageBaseDir, narrationFirstEnabled: true, narrationProvider: syntheticProvider(calls) });
+  const app = buildApp({ skipSnapshotLoad: true, storageBaseDir, narrationProvider: syntheticProvider(calls) });
   for (const model of buildPricingCatalogSeed({ llm: { mode: "stub" }, media: { deploymentScope: "cn-beijing" } })) {
     app.db.providerModelCatalog.set(model.id, model);
   }

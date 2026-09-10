@@ -9,7 +9,7 @@ import {
   TopicPackage,
 } from "../../../shared/src/index.js";
 import { createDbClient } from "../../../backend/src/db/client.js";
-import { createProject } from "../../../backend/src/modules/projects/project.repository.js";
+import { createLegacyProject as createProject } from "../projects/legacy-project.fixture.js";
 import { generateScriptDraft } from "../../../backend/src/modules/script/script-generation.service.js";
 import { validateScriptDraft } from "../../../backend/src/modules/script/script-local-validator.js";
 import { runScriptGeneration } from "../../../backend/src/modules/script/script-run.service.js";

@@ -20,7 +20,7 @@ vi.mock("../../backend/src/config/env.js", () => {
     nodeEnv: "test",
     databaseUrl: "file:./test.db",
     promptAssetsDir: process.cwd().replace(/\\/g, "/") + "/prompts",
-    demoMode: false,
+
     generation: {
       mediaCredentialConfigured: true,
     },
@@ -46,7 +46,7 @@ vi.mock("../../backend/src/runtime/llm/tier-aware-provider-factory.js", () => ({
 }));
 
 import { buildApp } from "../../backend/src/app.js";
-import { createProject } from "../../backend/src/modules/projects/project.repository.js";
+import { createLegacyProject as createProject } from "./projects/legacy-project.fixture.js";
 import { buildTestAuth } from "./auth/test-utils.js";
 import { seedQuotableCatalog, buildQuotableReadinessInput } from "./cost/quote-test-context.js";
 import type { ProjectRecord } from "../../backend/src/db/client.js";

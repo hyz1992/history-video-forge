@@ -36,7 +36,7 @@ const { factoryOptionsMock, hoistedDraft } = vi.hoisted(() => ({
 vi.mock("../../../backend/src/config/env.js", () => {
   const env = {
     nodeEnv: "test",
-    demoMode: false,
+
     promptAssetsDir: process.cwd().replace(/\\/g, "/") + "/prompts",
     llm: {
       provider: "openai",
@@ -73,7 +73,7 @@ import {
 import { createSemanticReviewerGateway } from "../../../backend/src/modules/script/script-semantic-review.service.js";
 import { runScriptGeneration } from "../../../backend/src/modules/script/script-run.service.js";
 import { createDbClient } from "../../../backend/src/db/client.js";
-import { createProject } from "../../../backend/src/modules/projects/project.repository.js";
+import { createLegacyProject as createProject } from "../projects/legacy-project.fixture.js";
 import {
   ScriptDraftPackage,
   type ResolvedCapabilityMap,

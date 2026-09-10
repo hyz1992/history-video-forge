@@ -7,7 +7,7 @@ vi.mock("../../../backend/src/modules/storyboard/storyboard-generation.service.j
 }));
 
 import { createDbClient } from "../../../backend/src/db/client.js";
-import { createProject } from "../../../backend/src/modules/projects/project.repository.js";
+import { createLegacyProject as createProject } from "../projects/legacy-project.fixture.js";
 import { saveScriptRecord } from "../../../backend/src/modules/script/script-record.repository.js";
 import { saveTopicPackage } from "../../../backend/src/modules/topic/topic-package.repository.js";
 import { runStoryboardGeneration } from "../../../backend/src/modules/storyboard/storyboard-run.service.js";
