@@ -155,6 +155,17 @@ describe("NarrationGenerateDialog", () => {
     w.unmount();
   });
 
+  it("失败后重新生成按钮可点击", async () => {
+    const store = makeStore({ status: "failed" });
+    const w = mount(NarrationGenerateDialog, { props: { store, visible: true, estimatedDurationSec: 4 } });
+    const gen = q("[data-testid=narration-generate]") as HTMLButtonElement;
+    expect(gen.disabled).toBe(false);
+    gen.click();
+    await flushPromises();
+    expect(store.generate).toHaveBeenCalled();
+    w.unmount();
+  });
+
   it("生成中展示进度与取消入口", () => {
     const store = makeStore({ status: "generating" });
     const w = mount(NarrationGenerateDialog, { props: { store, visible: true, estimatedDurationSec: 4 } });

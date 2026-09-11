@@ -198,10 +198,10 @@ onBeforeUnmount(() => {
             v-if="status !== 'generating' && !sourceGenerating"
             class="primary"
             data-testid="narration-generate"
-            :disabled="busy || !!d"
+            :disabled="busy"
             @click="handleGenerate"
           >
-            {{ d ? "重新生成口播" : "生成整篇口播" }}
+            {{ d?.files?.audio ? "重新生成口播" : "生成整篇口播" }}
           </button>
           <button
             v-else
