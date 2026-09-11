@@ -30,8 +30,11 @@ async function makeTempRoot() {
 }
 
 describe("global voice profile repository", () => {
-  it("seeds four shared presets plus one system voice", async () => {
+  it("seeds four shared presets plus two system voices（含口播前置 WS 音色）", async () => {
     const db = createDbClient();
+    // 隔离空根目录：避免读到开发机真实 storage 的 JSON 音色库，保证确定性
+    // （此前依赖 cwd 真实库，含历史导入音色时该用例结果随环境漂移）。
+    configureVoiceProfilePersistence(db, { rootDir: await makeTempRoot() });
 
     await seedGlobalVoiceProfiles(db);
     await seedGlobalVoiceProfiles(db);
@@ -43,6 +46,7 @@ describe("global voice profile repository", () => {
       "voice_preset_crisp_storyteller",
       "voice_preset_eerie_suspense",
       "voice_system_ethan",
+      "voice_narration_qwen_longyimuling",
     ]);
   });
 

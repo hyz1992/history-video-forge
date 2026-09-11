@@ -240,6 +240,15 @@ async function seedPrismaProfiles(db: DbClient): Promise<void> {
   for (const profile of document.profiles) {
     if (knownIds.has(profile.voice_profile_id)) continue;
     const imported = normalizeLoadedProfile(profile);
+    // 私有档案的 owner 必须真实存在（FK 约束）：孤儿归属的档案跳过并告警，
+    // 不伪造归属也不冒充公共（含测试夹具残留 browser-* 等历史污染数据）。
+    if (imported.owner_id) {
+      const ownerExists = await prisma.user.findUnique({ where: { id: imported.owner_id } });
+      if (!ownerExists) {
+        console.warn(`[voice-seed] skip private voice ${imported.voice_profile_id}: owner ${imported.owner_id} 不存在`);
+        continue;
+      }
+    }
     // 导入同样用 create-only upsert：并发安全且不覆盖已存在行的运行态
     await prisma.voiceProfile.upsert({
       where: { id: imported.voice_profile_id },
