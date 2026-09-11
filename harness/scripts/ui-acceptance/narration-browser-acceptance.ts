@@ -17,7 +17,7 @@ import "./narration-browser-acceptance.setup.js";
 import { chromium, type Browser, type Page } from "@playwright/test";
 import { spawn, type ChildProcess } from "node:child_process";
 import { createServer } from "node:http";
-import { mkdtempSync, mkdirSync, rmSync, copyFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, rmSync, copyFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import Database from "better-sqlite3";
@@ -160,7 +160,12 @@ async function startAcceptanceApp(): Promise<Setup> {
   // 预置隔离音色库（含 WS 口播音色档案 voice_narration_qwen_longyimuling），否则资格过滤会拒绝重试。
   const libDir = join(root, "project-storage", "storage", "voice-profiles");
   mkdirSync(libDir, { recursive: true });
-  copyFileSync(join(process.cwd(), "storage", "voice-profiles", "voice-profiles.json"), join(libDir, "voice-profiles.json"));
+  // dev 库启动 seed 后原 JSON 会被归档为 .imported（DB 成权威）；两者都缺失则
+  // 跳过复制（隔离库由 seedGlobalVoiceProfiles 预置共享音色）。
+  const srcJson = join(process.cwd(), "storage", "voice-profiles", "voice-profiles.json");
+  const srcImported = join(process.cwd(), "storage", "voice-profiles", "voice-profiles.json.imported");
+  if (existsSync(srcJson)) copyFileSync(srcJson, join(libDir, "voice-profiles.json"));
+  else if (existsSync(srcImported)) copyFileSync(srcImported, join(libDir, "voice-profiles.json"));
 
   await bootstrapAdmin(client, {
     username: "n11-admin",
@@ -303,7 +308,13 @@ async function main(): Promise<void> {
   let browser: Browser | null = null;
   try {
     setup = await startAcceptanceApp();
-    browser = await chromium.launch();
+    // headless shell 二进制缺失时回退到已安装的完整 chromium（同版本可执行文件）。
+    const shellCandidate = join(process.env.LOCALAPPDATA ?? "", "ms-playwright", "chromium_headless_shell-1208", "chrome-headless-shell-win64", "chrome-headless-shell.exe");
+    const chromiumCandidate = join(process.env.LOCALAPPDATA ?? "", "ms-playwright", "chromium-1208", "chrome-win64", "chrome.exe");
+    const launchOptions = !existsSync(shellCandidate) && existsSync(chromiumCandidate)
+      ? { executablePath: chromiumCandidate }
+      : {};
+    browser = await chromium.launch(launchOptions);
     const page = await browser.newPage();
     // 任务12-B 调试：打印创建请求的真实响应体（422 原因定位）
     page.on("response", async (response) => {
@@ -368,36 +379,46 @@ async function main(): Promise<void> {
     await page.locator("[data-testid=confirm-candidate]").click();
     await page.waitForTimeout(2000);
     await page.goto(`${base}projects/${projectIdFromUrl}/script`, { waitUntil: "domcontentloaded" });
-    await page.waitForSelector("[data-testid=narration-panel]", { timeout: 20000 }).catch(async (error) => {
+    await page.waitForSelector("[data-testid=narration-entry]", { timeout: 20000 }).catch(async (error) => {
       const snap = await page.request.get(`${base}api/projects/${projectIdFromUrl}`);
       const snapBody = await snap.json();
       console.error("DEBUG snapshot mode/status/active_script:", snapBody.narration_timing_mode, snapBody.current_status, JSON.stringify(snapBody.active_script)?.slice(0, 120));
       throw error;
     });
-    await page.locator("[data-testid=narration-panel]").getByText("确认正文").click();
-    await page.waitForTimeout(800);
+    // 确认文案按钮分流：口播未生成时点击应弹引导提示而非跳转。
+    await page.locator(".script-confirm-btn").click({ timeout: 10000 });
+    const guideVisible = await page.locator(".el-message-box:has-text('去生成口播')").waitFor({ state: "visible", timeout: 8000 }).then(() => true).catch(() => false);
+    record("narration: 未生成口播时点确认文案弹引导提示", guideVisible);
+    await page.locator(".el-message-box").getByRole("button", { name: "去生成口播" }).click();
+    // 引导跳转到二级生成弹窗；弹窗内直接生成（自动确认正文）。
+    await page.waitForSelector("[data-testid=narration-dialog]", { timeout: 10000 });
     await page.locator("[data-testid=narration-generate]").click({ timeout: 15000 });
-    await page.waitForSelector("audio", { timeout: 30000 }).catch(async (error) => {
-      const statusText = await page.locator("[data-testid=narration-status]").innerText().catch(() => "(no status)");
-      debugAt(`audio missing after generate; narration-status="${statusText}"`);
+    await page.waitForSelector("[data-testid=narration-dialog-audio]", { timeout: 30000 }).catch(async (error) => {
+      const statusText = await page.locator("[data-testid=narration-dialog-status]").innerText().catch(() => "(no status)");
+      debugAt(`audio missing after generate; dialog-status="${statusText}"`);
       const snap = await page.request.get(`${base}api/projects/${projectIdFromUrl}/script/narration/context`);
       debugAt(`narration context: ${(await snap.text()).slice(0, 600)}`);
       throw error;
     });
-    record("narration: 口播生成成功（音频出现）", true);
+    record("narration: 口播生成成功（弹窗内音频出现）", true);
     const accept = page.locator('[data-testid="accept-duration"]');
     if (await accept.count()) await accept.check();
+    // 先注册再点击：waitForResponse 必须监听在动作之前。
+    const narrationConfirmRespPromise = page.waitForResponse((response) => response.url().includes("/narrations/") && response.url().endsWith("/confirm"), { timeout: 15000 }).catch(() => null);
     await page.locator('[data-testid="narration-confirm"]').click();
-    const narrationConfirmResp = await page.waitForResponse((response) => response.url().includes("/narrations/") && response.url().endsWith("/confirm"), { timeout: 15000 }).catch(() => null);
+    const narrationConfirmResp = await narrationConfirmRespPromise;
     await page.waitForTimeout(800);
-    const narrationStatusAfter = await page.locator("[data-testid=narration-status]").innerText().catch(() => "");
-    // 确认成功且下游就绪时前端会自动跳分镜页，此时 narration-status 已卸载，
-    // 以「确认 API 2xx + 状态标签已确认 或 已跳分镜」为确认完成的判据。
+    // 确认成功后弹窗关闭，入口行状态应变为已确认。
+    const entryStatusAfter = await page.locator("[data-testid=narration-entry-status]").innerText().catch(() => "");
     record(
-      "narration: 口播确认完成",
-      narrationConfirmResp !== null && narrationConfirmResp.ok() && (narrationStatusAfter.includes("口播已确认") || page.url().includes("/storyboard")),
-      `api=${narrationConfirmResp?.status() ?? "no-response"} status="${narrationStatusAfter.slice(0, 20)}" url=${page.url().slice(-40)}`,
+      "narration: 口播确认完成（弹窗关闭，入口行已确认）",
+      narrationConfirmResp !== null && narrationConfirmResp.ok() && entryStatusAfter.includes("已确认"),
+      `api=${narrationConfirmResp?.status() ?? "no-response"} entry="${entryStatusAfter.slice(0, 20)}"`,
     );
+    // 就绪后再点确认文案按钮：正常进入分镜规划。
+    await page.locator(".script-confirm-btn").click({ timeout: 10000 });
+    await page.waitForURL(/\/storyboard/, { timeout: 15000 });
+    record("narration: 口播确认后确认文案按钮正常进入分镜", true);
 
     // 3) 事件库入口：422→选择面板在详情抽屉之上可操作（层叠）→取消零创建→
     //    再次生成→确认→带 selection 重试创建成功（与系统/自定义入口同链）。
@@ -495,8 +516,8 @@ async function main(): Promise<void> {
     legacyProject.activeNarrationSubtitleRevisionId = null;
     await setup.client.project.upsert({
       where: { id: legacyProject.id },
-      create: { id: legacyProject.id, ownerId: legacyProject.ownerId, createdById: legacyProject.createdById, name: legacyProject.name, status: legacyProject.status, storageKey: legacyProject.id, storageDisplayName: legacyProject.storageDisplayName || legacyProject.name },
-      update: { name: legacyProject.name, status: legacyProject.status },
+      create: { id: legacyProject.id, ownerId: legacyProject.ownerId, createdById: legacyProject.createdById, name: legacyProject.name, status: legacyProject.status, storageKey: legacyProject.id, storageDisplayName: legacyProject.storageDisplayName || legacyProject.name, narrationTimingMode: "legacy_estimated" },
+      update: { name: legacyProject.name, status: legacyProject.status, narrationTimingMode: "legacy_estimated" },
     });
     await page.goto(`${base}projects/${legacyProject.id}/storyboard`);
     await page.waitForTimeout(1500);
