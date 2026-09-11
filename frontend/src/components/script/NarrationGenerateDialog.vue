@@ -42,7 +42,8 @@ const optionIndex = ref(0);
 const tone = ref("neutral");
 const rate = ref(1);
 const accepted = ref(false);
-const busy = computed(() => s.value.busy || s.value.loading);
+// 轮询刷新会短暂翻转 loading；按钮状态只绑定动作在途，避免每 2 秒闪烁。
+const busy = computed(() => s.value.busy);
 
 const selected = computed(() => c.value?.options[optionIndex.value]);
 const band = computed(() => c.value?.target_duration_band);
@@ -208,9 +209,9 @@ onBeforeUnmount(() => {
             data-testid="narration-generating"
             disabled
           >
-            生成中，约 1-2 分钟…
+            生成中…
           </button>
-          <button v-if="status === 'generating'" data-testid="narration-cancel" :disabled="busy" @click="props.store.cancel()">取消生成</button>
+          <button v-if="status === 'generating'" class="secondary" data-testid="narration-cancel" :disabled="busy" @click="props.store.cancel()">取消生成</button>
         </div>
 
         <!-- 试听与确认 -->
@@ -361,6 +362,18 @@ button.primary {
   cursor: pointer;
 }
 button.primary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+button.secondary {
+  padding: 9px 16px;
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  background: var(--bg-panel);
+  color: inherit;
+  cursor: pointer;
+}
+button.secondary:disabled {
   opacity: 0.45;
   cursor: not-allowed;
 }

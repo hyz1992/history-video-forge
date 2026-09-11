@@ -71,7 +71,7 @@ onBeforeUnmount(() => {
     <button
       class="entry-open"
       data-testid="narration-entry-open"
-      :disabled="s.busy || s.loading"
+      :disabled="s.busy"
       @click="emit('open')"
     >
       {{ openLabel }}
