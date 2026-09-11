@@ -47,8 +47,17 @@ describe('独立DashScope口播provider',()=>{
     expect(new Set(socket.sent.map(m=>m.header.task_id))).toEqual(new Set(['task-1']));
     expect(error).toBeInstanceOf(Error); expect(error.message).toBe('narration_socket_closed');
   });
-  it.each(['甲'.repeat(20001),'甲'.repeat(535),'甲'.repeat(1500),''])('输入超限/无自然段长文在联网前拒绝',async text=>{
+  it.each(['甲'.repeat(20001),''])('输入超限/空正文在联网前拒绝',async text=>{
     const {provider,socketFactory}=setup();await expect(provider.generate({sourceText:text,settings})).rejects.toThrow(/narration_(text|paragraph)/);expect(socketFactory).not.toHaveBeenCalled();
+  });
+  it('单段超534（官方单条上限20000内）不再被伪限制拒绝，按单条continue-task发送',async()=>{
+    const {socket,client}=setup();const text='甲'.repeat(1500);
+    const pending=client.synthesize({sourceText:text,settings});const outcome=pending.catch(error=>error);
+    socket.emit('open');socket.json('task-started');
+    socket.emit('close'); const error=await outcome;
+    const messages=socket.sent.filter(m=>m.header.action==='continue-task');
+    expect(messages.map(m=>m.payload.input.text).join('')).toBe(text);expect(messages).toHaveLength(1);
+    expect(error).toBeInstanceOf(Error); expect(error.message).toBe('narration_socket_closed');
   });
   it.each([null,{}, {sourceText:'甲乙',settings:{...settings,tone:'sad'}},{sourceText:'甲乙',settings:{...settings,model:'cosyvoice-v3-flash'}}])('外部未知请求和未验证参数联网前拒绝',async input=>{
     const {provider,socketFactory}=setup();await expect(provider.generate(input)).rejects.toThrow('narration_request_invalid');expect(socketFactory).not.toHaveBeenCalled();

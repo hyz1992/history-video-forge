@@ -30,8 +30,9 @@ export function parseNarrationSpeechRequest(value: unknown): NarrationSpeechRequ
 export function splitNarrationParagraphs(text: string): string[] {
   if (!text.length || !text.trim()) return reject('narration_text_empty');
   if (text.length > 20000) return reject('narration_text_too_long');
+  // 单条 continue-task 上限按官方协议为 20000 字符（累计 200000），总长检查已覆盖。
+  // 早前"单自然段 ≤534"为资格期实测样本的保守自限，无协议依据，已移除（2026-09-11）。
   const parts = text.match(/[^\n]*\n|[^\n]+$/g)!;
-  if (parts.some(part => part.length > 534)) return reject('narration_paragraph_too_long');
   if (parts.join('') !== text) return reject('narration_text_invalid');
   return parts;
 }

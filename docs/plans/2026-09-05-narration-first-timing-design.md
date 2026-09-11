@@ -54,7 +54,7 @@
 
 WS 的单条 `continue-task` 最多20,000字符、同一任务累计最多200,000字符。应用继续对整篇正文采用UTF-16长度不超过20,000的保守校验；这不是供应商字符计数规则声明。超过应用上限在请求前报 `narration_text_too_long`，本轮不开放20万字符能力。
 
-2026-09-06 根据同稿诊断调整输入方式：同一个WS任务中按自然段顺序发送多条输入，所有片段拼接必须逐字等于原文；无换行的短稿172字和中稿534字仍各为一条，已测长稿1740字为18条。协议顺序为 `run-task → task-started → 顺序continue-task → 一次finish-task → 收齐音频/时间戳 → task-finished`。不另起多份TTS，不做交叉淡化，完整音频仍是一份；供应商内部可能按句处理，不承诺一次神经网络前向或绝对无衔接问题。[协议依据](https://help.aliyun.com/zh/model-studio/cosyvoice-client-events)
+2026-09-06 根据同稿诊断调整输入方式：同一个WS任务中按自然段顺序发送多条输入，所有片段拼接必须逐字等于原文；无换行的短稿172字和中稿534字各为一条，已测长稿1740字为18条。协议顺序为 `run-task → task-started → 顺序continue-task → 一次finish-task → 收齐音频/时间戳 → task-finished`。不另起多份TTS，不做交叉淡化，完整音频仍是一份；供应商内部可能按句处理，不承诺一次神经网络前向或绝对无衔接问题。[协议依据](https://help.aliyun.com/zh/model-studio/cosyvoice-client-events)
 
 该方式先经任务0机器工程资格门验证，再于任务3接入独立adapter。长段落超出已测单条体量时的应用约束和失败路径须在任务3明确验证，不能仅凭官方20,000字符限额声称任意长输入已经保证连续朗读。任务0记录不等于生产接线完成。见[自然段对照](../records/2026-09-06-narration-paragraph-comparison.md)和[自动验收](../records/2026-09-06-narration-audio-acceptance.md)。
 
