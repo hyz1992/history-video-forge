@@ -105,6 +105,30 @@ export class DashScopeNarrationProvider {
     return { ...parsed.data, pcm, wav, sampleCount, sampleRate: 24000 as const, channels: 1 as const, bitDepth: 16 as const,
       durationMs, audioHash, timingMap, settings: input.settings };
     } catch (error) {
+      // 有限脱敏诊断：原生时间校验失败时输出拼接差异摘要（不打印正文全文），
+      // 用于定位长段/特殊文本的供应商句子切分与合同的偏差。
+      if (localErrorCode === 'narration_timing_invalid') {
+        try {
+          const sentences = (captured as { sentences?: Array<{ originalText?: string; normalizedText?: string; words?: unknown[] }> })?.sentences ?? [];
+          const joined = sentences.map((x) => x.originalText ?? "").join("");
+          let firstDiff = -1;
+          for (let i = 0; i < Math.max(joined.length, input.sourceText.length); i += 1) {
+            if (joined[i] !== input.sourceText[i]) { firstDiff = i; break; }
+          }
+          console.warn("[narration-timing-diagnosis]", JSON.stringify({
+            sourceLen: input.sourceText.length,
+            sentenceCount: sentences.length,
+            joinedLen: joined.length,
+            firstDiff,
+            around: firstDiff >= 0 ? {
+              src: input.sourceText.slice(Math.max(0, firstDiff - 12), firstDiff + 12),
+              joined: joined.slice(Math.max(0, firstDiff - 12), firstDiff + 12),
+            } : null,
+            sentenceLens: sentences.map((x) => x.originalText?.length ?? 0),
+            wordCount: sentences.reduce((n, x) => n + (x.words?.length ?? 0), 0),
+          }));
+        } catch { /* 诊断失败不影响主流程 */ }
+      }
       throw new NarrationProviderError(error instanceof NarrationProviderError ? error.code : localErrorCode, receipt, remoteOutcome);
     }
   }
