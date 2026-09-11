@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, watch, ref } from "vue";
 import { useRouter } from "vue-router";
-import { ElMessage } from "element-plus";
+import { ElMessage, ElMessageBox } from "element-plus";
 
 import { useScriptStore } from "../../stores/script";
 import { useProjectStore } from "../../stores/project";
@@ -9,7 +9,8 @@ import { useWorkspaceStore, PIPELINE_STEPS } from "../../stores/workspace";
 import { useGenerationCostStore } from "../../stores/generation-cost";
 import { useStagePolling } from "../../composables/useStagePolling";
 import { resolvePipelineStagePhase } from "../../composables/usePipelineStagePhase";
-import NarrationPanel from './NarrationPanel.vue';
+import NarrationEntryCard from './NarrationEntryCard.vue';
+import NarrationGenerateDialog from './NarrationGenerateDialog.vue';
 import { createNarrationStore } from '../../stores/narration';
 import StageGenerating from "../workspace/StageGenerating.vue";
 import StageLoadingBar from "../workspace/StageLoadingBar.vue";
@@ -28,6 +29,7 @@ const router = useRouter();
 const projectStore = useProjectStore();
 const initialLoadDone = ref(false);
 const narrationStore = createNarrationStore({projectId:()=>projectStore.state.projectId});
+const narrationDialogVisible = ref(false);
 const narrationMode = computed(()=>scriptStore.state.snapshot?.narration_timing_mode==="narration_first_v1");
 watch([narrationMode,()=>projectStore.state.projectId,()=>scriptStore.state.snapshot?.active_script?.script_record_id,()=>scriptStore.state.snapshot?.active_script?.script_text],([enabled])=>{if(enabled)void narrationStore.refresh(true);},{immediate:true});
 
@@ -416,7 +418,24 @@ function handleSelectHistory(entryId: string) {
 }
 
 async function handleConfirm() {
-  if(narrationMode.value){await narrationStore.refresh();if(!narrationStore.canProceed())return;}
+  if(narrationMode.value){
+    await narrationStore.refresh();
+    if(!narrationStore.canProceed()){
+      // 口播未确认：不静默，给出引导并可直接跳到生成弹窗
+      const ready = narrationStore.state.snapshot?.script_confirmation;
+      try{
+        const choice = await ElMessageBox.confirm(
+          ready
+            ? "分镜规划需要先确认整篇口播，真实时长将驱动分镜切点。"
+            : "分镜规划需要先确认整篇口播（将先锁定文案再生成）。",
+          "先去生成口播",
+          { confirmButtonText: "去生成口播", cancelButtonText: "取消", type: "info" },
+        );
+        if(choice === "confirm") narrationDialogVisible.value = true;
+      }catch{ /* 用户取消，留在当前页 */ }
+      return;
+    }
+  }
   if (!canConfirmVisibleScript.value) {
     return;
   }
@@ -606,7 +625,7 @@ async function handleConfirm() {
           </div>
 
           <!-- Action buttons -->
-          <div v-if="visibleScript && !isViewingHistoryEntry && !narrationMode" class="script-actions-card">
+          <div v-if="visibleScript && !isViewingHistoryEntry" class="script-actions-card">
             <el-button
               type="primary"
               :disabled="scriptStore.state.isRunningAction || !canConfirmVisibleScript"
@@ -626,7 +645,14 @@ async function handleConfirm() {
           </div>
         </div>
       </div>
-      <NarrationPanel v-if="narrationMode && !isViewingHistoryEntry" :store="narrationStore" :estimated-duration-sec="scriptDurationSec" @proceed="handleConfirm" />
+      <template v-if="narrationMode && !isViewingHistoryEntry">
+        <NarrationEntryCard :store="narrationStore" @open="narrationDialogVisible = true" />
+        <NarrationGenerateDialog
+          v-model:visible="narrationDialogVisible"
+          :store="narrationStore"
+          :estimated-duration-sec="scriptDurationSec"
+        />
+      </template>
     </template>
 
     <RegenFeedbackModal

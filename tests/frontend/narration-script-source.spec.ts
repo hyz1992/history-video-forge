@@ -4,7 +4,7 @@ import {reactive} from 'vue';
 import {it,expect,vi,afterEach} from 'vitest';
 import ElementPlus from 'element-plus';
 import ScriptPanel from '../../frontend/src/components/script/ScriptPanel.vue';
-import NarrationPanel from '../../frontend/src/components/script/NarrationPanel.vue';
+import NarrationEntryCard from '../../frontend/src/components/script/NarrationEntryCard.vue';
 import {projectStoreKey} from '../../frontend/src/stores/project';
 import {scriptStoreKey} from '../../frontend/src/stores/script';
 import {workspaceStoreKey} from '../../frontend/src/stores/workspace';
@@ -17,5 +17,5 @@ for(const initial of [null,'old'])it('正文来源自动同步 '+initial,async()
  const router=createAppRouter();await router.push('/projects/p/script');
  const wrapper=mount(ScriptPanel,{global:{plugins:[router,ElementPlus],provide:{[projectStoreKey as symbol]:{state:reactive({projectId:'p',projects:[]}),loadProject:async()=>{}},[workspaceStoreKey as symbol]:{setCurrentStep:vi.fn()},[scriptStoreKey as symbol]:{state,loadActiveScriptSnapshot:async()=>{},generateInitialScript:async()=>{state.snapshot.active_script=draft('new');},runRegenOnce:async()=>{},selectHistoryEntry:()=>{}}}}});
  await flushPromises();if(initial){state.snapshot.active_script=draft('new');await flushPromises();}
- expect(wrapper.findComponent(NarrationPanel).props('store').state.context.source_script_record_id).toBe('new');wrapper.unmount();
+ expect(wrapper.findComponent(NarrationEntryCard).props('store').state.context.source_script_record_id).toBe('new');wrapper.unmount();
 });
