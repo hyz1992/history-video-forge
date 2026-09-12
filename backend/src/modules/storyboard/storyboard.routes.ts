@@ -131,7 +131,8 @@ async function updateSegmentStrategyController(
       is_default: entry.isDefault,
     })),
     // 口播前置项目绑定音色：缺清单会误报"音色不可用"，与费用/快照路径同源补齐。
-    voiceProfiles: await listVoiceProfiles(context.app.db, { ownerId: user.userId }),
+    // 可见性按项目 owner 过滤（与 generation-cost/快照一致；ADMIN 代管他人项目时同样用 owner 视角）。
+    voiceProfiles: await listVoiceProfiles(context.app.db, { ownerId: project.ownerId }),
     creativePresets: CREATIVE_PRESET_REGISTRY_SNAPSHOT_V1,
     operation: "assets.generate",
     segmentInputs: [{ segment_id: segment.segment_id, api_video_suitability: segment.api_video_suitability }],

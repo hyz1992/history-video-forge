@@ -1626,6 +1626,10 @@ describe("project snapshot service", () => {
     const configRecord = findProjectConfigRecord(db, project.id)!;
     (configRecord.configurationJson as { creative: { voice_profile_id: string | null } }).creative.voice_profile_id =
       "voice_narration_qwen_longyimuling";
+    // 钉死前置条件：若绑定未生效（如仓储改为返回副本），用例会空转通过
+    expect(
+      (findProjectConfigRecord(db, project.id)!.configurationJson as { creative: { voice_profile_id: string | null } }).creative.voice_profile_id,
+    ).toBe("voice_narration_qwen_longyimuling");
 
     const topicPackage = await saveTopicPackage(db, {
       projectId: project.id,
