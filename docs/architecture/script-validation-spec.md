@@ -114,7 +114,6 @@
 |---|---|---|
 | `bundle_missing_field` | `Script Input Bundle` 缺少必需字段 | hard lane 缺失 |
 | `draft_missing_field` | `Script Draft Package` 缺少必需字段 | `script_text` / `beat_trace` / `opening_span` 缺失 |
-| `duration_extreme` | 时长极端异常 | 偏离档位超过 `35%` |
 | `forbidden_expansion_hit` | 确定性命中禁写项 | 命中显式禁写表达 |
 | `draft_unreadable` | 草稿明显残缺或不可读 | 只剩一句摘要、非完整口播稿 |
 
@@ -124,7 +123,6 @@
 |---|---|---|
 | `script_empty_or_short` | 正文过短或明显残缺 | 空文本、极短残稿 |
 | `script_body_too_thin` | 正文体量或句子数低于当前时长档位结构下限 | `medium` 稿低于 `320` 汉字等价长度或少于 `8` 句 |
-| `duration_body_mismatch` | 估时明显高于正文体量可支撑的口播时长 | `script_char_count / estimated_duration_sec < 3.6` |
 | `beat_missing` | 缺关键 beat | 任一 `must_include_beat` 无 trace |
 | `beat_trace_weak` | beat 命中过弱 | `excerpt` 少于 `14` 个汉字等价长度 |
 | `beat_trace_excerpt_not_in_script` | trace 与正文脱节 | `excerpt` 无法在 `script_text` 中找到 |
@@ -132,13 +130,11 @@
 | `opening_missing` | 缺开头片段 | `opening_span` 为空 |
 | `ending_missing` | 缺结尾片段 | `ending_span` 为空 |
 | `placeholder_found` | 存在未清理占位符 | `TODO / 待补充 / placeholder / XXX` |
-| `duration_severe` | 时长严重异常 | 偏离档位在 `15% ~ 35%` |
 
 #### C. 仅 `warning`
 
 | 警告码 | 含义 | 典型触发 |
 |---|---|---|
-| `duration_mild_drift` | 时长轻微偏差 | 偏离档位不超过 `15%` |
 | `beat_trace_low_confidence` | trace 自报置信度低，但覆盖齐全 | `confidence` 偏低 |
 | `quote_trace_all_paraphrase` | 原文全部意译而非直引 | 无明显误用 |
 | `beat_trace_excerpt_drift:{beat}` | beat excerpt 严格 includes 失败，但语义上仍在 script 中 | LLM 对 excerpt 做字符级改写（标点、断句、修饰）；regen 不会改善，降级为 warning。详见 [LLM 输出文本对齐归一化容错设计](../plans/archive/2026-07-28-llm-output-text-normalization-design.md)。 |
@@ -147,29 +143,19 @@
 
 ### 4.5 数值阈值
 
-#### 时长偏差
+#### 预估时长回填
 
-定义：
+`estimated_duration_sec` 不再由 LLM 输出，由 script 生成服务在草稿归一化后按正文字数与实测语速本地回填：
 
 ```text
-duration_delta_ratio =
-  当前稿 estimated_duration_sec 与 duration_band 最近边界的偏离比例
+estimated_duration_sec = round(script_text 去空白字数 / 5.3 字/秒)
 ```
 
-判定规则：
+- 语速常量来自 TTS 实测样本（5.33 字/秒、4.93 字/秒），设计见 [预估时长本地回填计划](../plans/2026-09-11-script-duration-estimate-backfill.md)。
+- 本地校验不再对估时做档位偏差检查（原 `duration_extreme` / `duration_severe` / `duration_mild_drift` / `duration_body_mismatch` 已于 2026-09-11 废弃）。
+- 档位与实测时长的一致性由口播确认门禁负责：实测 `durationMs` vs `target_duration_band`，超出时需用户显式接受（`accept_duration_outside_band`）。
 
-| 区间 | 动作 |
-|---|---|
-| `<= 15%` | 只记 `warning` |
-| `> 15% 且 <= 35%` | `regen_once` |
-| `> 35%` | `hard_fail` |
-
-说明：
-
-- 不按精确秒数卡死。
-- 本质上是“当前稿是否已经和所选范围明显失真”的判断。
-
-#### 正文体量与估时匹配
+#### 正文体量结构下限
 
 正文结构下限：
 
@@ -178,14 +164,6 @@ duration_delta_ratio =
 | `short` | `180` 个汉字等价长度 | `6` |
 | `medium` | `320` 个汉字等价长度 | `8` |
 | `long` | `420` 个汉字等价长度 | `10` |
-
-估时体量匹配：
-
-```text
-chars_per_estimated_second = script_char_count / estimated_duration_sec
-```
-
-当 `chars_per_estimated_second < 3.6` 时，记 `duration_body_mismatch` 并触发 `regen_once`。该规则只防止明显虚高估时，不作为真实语速或稿件质量判断。
 
 #### `beat_trace` 最小命中质量
 

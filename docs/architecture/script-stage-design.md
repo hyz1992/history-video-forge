@@ -254,27 +254,20 @@ script 生成阶段不只输出正文，还要输出轻量 sidecar：
 | `draft 完整性` | `script_text / estimated_duration_sec / beat_trace / opening_span / ending_span` 缺失 | `hard_fail` |
 | `正文非空` | `script_text` 为空或明显残缺 | `regen_once` |
 | `正文体量过薄` | 正文低于当前时长档位的结构下限 | `regen_once` |
-| `估时与正文体量失真` | `estimated_duration_sec` 明显高于正文体量可支撑的口播时长 | `regen_once` |
 | `beat 覆盖缺失` | 任一 `must_include_beat` 没有 trace | `regen_once` |
 | `beat_trace excerpt 过短` | excerpt 明显不足以证明命中 | `regen_once` |
 | `beat_trace excerpt 脱离正文` | excerpt 无法在 `script_text` 中找到 | `regen_once` |
 | `quote_trace 缺失` | 使用了锚句但未标明 `exact/paraphrase` | `regen_once` |
-| `严重时长异常` | 明显超出当前档位合理范围 | `regen_once` |
-| `极端时长异常` | 明显说明 topic 与正文完全错位 | `hard_fail` |
 | `占位符残留` | `TODO / 待补充 / placeholder` 等 | `regen_once` |
 | `显式禁写命中` | 确定性命中 `forbidden_expansions` | `hard_fail` |
 | `opening/ending 缺失` | `opening_span` 或 `ending_span` 为空 | `regen_once` |
 
 说明：
 
-- 时长异常按“是否与当前档位明显失真”判断，不按精确秒数卡死
+- `estimated_duration_sec` 由生成服务按正文去空白字数与实测语速（约 5.3 字/秒）本地回填，不再由 LLM 输出；本地硬校验不对估时做档位偏差检查（原"估时与正文体量失真 / 严重时长异常 / 极端时长异常"检查已于 2026-09-11 废弃，见 [预估时长本地回填计划](../plans/2026-09-11-script-duration-estimate-backfill.md)）
+- 档位与实测时长的一致性由口播确认门禁处理：实测 `durationMs` vs `target_duration_band`，超出时需用户显式接受
 - 本地硬校验只判断“是否还能继续进入语义审校”，不判断“这稿好不好”
-- 第一版数值阈值按以下规则执行：
-  - 偏离 `duration_band` 不超过 `15%`：只记 `warning`
-  - 偏离 `duration_band` 在 `15% ~ 35%`：`regen_once`
-  - 偏离 `duration_band` 超过 `35%`：`hard_fail`
 - 正文体量下限：`short=180字/6句`，`medium=320字/8句`，`long=420字/10句`
-- 若 `script_char_count / estimated_duration_sec < 3.6`，视为估时明显虚高，按 `regen_once` 处理
 - `beat_trace.excerpt` 少于 `14` 个汉字等价长度，或 excerpt 无法在 `script_text` 中找到时，视为 trace 命中不足，按 `regen_once` 处理；若 excerpt 与正文只差中英文引号边界符，可按结构性命中处理，但不得允许 `……` 拼接、改写或跨片段合并
 - `quote_trace` 只有在正文实际使用了 `canonical_quotes` 时才强制要求存在；若使用了锚句但未标明 `usage_type` 或 excerpt 为空，按 `regen_once` 处理
 - 本地硬校验建议返回：

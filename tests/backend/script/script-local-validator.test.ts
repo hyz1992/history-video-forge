@@ -100,39 +100,32 @@ describe("script local validator", () => {
     expect(() => ScriptValidationResult.parse(persisted)).not.toThrow();
   });
 
-  it("uses the nearest duration boundary instead of the center point", async () => {
+  it("does not flag duration errors for a high-volume draft whose estimate is locally backfilled", async () => {
     const draft = await generateScriptDraft({
       bundle: scriptInputBundle,
     });
 
-    const volumeReadyDraft = {
-      ...draft,
-      script_text: `${draft.script_text}\n楚王退到案后，满堂一时无人接话，晏子把被压住的场面重新夺回来，也让这场羞辱变成楚王自己的难堪。`,
-    };
-    const upperBoundaryResult = validateScriptDraft({
-      bundle: scriptInputBundle,
-      draft: {
-        ...volumeReadyDraft,
-        estimated_duration_sec: 95,
-      },
-    });
+    // 高体量 medium 稿：按实测语速回填的估时必然超出 75-95s 档位，
+    // 时长一致性不再由本地 validator 检查（改由口播确认门禁负责）。
+    const longBody = draft.script_text + Array.from(
+      { length: 8 },
+      () => "楚王退到案后，满堂一时无人接话，晏子把被压住的场面重新夺回来，也让这场羞辱变成楚王自己的难堪。",
+    ).join("");
 
-    expect(upperBoundaryResult.decision).toBe("pass");
-    expect(upperBoundaryResult.errors).not.toContain("duration_extreme");
-    expect(upperBoundaryResult.errors).not.toContain("duration_severe");
-    expect(upperBoundaryResult.warnings).not.toContain("duration_mild_drift");
-
-    const severeDriftResult = validateScriptDraft({
+    const result = validateScriptDraft({
       bundle: scriptInputBundle,
       draft: {
         ...draft,
-        estimated_duration_sec: 120,
+        script_text: longBody,
+        estimated_duration_sec: Math.round(longBody.replace(/\s/g, "").length / 5.3),
       },
     });
 
-    expect(severeDriftResult.decision).toBe("regen_once");
-    expect(severeDriftResult.errors).toContain("duration_severe");
-    expect(severeDriftResult.errors).not.toContain("duration_extreme");
+    expect(result.errors).not.toContain("duration_extreme");
+    expect(result.errors).not.toContain("duration_severe");
+    expect(result.errors).not.toContain("duration_body_mismatch");
+    expect(result.warnings).not.toContain("duration_mild_drift");
+    expect(result.decision).not.toBe("hard_fail");
   });
 
   it("returns regen_once for recoverable structural issues", async () => {
@@ -241,7 +234,7 @@ describe("script local validator", () => {
     });
   });
 
-  it("returns regen_once when estimated duration is too high for the body volume", async () => {
+  it("does not flag duration_body_mismatch when the estimate is locally backfilled", async () => {
     const draft = await generateScriptDraft({
       bundle: scriptInputBundle,
     });
@@ -253,14 +246,16 @@ describe("script local validator", () => {
       "楚王脸色转冷，场面彻底翻转。";
 
     expect(body.length).toBeGreaterThanOrEqual(320);
-    expect(body.length).toBeLessThan(Math.ceil(95 * 3.6));
+    // 回填后估时与字数同源（chars ÷ 5.3），原"估时虚高"检查不再适用。
+    const backfilledSec = Math.round(body.replace(/\s/g, "").length / 5.3);
+    expect(backfilledSec).toBeLessThan(95);
 
     const result = validateScriptDraft({
       bundle: scriptInputBundle,
       draft: {
         ...draft,
         script_text: body,
-        estimated_duration_sec: 95,
+        estimated_duration_sec: backfilledSec,
         opening_span: "楚王把狗门摆在晏子面前，第一眼就是羞辱。",
         ending_span: "两次压场都被顶回，楚王想立威，反倒把自己的粗鄙暴露出来。",
         beat_trace: [
@@ -278,13 +273,11 @@ describe("script local validator", () => {
       },
     });
 
-    expect(result.decision).toBe("regen_once");
-    expect(result.errors).toContain("duration_body_mismatch");
+    expect(result.errors).not.toContain("duration_body_mismatch");
     expect(result.metrics).toMatchObject({
       script_char_count: body.length,
-      estimated_duration_sec: 95,
+      estimated_duration_sec: backfilledSec,
     });
-    expect(Number(result.metrics.chars_per_estimated_second)).toBeLessThan(3.6);
   });
 
   it("returns regen_once when beat trace excerpts are detached from script text", async () => {

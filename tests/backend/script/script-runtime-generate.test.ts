@@ -10,7 +10,10 @@ import {
 } from "../../../shared/src/index.js";
 import { createDbClient } from "../../../backend/src/db/client.js";
 import { createLegacyProject as createProject } from "../projects/legacy-project.fixture.js";
-import { generateScriptDraft } from "../../../backend/src/modules/script/script-generation.service.js";
+import {
+  estimateNarrationDurationSec,
+  generateScriptDraft,
+} from "../../../backend/src/modules/script/script-generation.service.js";
 import { validateScriptDraft } from "../../../backend/src/modules/script/script-local-validator.js";
 import { runScriptGeneration } from "../../../backend/src/modules/script/script-run.service.js";
 import { saveTopicPackage } from "../../../backend/src/modules/topic/topic-package.repository.js";
@@ -350,7 +353,10 @@ ${JSON.stringify(runtimeDraft)}
     });
 
     expect(invokeApi).toHaveBeenCalledTimes(1);
-    expect(draft).toMatchObject(runtimeDraft);
+    expect(draft).toMatchObject({
+      ...runtimeDraft,
+      estimated_duration_sec: estimateNarrationDurationSec(runtimeDraft.script_text),
+    });
     expect(() => ScriptDraftPackage.parse(draft)).not.toThrow();
   });
 
@@ -570,7 +576,7 @@ ${JSON.stringify(runtimeDraft)}
     expect(entries[0]?.systemPrompt).toContain("medium=75-95秒");
     expect(entries[0]?.systemPrompt).toContain("long=90-140秒");
     expect(entries[0]?.systemPrompt).toContain(
-      "先按档位控制正文体量，再按约 4.8-5.6 个汉字等价长度/秒回填",
+      "按本项目 TTS 实测语速约 5.3 字/秒换算",
     );
     expect(entries[0]?.systemPrompt).toContain("`opening_span`");
     expect(entries[0]?.systemPrompt).toContain(

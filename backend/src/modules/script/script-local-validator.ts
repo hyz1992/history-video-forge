@@ -29,33 +29,6 @@ export interface ValidateScriptDraftInput {
   draft: ScriptDraftInput;
 }
 
-function getDurationRange(durationBand: unknown) {
-  if (durationBand === "medium") {
-    return { min: 75, max: 95 };
-  }
-
-  if (durationBand === "short") {
-    return { min: 45, max: 70 };
-  }
-
-  return { min: 90, max: 140 };
-}
-
-function getDurationDeltaRatio(
-  estimatedDurationSec: number,
-  durationRange: { min: number; max: number },
-) {
-  if (estimatedDurationSec < durationRange.min) {
-    return (durationRange.min - estimatedDurationSec) / durationRange.min;
-  }
-
-  if (estimatedDurationSec > durationRange.max) {
-    return (estimatedDurationSec - durationRange.max) / durationRange.max;
-  }
-
-  return 0;
-}
-
 function pushUnique(target: string[], code: string) {
   if (!target.includes(code)) {
     target.push(code);
@@ -79,10 +52,6 @@ function countScriptSentences(scriptText: string) {
     .split(/(?<=[。！？!?；;])/u)
     .map((sentence) => sentence.trim())
     .filter(Boolean).length;
-}
-
-function getMinimumCharsForEstimatedDuration(estimatedDurationSec: number) {
-  return Math.ceil(estimatedDurationSec * 3.6);
 }
 
 function getCharsPerEstimatedSecond(
@@ -167,8 +136,6 @@ export function validateScriptDraft(input: ValidateScriptDraftInput) {
   const bodyFloor = getBodyFloor(input.bundle.hard_lane.duration_band);
   const scriptCharCount = draft.script_text.trim().length;
   const scriptSentenceCount = countScriptSentences(draft.script_text);
-  const minScriptCharsForEstimatedDuration =
-    getMinimumCharsForEstimatedDuration(draft.estimated_duration_sec);
   const charsPerEstimatedSecond = getCharsPerEstimatedSecond(
     scriptCharCount,
     draft.estimated_duration_sec,
@@ -178,12 +145,6 @@ export function validateScriptDraft(input: ValidateScriptDraftInput) {
     scriptSentenceCount < bodyFloor.minSentenceCount
   ) {
     pushUnique(errors, "script_body_too_thin");
-  }
-  if (
-    draft.estimated_duration_sec > 0 &&
-    scriptCharCount < minScriptCharsForEstimatedDuration
-  ) {
-    pushUnique(errors, "duration_body_mismatch");
   }
 
   if (draft.opening_span.trim().length === 0) {
@@ -202,20 +163,6 @@ export function validateScriptDraft(input: ValidateScriptDraftInput) {
     ) {
       pushUnique(errors, "forbidden_expansion_hit");
     }
-  }
-
-  const durationRange = getDurationRange(input.bundle.hard_lane.duration_band);
-  const durationDeviation = getDurationDeltaRatio(
-    draft.estimated_duration_sec,
-    durationRange,
-  );
-
-  if (durationDeviation > 0.35) {
-    pushUnique(errors, "duration_extreme");
-  } else if (durationDeviation > 0.15) {
-    pushUnique(errors, "duration_severe");
-  } else if (durationDeviation > 0) {
-    pushUnique(warnings, "duration_mild_drift");
   }
 
   const beatTrace = draft.beat_trace as Array<Record<string, unknown>>;
@@ -292,7 +239,7 @@ export function validateScriptDraft(input: ValidateScriptDraftInput) {
   }
 
   const decision = errors.some((code) =>
-    ["bundle_missing_field", "draft_missing_field", "duration_extreme", "forbidden_expansion_hit"].includes(code),
+    ["bundle_missing_field", "draft_missing_field", "forbidden_expansion_hit"].includes(code),
   )
     ? "hard_fail"
     : errors.length > 0
@@ -310,7 +257,6 @@ export function validateScriptDraft(input: ValidateScriptDraftInput) {
       script_sentence_count: scriptSentenceCount,
       min_script_chars_for_band: bodyFloor.minScriptChars,
       min_sentence_count_for_band: bodyFloor.minSentenceCount,
-      min_script_chars_for_estimated_duration: minScriptCharsForEstimatedDuration,
       chars_per_estimated_second: charsPerEstimatedSecond,
       beat_trace_count: beatTrace.length,
       quote_trace_count: quoteTrace.length,

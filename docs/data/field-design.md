@@ -333,7 +333,7 @@
 | 字段 | 含义 |
 |---|---|
 | `script_text` | 口播正文 |
-| `estimated_duration_sec` | 预计口播时长 |
+| `estimated_duration_sec` | 口播时长预估；由系统按正文去空白字数与实测语速（约 5.3 字/秒）本地回填，不再由 LLM 输出 |
 | `beat_trace` | 各必讲节点在正文中的命中片段 |
 | `quote_trace` | 锚句使用追踪 |
 | `opening_span` | 开头片段 |

@@ -70,6 +70,19 @@ export interface GenerateScriptDraftInput {
   };
 }
 
+/** 口播语速实测样本：5.33 字/秒（2026-09-05，459 字/86.16s）、4.93 字/秒
+ * （2026-09-11，698 字/141.7s）。回填取 5.3，与 script.writer prompt 的语速说明一致；
+ * 该值只作"约"级预估，档位与实测时长的一致性由口播确认门禁负责。 */
+const NARRATION_CHARS_PER_SECOND = 5.3;
+
+/** 按正文去空白字数与实测语速回填预估口播时长（秒，四舍五入，下限 1）。 */
+export function estimateNarrationDurationSec(scriptText: string | null | undefined) {
+  if (!scriptText) return 0;
+  const chars = scriptText.replace(/\s/gu, "").length;
+  if (chars === 0) return 0;
+  return Math.max(1, Math.round(chars / NARRATION_CHARS_PER_SECOND));
+}
+
 export async function generateScriptDraft(input: GenerateScriptDraftInput) {
   const gateway = input.llmGateway ?? createScriptWriterGateway(input.snapshotCapabilities);
   const rawDraft = await gateway.invokeStructuredPrompt<unknown>({
@@ -121,6 +134,11 @@ function normalizeScriptDraft(rawDraft: unknown, requiredBeats: string[]) {
   draft.quote_trace = normalizeQuoteTrace(draft.quote_trace);
   draft.opening_span = normalizeTextSpan(draft.opening_span);
   draft.ending_span = normalizeTextSpan(draft.ending_span);
+
+  // 预估时长不再信任 LLM 输出（曾为凑档位谎报），按正文字数与实测语速本地回填。
+  if (typeof draft.script_text === "string") {
+    draft.estimated_duration_sec = estimateNarrationDurationSec(draft.script_text);
+  }
 
   return draft;
 }
@@ -460,7 +478,6 @@ function buildDeterministicDraft(input: ScriptInputBundleInput) {
 
   return {
     script_text: scriptText,
-    estimated_duration_sec: 88,
     beat_trace: beats.map((beat, index) => ({
       beat,
       excerpt: beatSentences[index],

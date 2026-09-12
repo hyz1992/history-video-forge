@@ -8,6 +8,10 @@
 
 ## 当前状态
 
+截至 2026-09-11：
+
+- [Script 预估时长本地回填](./2026-09-11-script-duration-estimate-backfill.md)：`estimated_duration_sec` 不再由 LLM 猜数（曾为凑档位谎报，698 字 medium 稿报 82s 实测 141.7s），改由生成服务按字数 ÷ 实测语速 5.3 字/秒本地回填；本地 validator 同步废弃四条时长检查，档位一致性改由口播确认门禁负责。
+
 截至 2026-09-10：
 
 - `口播前置与真实时间轴` 实施计划任务 1–11 全部完成并通过独立审查收敛；任务 12 拆分的两个子任务已收敛：Task12-A fake runtime 冒烟（[记录](../records/2026-09-09-narration-task12a-runtime-smoke.md)）与 Task12-B 真实浏览器验收（[记录](../records/2026-09-09-narration-task12b-browser.md)，run13/run14 两轮 0 failed，含三入口 422→面板→重试、事件库层叠命中、口播主链、深链门禁、legacy 并存、设置项禁用与零未处理拒绝）。

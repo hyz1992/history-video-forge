@@ -11,7 +11,10 @@ import type {
   LlmGateway,
 } from "../../../backend/src/runtime/llm/llm-gateway.js";
 import { LlmOutputError } from "../../../backend/src/runtime/llm/llm-output-error.js";
-import { generateScriptDraft } from "../../../backend/src/modules/script/script-generation.service.js";
+import {
+  estimateNarrationDurationSec,
+  generateScriptDraft,
+} from "../../../backend/src/modules/script/script-generation.service.js";
 
 const topicPackage = TopicPackage.parse({
   topic_id: "topic_yanzi_shichu",
@@ -129,5 +132,58 @@ describe("generateScriptDraft", () => {
   it("returns a parsed ScriptDraftPackage on the deterministic stub success path", async () => {
     const draft = await generateScriptDraft({ bundle: scriptInputBundle });
     expect(() => ScriptDraftPackage.parse(draft)).not.toThrow();
+  });
+
+  it("backfills estimated_duration_sec locally from script text on the stub success path", async () => {
+    const draft = await generateScriptDraft({ bundle: scriptInputBundle });
+    expect(draft.estimated_duration_sec).toBe(
+      estimateNarrationDurationSec(draft.script_text),
+    );
+    expect(draft.estimated_duration_sec).toBeGreaterThan(0);
+  });
+
+  it("overrides an LLM-provided estimated_duration_sec with the local backfill", async () => {
+    const stubDraft = await generateScriptDraft({ bundle: scriptInputBundle });
+    const gateway: LlmGateway = {
+      async invokeStructuredPrompt<T>(
+        _options: InvokeStructuredPromptOptions,
+      ): Promise<T> {
+        return { ...stubDraft, estimated_duration_sec: 999 } as T;
+      },
+      invokeStrictStructured: vi.fn(),
+    };
+
+    const draft = await generateScriptDraft({
+      bundle: scriptInputBundle,
+      llmGateway: gateway,
+    });
+
+    expect(draft.estimated_duration_sec).toBe(
+      estimateNarrationDurationSec(draft.script_text),
+    );
+    expect(draft.estimated_duration_sec).not.toBe(999);
+  });
+});
+
+describe("estimateNarrationDurationSec", () => {
+  it("rounds the 698-char measured sample to 132 seconds", () => {
+    const text = "楚".repeat(698);
+    expect(text.replace(/\s/g, "").length).toBe(698);
+    expect(estimateNarrationDurationSec(text)).toBe(132);
+  });
+
+  it("strips whitespace before counting", () => {
+    const text = "楚王把羞辱压到晏子面前。\n 晏子当场接住压力。\n";
+    const stripped = text.replace(/\s/g, "").length;
+    expect(estimateNarrationDurationSec(text)).toBe(
+      Math.max(1, Math.round(stripped / 5.3)),
+    );
+  });
+
+  it("returns 0 for empty text and at least 1 second for non-empty text", () => {
+    expect(estimateNarrationDurationSec("")).toBe(0);
+    expect(estimateNarrationDurationSec(null)).toBe(0);
+    expect(estimateNarrationDurationSec(undefined)).toBe(0);
+    expect(estimateNarrationDurationSec("楚")).toBe(1);
   });
 });
