@@ -2,7 +2,7 @@
 
 适用项目：`history-video-forge`
 日期：2026-09-12
-关联：`prompts/storyboard/storyboard-planner.prompt.md` v1.4.0、`backend/src/modules/storyboard/storyboard-timing-projector.ts`、[口播前置设计](./2026-09-05-narration-first-timing-design.md) §5.2
+关联：`prompts/storyboard/storyboard-planner.prompt.md` v1.4.1、`backend/src/modules/storyboard/storyboard-timing-projector.ts`、[口播前置设计](./2026-09-05-narration-first-timing-design.md) §5.2
 
 ---
 
@@ -17,9 +17,13 @@
 
 ## 设计
 
-1. **prompt 时序硬约束（v1.4.0）**：显式要求"镜头沿口播时间轴单向排列：每镜 end 晚于 start、下一镜 start 等于上一镜 end、禁止时间倒流/回跳、start/end 不得互换；boundary ID 必须从边界表逐字复制，禁止抄别处 ID 或凭感觉改数字"。此前单调性只存在于本地校验（事后拒绝），LLM 生成时无引导。
-2. **结构化违反信息**：`projectStoryboardTiming` 的边界类失败改抛 `StoryboardBoundaryError`（`violations: string[]`，中文可读描述，如"第 2 镜结束时间 17520ms 不晚于开始时间 48800ms，时间倒流…"）。非边界错误（来源不一致、schema、时长不匹配）行为不变。
-3. **一次性带反馈重生**：`generateStoryboardPlan` 在口播模式下最多尝试 2 次——首次投影失败且为 `StoryboardBoundaryError` 时，用 `regenerationContext = { reason: "storyboard_narration_plan_invalid", errors: cause.violations }` 重调一次；二次失败或非边界错误直接抛 `LlmOutputError("storyboard_narration_plan_invalid")`。v1（无 narration_timing）路径不重试。若外层已传入本地校验重生上下文（run service 的 local-validation regen 路径），内层重生**合并**其 errors 与 user_feedback（reason 以边界失败为准），不整体覆盖。
+1. **prompt 时序硬约束与必含字段清单（v1.4.0 → v1.4.1）**：显式要求"镜头沿口播时间轴单向排列：每镜 end 晚于 start、下一镜 start 等于上一镜 end、禁止时间倒流/回跳、start/end 不得互换；boundary ID 必须从边界表逐字复制，禁止抄别处 ID 或凭感觉改数字"。v1.4.1 增加每镜必含字段清单（含 `api_video_suitability` 四档枚举、禁止缺字段与多余字段、来源 ID 逐字复制）。此前单调性只存在于本地校验（事后拒绝），LLM 生成时无引导。
+2. **结构化违反信息**：`projectStoryboardTiming` 的边界类失败改抛 `StoryboardBoundaryError`（`violations: string[]`，中文可读描述，如"第 2 镜结束时间 17520ms 不晚于开始时间 48800ms，时间倒流…"）；schema 形状失败由 `generateStoryboardPlan` 把 ZodError issues 逐条转中文（"第 N 镜缺少必填字段 X"）。narration 来源哈希不一致行为不变（不可修、不重试）。
+3. **一次性带反馈重生**：`generateStoryboardPlan` 在口播模式下最多尝试 2 次——首次投影失败且为 **LLM 输出反馈可修错误**时，把具体违反信息转成中文 errors 重调一次；二次失败或不可修错误直接抛 `LlmOutputError("storyboard_narration_plan_invalid")`。可修类别：
+   - `StoryboardBoundaryError`（边界漂移不可吸附/时间倒流/断链/order/覆盖）；
+   - `ZodError`（schema 形状：缺必填字段、枚举非法、多余字段、重复 segment_id 等，issues 逐条转中文，最多取 3 条）；
+   - 来源 ID 抄写错误（`storyboard_source_mismatch`）与时长字段多输出（`storyboard_narration_duration_mismatch`）。
+   不可修类别：narration 来源哈希不一致（`storyboard_narration_source_mismatch`，系统不变量，不是 LLM 输出）。v1（无 narration_timing）路径不重试。若外层已传入本地校验重生上下文（run service 的 local-validation regen 路径），内层重生**合并**其 errors 与 user_feedback（reason 以边界失败为准），不整体覆盖。
 4. **prompt regeneration 分支**：`regeneration_context.reason === storyboard_narration_plan_invalid` 时，errors 逐条指出上一稿边界错误，必须逐条修正后重选合法边界，视觉与叙事质量保持。
 
 ## 明确不改

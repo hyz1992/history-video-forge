@@ -5,6 +5,7 @@ import {
   type ScriptDraftPackage,
 } from "../../../../shared/src/index.js";
 import { StoryboardSegmentV2 } from "../../../../shared/src/storyboard/storyboard-plan-v2.schema.js";
+import { z } from "zod";
 import { env, getValidatedRuntimeEnv } from "../../config/env.js";
 import { createHash } from "node:crypto";
 import { createLlmGateway, type LlmGateway } from "../../runtime/llm/llm-gateway.js";
@@ -74,6 +75,35 @@ export function buildStoryboardPlannerPromptInput(
   };
 }
 
+/** 重生触发面：LLM 输出反馈可修的错误类别。
+ *  - StoryboardBoundaryError：边界类（漂移不可吸附/倒流/断链/order/覆盖）；
+ *  - ZodError：schema 形状（缺必填字段/枚举非法/多余字段/重复 id 等）；
+ *  - source/duration 抄写错误。
+ *  narration 来源哈希不一致（narration_source_mismatch）是系统不变量，
+ *  不是 LLM 输出问题，不重试。 */
+const REGEN_WORTHY_SOURCE_ERRORS = new Set(["storyboard_source_mismatch", "storyboard_narration_duration_mismatch"]);
+function isStoryboardPlanRegenWorthy(cause: unknown): boolean {
+  if (cause instanceof StoryboardBoundaryError || cause instanceof z.ZodError) return true;
+  return cause instanceof Error && REGEN_WORTHY_SOURCE_ERRORS.has(cause.message);
+}
+function formatStoryboardZodIssue(issue: z.ZodIssue): string {
+  const path = issue.path;
+  const segmentIndex = typeof path[1] === "number" ? path[1] : null;
+  const field = path.length > 0 && typeof path.at(-1) === "string" ? path.at(-1)! : null;
+  const where = segmentIndex !== null ? `第 ${segmentIndex + 1} 镜` : "计划";
+  if (issue.code === "invalid_type" && issue.received === "undefined") return `${where}缺少必填字段 ${field}`;
+  if (issue.code === "invalid_enum_value") return `${where}的 ${field} 值非法（收到 ${JSON.stringify(issue.received)}），必须使用规定枚举`;
+  if (issue.code === "unrecognized_keys") return `${where}包含多余字段 ${issue.keys.join("、")}，不得输出 schema 之外的字段`;
+  return `${where}输出不符合 schema：${issue.path.join(".")}（${issue.message}）`;
+}
+function storyboardPlanViolations(cause: unknown): string[] {
+  if (cause instanceof StoryboardBoundaryError) return cause.violations;
+  if (cause instanceof z.ZodError) return cause.issues.slice(0, 3).map(formatStoryboardZodIssue);
+  if (cause instanceof Error && cause.message === "storyboard_source_mismatch") return ["source_script_record_id / source_topic_package_id 必须逐字复制输入值，不得改写"];
+  if (cause instanceof Error && cause.message === "storyboard_narration_duration_mismatch") return ["不要输出 estimated_total_duration_sec（由运行时按边界派生）；如输出必须等于实测时长"];
+  return [];
+}
+
 export async function generateStoryboardPlan(input: GenerateStoryboardPlanInput) {
   const narrationTiming = input.narrationTiming ? verifyStoryboardNarrationContext(input.narrationTiming, input.draft.script_text) : undefined;
   input = { ...input, narrationTiming };
@@ -94,13 +124,13 @@ export async function generateStoryboardPlan(input: GenerateStoryboardPlanInput)
         if (plan.source_script_record_id !== input.sourceScriptRecordId || plan.source_topic_package_id !== input.sourceTopicPackageId) throw new Error("storyboard_source_mismatch");
         return plan;
       } catch (cause) {
-        if (attempt < maxAttempts && cause instanceof StoryboardBoundaryError) {
+        if (attempt < maxAttempts && isStoryboardPlanRegenWorthy(cause)) {
           // 合并而非覆盖：run service 可能已传入本地校验重生上下文与用户反馈，
-          // 内层重生的 reason 以边界失败为准，但保留外层 errors 与 user_feedback。
+          // 内层重生的 reason 以 plan_invalid 为准，但保留外层 errors 与 user_feedback。
           input = { ...input, regenerationContext: {
             ...(input.regenerationContext ?? { metrics: {} }),
             reason: "storyboard_narration_plan_invalid",
-            errors: [...(input.regenerationContext?.errors ?? []), ...cause.violations],
+            errors: [...(input.regenerationContext?.errors ?? []), ...storyboardPlanViolations(cause)],
           } };
           continue;
         }

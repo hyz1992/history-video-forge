@@ -1,5 +1,9 @@
 # storyboard.storyboard-planner 变更记录
 
+## v1.4.1 - 2026-09-12
+- 每镜必含字段清单显式化（含 `api_video_suitability` 四档枚举），禁止缺字段与输出规定之外字段；`source_script_record_id` / `source_topic_package_id` 必须逐字复制输入值。
+- 背景：项目二（江都宫）第三次失败为 9 镜中 7 镜漏掉 `api_video_suitability` 必填字段；`regeneration_context` 分支同步覆盖 schema 错误与来源/时长抄写错误。
+
 ## v1.4.0 - 2026-09-12
 - 边界时序硬约束显式化：镜头必须沿口播时间轴单向排列（end 晚于 start、下一镜 start 等于上一镜 end、禁止时间倒流/回跳/start-end 互换），boundary ID 必须从边界表逐字复制。
 - 背景：两个口播前置端到端项目连续暴露边界合同失败——项目一（玄武门，450 个真实边界）planner 复制 ID 时编号漂移（12 端点错 3），项目二（江都宫，464 个真实边界）除编号漂移外前两镜 start/end 互换导致时间倒流；见 [分镜边界就近吸附设计](../../docs/plans/2026-09-12-storyboard-boundary-snap-design.md) 与 [分镜结构失败重生设计](../../docs/plans/2026-09-12-storyboard-plan-structure-regen-design.md)。

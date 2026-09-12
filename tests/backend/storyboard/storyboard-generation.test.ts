@@ -725,33 +725,93 @@ describe("边界合同违反一次性重生", () => {
     expect(attempt).toBe(2);
   });
 
-  it("非边界错误（来源不一致）不重生，仅调用一次", async () => {
+  it("来源 ID 抄错同样带反馈重生，二次成功", async () => {
     const input = makeNarrationInput();
     const f = { timingMap: input.narrationTiming.timingMap };
+    const calls: Array<{ regeneration_context?: { errors: string[] } }> = [];
     let attempt = 0;
     const gateway: LlmGateway = {
-      async invokeStructuredPrompt<T>(_options: InvokeStructuredPromptOptions): Promise<T> {
+      async invokeStructuredPrompt<T>(options: InvokeStructuredPromptOptions): Promise<T> {
+        calls.push(options.input as never);
         attempt++;
-        return { ...rawPlan(f, [[0, 6], [6, 18]]), source_script_record_id: "other" } as T;
+        if (attempt === 1) return { ...rawPlan(f, [[0, 6], [6, 18]]), source_script_record_id: "other" } as T;
+        return rawPlan(f, [[0, 6], [6, 18]]) as T;
       },
       invokeStrictStructured: vi.fn(),
     };
-    await expect(generateStoryboardPlan({ ...input, llmGateway: gateway })).rejects.toMatchObject({ code: "storyboard_narration_plan_invalid" });
-    expect(attempt).toBe(1);
+    const plan = await generateStoryboardPlan({ ...input, llmGateway: gateway });
+    expect(attempt).toBe(2);
+    expect(calls[1]!.regeneration_context!.errors.join("")).toContain("逐字复制");
+    expect(plan.segments).toHaveLength(2);
   });
 
-  it("schema 失败（不可解析计划）不重生，仅调用一次", async () => {
+  it("缺必填字段（schema）带具体字段反馈重生，二次成功", async () => {
     const input = makeNarrationInput();
+    const f = { timingMap: input.narrationTiming.timingMap };
+    const calls: Array<{ regeneration_context?: { errors: string[] } }> = [];
     let attempt = 0;
     const gateway: LlmGateway = {
-      async invokeStructuredPrompt<T>(_options: InvokeStructuredPromptOptions): Promise<T> {
+      async invokeStructuredPrompt<T>(options: InvokeStructuredPromptOptions): Promise<T> {
+        calls.push(options.input as never);
         attempt++;
-        return { foo: "bar" } as T;
+        if (attempt === 1) {
+          const bad = rawPlan(f, [[0, 6], [6, 18]]);
+          for (const s of bad.segments.slice(1)) delete (s as Record<string, unknown>).api_video_suitability;
+          return bad as T;
+        }
+        return rawPlan(f, [[0, 6], [6, 18]]) as T;
       },
       invokeStrictStructured: vi.fn(),
     };
+    const plan = await generateStoryboardPlan({ ...input, llmGateway: gateway });
+    expect(attempt).toBe(2);
+    expect(calls[1]!.regeneration_context!.errors.join("")).toContain("缺少必填字段 api_video_suitability");
+    expect(plan.segments).toHaveLength(2);
+  });
+
+  it("枚举非法与多余字段同样触发带反馈重生", async () => {
+    const input = makeNarrationInput();
+    const f = { timingMap: input.narrationTiming.timingMap };
+    const calls: Array<{ regeneration_context?: { errors: string[] } }> = [];
+    let attempt = 0;
+    const gateway: LlmGateway = {
+      async invokeStructuredPrompt<T>(options: InvokeStructuredPromptOptions): Promise<T> {
+        calls.push(options.input as never);
+        attempt++;
+        if (attempt === 1) {
+          const bad = rawPlan(f, [[0, 6], [6, 18]]);
+          (bad.segments[0] as Record<string, unknown>).api_video_suitability = "high";
+          return bad as T;
+        }
+        if (attempt === 2) {
+          const bad = rawPlan(f, [[0, 6], [6, 18]]);
+          (bad.segments[0] as Record<string, unknown>).duration_sec = 5;
+          return bad as T;
+        }
+        return rawPlan(f, [[0, 6], [6, 18]]) as T;
+      },
+      invokeStrictStructured: vi.fn(),
+    };
+    // 枚举非法（第一次）→ 重生；多余字段（第二次）→ 上限耗尽拒绝
     await expect(generateStoryboardPlan({ ...input, llmGateway: gateway })).rejects.toMatchObject({ code: "storyboard_narration_plan_invalid" });
-    expect(attempt).toBe(1);
+    expect(attempt).toBe(2);
+    expect(calls[1]!.regeneration_context!.errors.join("")).toContain("值非法");
+  });
+
+  it("narration 来源哈希不一致（系统不变量）在 LLM 调用前拒绝", async () => {
+    const input = makeNarrationInput();
+    const f = { timingMap: input.narrationTiming.timingMap };
+    const brokenReference = { ...input.narrationTiming.narrationReference, timing_map_hash: "b".repeat(64) };
+    const gateway: LlmGateway = {
+      async invokeStructuredPrompt<T>(_options: InvokeStructuredPromptOptions): Promise<T> {
+        return rawPlan(f, [[0, 6], [6, 18]]) as T;
+      },
+      invokeStrictStructured: vi.fn(),
+    };
+    const spy = vi.spyOn(gateway, "invokeStructuredPrompt");
+    await expect(generateStoryboardPlan({ ...input, narrationTiming: { timingMap: f.timingMap, narrationReference: brokenReference }, llmGateway: gateway }))
+      .rejects.toMatchObject({ message: "narration_stale" });
+    expect(spy).not.toHaveBeenCalled();
   });
 
   it("order 错位同样触发带反馈重生", async () => {
