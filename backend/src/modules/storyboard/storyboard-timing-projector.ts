@@ -41,7 +41,7 @@ export class StoryboardBoundaryError extends Error {
 const boundaryFail = (violations: string[]): never => { throw new StoryboardBoundaryError(violations); };
 
 /** 粗切点候选：planner 从全部边界（450-464 个，长 ID 逐字复制实测三连败）缩减为
- *  "句末 或 停顿 ≥400ms"的候选并按时间编号，复制负担降约 6 倍、选择余量仍近 10 倍。
+ *  "句末 或 停顿 ≥400ms"的候选并按时间编号，复制负担降约 6 倍、选择余量约 4-5 倍。
  *  首尾必含（首尾覆盖合同）；粗筛不足 3 个时退回全量（极端短稿保护）。 */
 export const COARSE_BOUNDARY_MIN_PAUSE_MS = 400;
 export interface StoryboardBoundaryCandidate { id: string; boundary_id: string; visual_time_ms: number; source_offset: number; }
@@ -112,7 +112,7 @@ export function projectStoryboardTiming(input: StoryboardTimingContext & { plan:
   let nextBoundary = timingMap.boundaries[0]!.id;
   const segments = plan.segments.map((segment, index) => {
     const start = resolveBoundary(segment.start_boundary_id), end = resolveBoundary(segment.end_boundary_id);
-    if (!start || !end) return boundaryFail([`第 ${index + 1} 镜的边界 ID 不在边界表内且无法唯一就近吸附：start_boundary_id="${segment.start_boundary_id}"、end_boundary_id="${segment.end_boundary_id}"；必须从边界表逐字复制合法 ID`]);
+    if (!start || !end) return boundaryFail([`第 ${index + 1} 镜的切点不在候选表内且无法唯一就近吸附：start_boundary_id="${segment.start_boundary_id}"、end_boundary_id="${segment.end_boundary_id}"；必须使用候选表中的候选编号`]);
     if (start.boundary.id !== nextBoundary) return boundaryFail([`第 ${index + 1} 镜起始边界 "${start.boundary.id}" 与上一镜结束边界 "${nextBoundary}" 不连续：相邻镜头必须共享同一端点`]);
     if (end.boundary.visualTimeMs <= start.boundary.visualTimeMs) return boundaryFail([`第 ${index + 1} 镜结束时间 ${end.boundary.visualTimeMs}ms 不晚于开始时间 ${start.boundary.visualTimeMs}ms，时间倒流：镜头边界时间必须沿口播时间轴严格递增，禁止交换 start/end`]);
     if (segment.order !== index) return boundaryFail([`第 ${index + 1} 镜的 order=${segment.order} 与其在数组中的位置 ${index} 不符：order 必须从 0 起按时间顺序连续编号`]);

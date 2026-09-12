@@ -134,6 +134,17 @@ describe("粗切点候选与编号还原", () => {
     expect(resolved.segments[1]).toMatchObject({ start_boundary_id: "boundary:1500:6", end_boundary_id: "boundary:4500:18" });
     expect(resolved.segments[2]).toMatchObject({ start_boundary_id: "boundary:100:1", end_boundary_id: "C99" });
   });
+  it("停顿分支：恰好 400ms 入选、399ms 不入选", async () => {
+    const a = await api();
+    const make = (g1: number) => normalizeNarrationTiming({ sourceText: "甲乙丙丁", audioHash, durationMs: 1500 + g1,
+      sentences: [{ providerSentenceIndex: 0, originalText: "甲乙丙丁", normalizedText: "甲乙丙丁", words: [
+        { text: "甲", begin_index: 0, end_index: 1, begin_time: 0, end_time: 250 },
+        { text: "乙", begin_index: 1, end_index: 2, begin_time: 250, end_time: 500 },
+        { text: "丙", begin_index: 2, end_index: 3, begin_time: 500 + g1, end_time: 750 + g1 },
+        { text: "丁", begin_index: 3, end_index: 4, begin_time: 750 + g1 + 500, end_time: 1500 + g1 }] }] });
+    expect(a.buildStoryboardBoundaryCandidates(make(150)).map(c => c.visual_time_ms)).toContain(250);
+    expect(a.buildStoryboardBoundaryCandidates(make(149)).map(c => c.visual_time_ms)).not.toContain(250);
+  });
 });
 it.each(["token", "boundary", "missing_tail", "duplicate_id"])("完整来源与覆盖验证：%s", async mode => {
   const value = input(), a = await api();
@@ -198,7 +209,7 @@ describe("边界ID数字漂移唯一最近吸附", () => {
   it("吸附到与起点相同边界导致零时长仍拒绝", async () => {
     const f = fixture(), value = input(f, [0, 6, 18]);
     value.plan.segments[0]!.end_boundary_id = "boundary:100:1"; // 最近真实边界是起点 0
-    expect(() => (async () => (await api()).projectStoryboardTiming(value))()).rejects.toThrow();
+    await expect((async () => (await api()).projectStoryboardTiming(value))()).rejects.toThrow();
   });
   it("阈值边界：Δ=500 吸附、Δ=501 拒绝", async () => {
     const f = sparseFixture([0, 1000, 2500, 3500]), a = await api();

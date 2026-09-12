@@ -852,6 +852,33 @@ describe("边界合同违反一次性重生", () => {
     expect(plan.segments[1]!.end_boundary_id).toBe("boundary:4500:18");
   });
 
+  it("粗筛候选表下的编号链路（C编号与边界下标错位）投影正确", async () => {
+    const text = "甲乙。丙丁。戊己。";
+    const audioHash = "a".repeat(64);
+    const timingMap = normalizeNarrationTiming({ sourceText: text, audioHash, durationMs: 2250,
+      sentences: [{ providerSentenceIndex: 0, originalText: text, normalizedText: text,
+        words: Array.from(text, (c, i) => ({ text: c, begin_index: i, end_index: i + 1, begin_time: i * 250, end_time: (i + 1) * 250 })) }] });
+    const narrationReference = { narration_record_id: "n1", audio_hash: audioHash, timing_map_hash: createHash("sha256").update(canonicalStringify(timingMap)).digest("hex"), duration_ms: 2250 };
+    const input = makeNarrationInput();
+    input.draft = { ...input.draft, script_text: text };
+    input.narrationTiming = { timingMap, narrationReference };
+    const gateway: LlmGateway = {
+      async invokeStructuredPrompt<T>(_options: InvokeStructuredPromptOptions): Promise<T> {
+        // 句末粗筛：C1..C4 = boundaries[0],[3],[6],[9]（C2 不是下标 1，钉死查表映射）
+        return { plan_version: "storyboard_v2", source_script_record_id: "scr_001", source_topic_package_id: "topic_001",
+          global_visual_notes: [], segments: [
+            { ...visual, segment_id: "s0", order: 0, start_boundary_id: "C1", end_boundary_id: "C2" },
+            { ...visual, segment_id: "s1", order: 1, start_boundary_id: "C2", end_boundary_id: "C4" },
+          ] } as T;
+      },
+      invokeStrictStructured: vi.fn(),
+    };
+    const plan = await generateStoryboardPlan({ ...input, llmGateway: gateway });
+    expect(plan.segments[0]!.end_boundary_id).toBe(timingMap.boundaries[3]!.id);
+    expect(plan.segments[0]!.script_excerpt).toBe("甲乙。");
+    expect(plan.segments[1]!.end_boundary_id).toBe(timingMap.boundaries[9]!.id);
+  });
+
   it("narration 来源哈希不一致（系统不变量）在 LLM 调用前拒绝", async () => {
     const input = makeNarrationInput();
     const f = { timingMap: input.narrationTiming.timingMap };

@@ -25,7 +25,7 @@ status: active
 
 `topic_boundary_context` 只能用于避免越界和标注风险。它不能替你改写脚本，也不能让你新增脚本没有讲的剧情。
 
-如果输入包含 `regeneration_context`，只允许修复合法切分、trace 关联和空画面描述；旧模式可修复摘录及时间提示，新模式只能重新选择合法边界。不得借机改写 `script_text`，不得扩展剧情。若 `regeneration_context.reason` 为 `storyboard_narration_plan_invalid`，`errors` 逐条指出上一稿的问题——可能是边界错误（某镜时间倒流、边界不连续、boundary ID 不在边界表内），也可能是 schema 错误（某镜缺必填字段、枚举值非法、输出了规定之外的字段）或来源/时长抄写错误；必须逐条修正这些问题后重新输出，视觉与叙事内容保持原质量。
+如果输入包含 `regeneration_context`，只允许修复合法切分、trace 关联和空画面描述；旧模式可修复摘录及时间提示，新模式只能重新选择合法边界。不得借机改写 `script_text`，不得扩展剧情。若 `regeneration_context.reason` 为 `storyboard_narration_plan_invalid`，`errors` 逐条指出上一稿的问题——可能是边界错误（某镜时间倒流、边界不连续、使用了候选表之外的切点或编号），也可能是 schema 错误（某镜缺必填字段、枚举值非法、输出了规定之外的字段）或来源/时长抄写错误；必须逐条修正这些问题后重新输出，视觉与叙事内容保持原质量。
 
 输出必须是合法 JSON 对象，不输出 Markdown，不输出解释文字。
 
