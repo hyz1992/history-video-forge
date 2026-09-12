@@ -5,14 +5,14 @@ import { reactive } from "vue";
 import NarrationEntryCard from "../../frontend/src/components/script/NarrationEntryCard.vue";
 import NarrationGenerateDialog from "../../frontend/src/components/script/NarrationGenerateDialog.vue";
 
-interface StoreMockOptions { status?: string; confirmed?: boolean; durationMs?: number; errorCode?: string; scriptConfirmed?: boolean }
+interface StoreMockOptions { status?: string; confirmed?: boolean; durationMs?: number; errorCode?: string; scriptConfirmed?: boolean; error?: string | null }
 function makeStore(opts: StoreMockOptions = {}) {
   const status = opts.status ?? "empty";
   const store: any = {
     state: reactive({
       busy: false,
       loading: false,
-      error: null,
+      error: opts.error ?? null,
       context: {
         options: [{ provider_model_id: "q", voice_profile_id: "v", model: "Qwen", voice: "木灵", supported_tones: ["neutral"], supported_rates: [1] }],
         configuration: { capabilities: { "tts.synthesize": { provider_model_id: "q" } }, creative: { voice_profile_id: "v" } },
@@ -152,6 +152,16 @@ describe("NarrationGenerateDialog", () => {
     const store = makeStore({ status: "failed", errorCode: code });
     const w = mount(NarrationGenerateDialog, { props: { store, visible: true, estimatedDurationSec: 4 } });
     expect(q("[data-testid=narration-failure-reason]").textContent).toBeTruthy();
+    w.unmount();
+  });
+
+  it("即时错误按标签映射展示，未识别码回退原文", async () => {
+    const store = makeStore({ error: "narration_text_unsupported_chars" });
+    const w = mount(NarrationGenerateDialog, { props: { store, visible: true, estimatedDurationSec: 4 } });
+    expect(q("[role=alert]").textContent).toContain("文案包含口播未覆盖的字符");
+    store.state.error = "some_unknown_code";
+    await flushPromises();
+    expect(q("[role=alert]").textContent).toBe("some_unknown_code");
     w.unmount();
   });
 
