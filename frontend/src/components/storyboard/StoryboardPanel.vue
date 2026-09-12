@@ -580,7 +580,7 @@ function scrollToTop() {
       <div class="storyboard-empty-card">
         <div class="storyboard-empty-icon">🎬</div>
         <h2 class="storyboard-empty-title">分镜尚未生成</h2>
-        <p class="storyboard-empty-hint">确认文案后将自动生成分镜。如果已确认文案但未自动生成，请手动点击下方按钮。</p>
+        <p class="storyboard-empty-hint">确认口播后将自动生成分镜。如果已确认口播但未自动生成，请手动点击下方按钮。</p>
         <div class="storyboard-empty-line"></div>
         <el-button
           type="primary"
