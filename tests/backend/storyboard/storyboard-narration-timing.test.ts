@@ -109,3 +109,38 @@ it.each(["token", "boundary", "missing_tail", "duplicate_id"])("完整来源与�
   if (mode === "duplicate_id") value.plan.segments[1]!.segment_id = value.plan.segments[0]!.segment_id;
   expect(() => a.projectStoryboardTiming(value)).toThrow();
 });
+
+describe("边界ID数字漂移唯一最近吸附", () => {
+  it("无效ID吸附到唯一最近边界，派生与摘录保持一致", async () => {
+    const f = fixture(), value = input(f, [0, 6, 18]);
+    value.plan.segments[0]!.end_boundary_id = "boundary:1520:6"; // 最近真实边界 1500
+    const p = (await api()).projectStoryboardTiming(value);
+    expect(p.segments[0]).toMatchObject({ visual_end_ms: 1500, source_end: 6, script_excerpt: "汉".repeat(6) });
+    expect(p.segments[1]).toMatchObject({ visual_start_ms: 1500, source_start: 6 });
+  });
+  it("相邻镜头共用同一无效ID吸附到同一边界，链式保持", async () => {
+    const f = fixture(), value = input(f, [0, 6, 18]);
+    value.plan.segments[0]!.end_boundary_id = "boundary:1520:6";
+    value.plan.segments[1]!.start_boundary_id = "boundary:1520:6";
+    const p = (await api()).projectStoryboardTiming(value);
+    expect(p.segments.map(s => [s.visual_start_ms, s.visual_end_ms])).toEqual([[0, 1500], [1500, 4500]]);
+    // 持久化存解析后的真实边界 ID，不是原始无效 ID
+    expect(p.segments[0]!.end_boundary_id).toBe("boundary:1500:6");
+    expect(p.segments[1]!.start_boundary_id).toBe("boundary:1500:6");
+  });
+  it("等距歧义、超限与不可解析ID仍拒绝", async () => {
+    const a = await api();
+    const tie = input(); tie.plan.segments[0]!.end_boundary_id = "boundary:375:1"; // 250 与 500 等距
+    expect(() => a.projectStoryboardTiming(tie)).toThrow();
+    const far = input(); far.plan.segments[0]!.end_boundary_id = "boundary:9000:20"; // 超 500ms 上限
+    expect(() => a.projectStoryboardTiming(far)).toThrow();
+    const malformed = input(); malformed.plan.segments[0]!.end_boundary_id = "cut_here";
+    expect(() => a.projectStoryboardTiming(malformed)).toThrow();
+  });
+  it("吸附结果满足正式合同并可被持久化校验通过", async () => {
+    const f = fixture(), value = input(f, [0, 6, 18]);
+    value.plan.segments[0]!.end_boundary_id = "boundary:1520:6";
+    const a = await api(), p = a.projectStoryboardTiming(value);
+    expect(a.validateStoryboardTiming(p, f).segments).toHaveLength(2);
+  });
+});
