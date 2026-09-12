@@ -38,6 +38,7 @@ TTS 实测语速两个样本：
 - 存量 script 记录不追溯改写（已存 82s 的项目保留原值，下次重新生成才回填）。
 - 前端 `ISSUE_CODE_MAP` 三个失效码标签保留：存量校验记录仍可能显示这些历史错误码。
 - 生成时"体量 vs 档位"的软提示、存量记录迁移 —— 后续可选，不在本次范围。
+- `patchScriptDraft` 路径（`script-patch.service.ts`）不经过生成服务的回填点：patch 若改变正文长度，估时不会同步重算。当前主链路 `allowPatch: false`（shadow-only，见 AGENTS.md），该路径生产不可达；未来若开放 patch 主链路，须先补估时重算。
 
 ## 验证
 

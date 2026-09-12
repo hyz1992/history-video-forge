@@ -148,8 +148,10 @@
 `estimated_duration_sec` 不再由 LLM 输出，由 script 生成服务在草稿归一化后按正文字数与实测语速本地回填：
 
 ```text
-estimated_duration_sec = round(script_text 去空白字数 / 5.3 字/秒)
+estimated_duration_sec = max(1, round(script_text 去空白字数 / 5.3 字/秒))
 ```
+
+- 下限 `1` 秒（非空正文至少回填 1 秒），空正文回填 `0`。
 
 - 语速常量来自 TTS 实测样本（5.33 字/秒、4.93 字/秒），设计见 [预估时长本地回填计划](../plans/2026-09-11-script-duration-estimate-backfill.md)。
 - 本地校验不再对估时做档位偏差检查（原 `duration_extreme` / `duration_severe` / `duration_mild_drift` / `duration_body_mismatch` 已于 2026-09-11 废弃）。

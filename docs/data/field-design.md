@@ -374,7 +374,7 @@
 | `decision` | `pass / regen_once / hard_fail` |
 | `errors` | 结构性错误列表 |
 | `warnings` | 警告列表，不直接阻断流程 |
-| `metrics` | 轻量统计，如时长偏差、beat 覆盖情况 |
+| `metrics` | 轻量统计，如正文体量、估时回填结果、beat 覆盖情况 |
 
 ### 变体 B：单一语义审校
 
@@ -621,14 +621,17 @@ shared schema 层应实现为判别联合，而不是扁平对象：
   "decision": "pass",
   "errors": [],
   "warnings": [
-    "duration_slightly_out_of_band"
+    "beat_name_drift:入楚受辱"
   ],
   "metrics": {
-    "estimated_duration_sec": 88,
-    "duration_band_min_sec": 75,
-    "duration_band_max_sec": 95,
-    "beat_coverage_count": 5,
-    "beat_expected_count": 5
+    "estimated_duration_sec": 132,
+    "script_char_count": 698,
+    "script_sentence_count": 18,
+    "min_script_chars_for_band": 320,
+    "min_sentence_count_for_band": 8,
+    "chars_per_estimated_second": 5.29,
+    "beat_trace_count": 2,
+    "quote_trace_count": 1
   }
 }
 ```

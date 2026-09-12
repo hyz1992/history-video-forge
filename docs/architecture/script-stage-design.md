@@ -54,7 +54,7 @@ narration-first 变体（2026-09 已实现，开关未开放）：主链路末�
 
 1. 默认单稿，不默认多稿并行。
 2. `patch_once` 与 `regen_once` 都必须有限次。
-3. 时长只做严重异常检查，不做精确秒数 gate。
+3. 预估时长由系统按正文与实测语速回填，本地不做档位偏差 gate；档位一致性由口播确认门禁兜底。
 4. 本地硬校验只处理结构与显式边界，不做语义裁判。
 5. 语义审校只有一个主裁判。
 6. script 阶段不得反向修改 `Topic Package`。
@@ -219,7 +219,6 @@ script 生成阶段不只输出正文，还要输出轻量 sidecar：
 - 正文非空
 - beat 覆盖
 - quote 使用追踪
-- 严重时长异常
 - 占位符
 - 显式禁用扩写
 - 开头 / 结尾存在
@@ -504,7 +503,7 @@ script 生成阶段不只输出正文，还要输出轻量 sidecar：
 - 不在本地再做一层语义推理 gate
 - 不默认多稿并行
 - 不无限 patch / regen
-- 不因轻微时长偏差重写全文
+- 不因体量微调或预估时长差异重写全文（预估时长由系统回填，见 [预估时长本地回填计划](../plans/2026-09-11-script-duration-estimate-backfill.md)）
 - 不从 Candidate Cache、Event Registry prose、旧 brief 中拼接大 prompt
 
 ## 13. 当前待补充

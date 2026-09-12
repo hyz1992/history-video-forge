@@ -123,14 +123,11 @@
 - `hard_fail`
 
 说明：
-- `regen_once` 只用于可恢复的结构性失败，例如 beat 覆盖缺失、占位符残留、严重时长异常
+- `regen_once` 只用于可恢复的结构性失败，例如 beat 覆盖缺失、占位符残留
 - `hard_fail` 表示本地硬校验已经不能继续自动推进，本轮 script 直接失败退出
 - 本地硬校验不负责 topic 回退判定，`return_topic` 只来自单一语义审校
-- 时长偏差口径：
-  - 不超过 `15%`：只告警
-  - `15% ~ 35%`：`regen_once`
-  - 超过 `35%`：`hard_fail`
-- `beat_trace.excerpt` 少于 `8` 个汉字等价长度时，按“命中过弱”处理，进入 `regen_once`
+- 时长口径（2026-09-11 起）：`estimated_duration_sec` 由生成服务按正文去空白字数与实测语速（约 5.3 字/秒）本地回填，本地校验不再做档位偏差检查；档位与实测时长的一致性由口播确认门禁负责（实测 vs `target_duration_band` + 用户显式接受），见 [预估时长本地回填计划](../plans/2026-09-11-script-duration-estimate-backfill.md)
+- `beat_trace.excerpt` 少于 `14` 个汉字等价长度时，按“命中过弱”处理，进入 `regen_once`
 - `quote_trace` 仅在正文使用了 `canonical_quotes` 时强制要求存在
 
 更细的返回对象 schema、错误码定义与阈值说明，详见：
