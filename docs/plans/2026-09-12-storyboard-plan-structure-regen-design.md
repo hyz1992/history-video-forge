@@ -19,15 +19,15 @@
 
 1. **prompt 时序硬约束（v1.4.0）**：显式要求"镜头沿口播时间轴单向排列：每镜 end 晚于 start、下一镜 start 等于上一镜 end、禁止时间倒流/回跳、start/end 不得互换；boundary ID 必须从边界表逐字复制，禁止抄别处 ID 或凭感觉改数字"。此前单调性只存在于本地校验（事后拒绝），LLM 生成时无引导。
 2. **结构化违反信息**：`projectStoryboardTiming` 的边界类失败改抛 `StoryboardBoundaryError`（`violations: string[]`，中文可读描述，如"第 2 镜结束时间 17520ms 不晚于开始时间 48800ms，时间倒流…"）。非边界错误（来源不一致、schema、时长不匹配）行为不变。
-3. **一次性带反馈重生**：`generateStoryboardPlan` 在口播模式下最多尝试 2 次——首次投影失败且为 `StoryboardBoundaryError` 时，用 `regenerationContext = { reason: "storyboard_narration_plan_invalid", errors: cause.violations }` 重调一次；二次失败或非边界错误直接抛 `LlmOutputError("storyboard_narration_plan_invalid")`。v1（无 narration_timing）路径不重试。
+3. **一次性带反馈重生**：`generateStoryboardPlan` 在口播模式下最多尝试 2 次——首次投影失败且为 `StoryboardBoundaryError` 时，用 `regenerationContext = { reason: "storyboard_narration_plan_invalid", errors: cause.violations }` 重调一次；二次失败或非边界错误直接抛 `LlmOutputError("storyboard_narration_plan_invalid")`。v1（无 narration_timing）路径不重试。若外层已传入本地校验重生上下文（run service 的 local-validation regen 路径），内层重生**合并**其 errors 与 user_feedback（reason 以边界失败为准），不整体覆盖。
 4. **prompt regeneration 分支**：`regeneration_context.reason === storyboard_narration_plan_invalid` 时，errors 逐条指出上一稿边界错误，必须逐条修正后重选合法边界，视觉与叙事质量保持。
 
 ## 明确不改
 
 - 吸附规则本身（唯一最近、≤500ms、等距/超限拒绝）；
-- 本地校验器语义、run service 的 local-validation regen_once 路径（正交保留；最坏链为投影重生 1 次 + 本地校验 regen 1 次，共 3 次调用，仍是有界"一次结构性重生"）；
+- 本地校验器语义、run service 的 local-validation regen_once 路径（正交保留，内层重生合并其上下文；最坏链为每次 generateStoryboardPlan 调用 ≤2 次 gateway 调用、两条调用链最坏 2+2=4 次，仍是有界"一次结构性重生"，无循环）；
 - shared schema、分镜下游、口播链路；
-- 不新增自动循环：投影重生严格 ≤1 次。
+- 不新增自动循环：每次调用的投影重生严格 ≤1 次。
 
 ## 验证
 

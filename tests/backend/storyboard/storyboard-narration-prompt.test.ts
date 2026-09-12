@@ -66,6 +66,12 @@ describe("Task8 规划前已知真实口播", () => {
     for (const name of ["storyboard.planner", "storyboard.segment-regen"]) {
       const p = registry.getPrompt(name); expect(p.metadata.language).toBe("zh-CN"); expect(p.body).toContain("storyboard_v2"); expect(p.body).toContain("start_boundary_id");
     }
+    const planner = registry.getPrompt("storyboard.planner");
+    expect(planner.metadata.version).toBe("v1.4.0");
+    expect(planner.body).toContain("沿口播时间轴单向排列");
+    expect(planner.body).toContain("时间倒流");
+    expect(planner.body).toContain("逐字复制");
+    expect(planner.body).toContain("storyboard_narration_plan_invalid");
   });
 });
 

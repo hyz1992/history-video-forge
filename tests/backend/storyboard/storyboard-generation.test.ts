@@ -17,6 +17,7 @@ import {
   recalculateSegmentTimings,
   regenerateSingleSegment,
 } from "../../../backend/src/modules/storyboard/storyboard-generation.service.js";
+import type { GenerateStoryboardPlanInput } from "../../../backend/src/modules/storyboard/storyboard-generation.service.js";
 
 function makeDraft(): ScriptDraftPackage {
   return {
@@ -673,7 +674,7 @@ describe("边界合同违反一次性重生", () => {
   const visual = { narrative_role: "opening", visual_intent: "宫门", scene_description: "宫门", visual_elements: ["门"],
     framing_hint: "wide", content_type: "live_action", motion_hint: "static", editing_hint: "single",
     on_screen_text: [], linked_beats: [], linked_quotes: [], risk_notes: [], api_video_suitability: "remotion_sufficient" };
-  function makeNarrationInput(overrides: Partial<ReturnType<typeof makeInput>> = {}) {
+  function makeNarrationInput(overrides: Partial<GenerateStoryboardPlanInput> = {}) {
     const base = makeInput();
     const { timingMap, narrationReference } = narrationFixture();
     return { ...base, draft: { ...base.draft, script_text: timingMap.sourceText },
@@ -737,5 +738,73 @@ describe("边界合同违反一次性重生", () => {
     };
     await expect(generateStoryboardPlan({ ...input, llmGateway: gateway })).rejects.toMatchObject({ code: "storyboard_narration_plan_invalid" });
     expect(attempt).toBe(1);
+  });
+
+  it("schema 失败（不可解析计划）不重生，仅调用一次", async () => {
+    const input = makeNarrationInput();
+    let attempt = 0;
+    const gateway: LlmGateway = {
+      async invokeStructuredPrompt<T>(_options: InvokeStructuredPromptOptions): Promise<T> {
+        attempt++;
+        return { foo: "bar" } as T;
+      },
+      invokeStrictStructured: vi.fn(),
+    };
+    await expect(generateStoryboardPlan({ ...input, llmGateway: gateway })).rejects.toMatchObject({ code: "storyboard_narration_plan_invalid" });
+    expect(attempt).toBe(1);
+  });
+
+  it("order 错位同样触发带反馈重生", async () => {
+    const input = makeNarrationInput();
+    const f = { timingMap: input.narrationTiming.timingMap };
+    const calls: Array<{ regeneration_context?: { errors: string[] } }> = [];
+    let attempt = 0;
+    const gateway: LlmGateway = {
+      async invokeStructuredPrompt<T>(options: InvokeStructuredPromptOptions): Promise<T> {
+        calls.push(options.input as never);
+        attempt++;
+        if (attempt === 1) {
+          const bad = rawPlan(f, [[0, 6], [6, 18]]);
+          bad.segments[0]!.order = 1;
+          return bad as T;
+        }
+        return rawPlan(f, [[0, 6], [6, 18]]) as T;
+      },
+      invokeStrictStructured: vi.fn(),
+    };
+    const plan = await generateStoryboardPlan({ ...input, llmGateway: gateway });
+    expect(attempt).toBe(2);
+    expect(calls[1]!.regeneration_context!.errors.join("")).toContain("order");
+    expect(plan.segments).toHaveLength(2);
+  });
+
+  it("内层重生合并外层本地校验上下文与用户反馈", async () => {
+    const input = makeNarrationInput({
+      regenerationContext: {
+        reason: "storyboard_local_validation_regen_once",
+        errors: ["本地校验：segment 过短"],
+        metrics: { segment_count: 3 },
+        user_feedback: "节奏更紧张一些",
+      },
+    });
+    const f = { timingMap: input.narrationTiming.timingMap };
+    const calls: Array<{ regeneration_context?: { reason: string; errors: string[]; user_feedback?: string } }> = [];
+    let attempt = 0;
+    const gateway: LlmGateway = {
+      async invokeStructuredPrompt<T>(options: InvokeStructuredPromptOptions): Promise<T> {
+        calls.push(options.input as never);
+        attempt++;
+        if (attempt === 1) return rawPlan(f, [[0, 6], [6, 3], [3, 18]]) as T;
+        return rawPlan(f, [[0, 6], [6, 18]]) as T;
+      },
+      invokeStrictStructured: vi.fn(),
+    };
+    await generateStoryboardPlan({ ...input, llmGateway: gateway });
+    expect(attempt).toBe(2);
+    const ctx = calls[1]!.regeneration_context!;
+    expect(ctx.reason).toBe("storyboard_narration_plan_invalid");
+    expect(ctx.errors).toContain("本地校验：segment 过短");
+    expect(ctx.errors.join("")).toContain("时间倒流");
+    expect(ctx.user_feedback).toBe("节奏更紧张一些");
   });
 });

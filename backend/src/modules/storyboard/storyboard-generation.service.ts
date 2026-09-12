@@ -95,7 +95,13 @@ export async function generateStoryboardPlan(input: GenerateStoryboardPlanInput)
         return plan;
       } catch (cause) {
         if (attempt < maxAttempts && cause instanceof StoryboardBoundaryError) {
-          input = { ...input, regenerationContext: { reason: "storyboard_narration_plan_invalid", errors: cause.violations, metrics: {} } };
+          // 合并而非覆盖：run service 可能已传入本地校验重生上下文与用户反馈，
+          // 内层重生的 reason 以边界失败为准，但保留外层 errors 与 user_feedback。
+          input = { ...input, regenerationContext: {
+            ...(input.regenerationContext ?? { metrics: {} }),
+            reason: "storyboard_narration_plan_invalid",
+            errors: [...(input.regenerationContext?.errors ?? []), ...cause.violations],
+          } };
           continue;
         }
         throw new LlmOutputError("storyboard_narration_plan_invalid", { cause });
