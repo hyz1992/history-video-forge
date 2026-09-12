@@ -198,6 +198,8 @@ manifest 导入字幕时将 `resolvedStyle` 完整复制到现有消费者读取
 
 2026-09-12 补记（[边界就近吸附设计](./2026-09-12-storyboard-boundary-snap-design.md)）：planner 从完整边界表原样复制 ID 的要求在实测中出现数字漂移（450 个边界、12 个端点错 3，漂移 ≤320ms），本地投影对不存在的 boundary ID 增加唯一最近吸附（仅当存在唯一最近真实边界且 `|Δ| ≤ 500ms`；等距歧义、超限、不可解析仍拒绝），吸附后存解析后的真实边界 ID，其余全部校验不变。prompt 仍要求精确复制，容错为运行时兜底。
 
+2026-09-12 补记 2（[候选切点精简设计](./2026-09-12-storyboard-coarse-candidates-design.md)）：本节"为阅读方便的分句展示不能缩减可选边界集合"约束按生产证据修订——真实项目上全量边界表（450-464 个长 ID）的逐字复制连续三次失败（漂移/时间倒流/漏字段），即使有吸附与重生兜底，任务负担仍超出 LLM 可靠能力。修订为：planner 只接收按时间编号的**粗切点候选**（句末 或 停顿 ≥400ms，含首尾，实测 62-73 个），本地确定性还原为真实边界 ID 后照常投影；词内/句中细切点不再可选，属有意的质量上限收紧（候选密度约 1.5 秒/个，选择余量约 4-5 倍），规则为常量可回退全量。投影、吸附、重生触发面与校验全部不变。
+
 正式 `storyboard_v2` 包含 source narration ID/hash、timingMap hash、boundary ranges 与最终 visual intervals；旧 `start_hint_sec/end_hint_sec` 若为 UI 兼容保留，只能由最终毫秒派生。新旧合同用版本判别联合，禁止 v2 缺字段时回落 v1。回归须证明 18 个各 250 ms 的独立字 token 可以在第 6 字后（1,500 ms）切镜头，而非只能选择机械分组末尾；投影前后原始 timing hash 不变。
 
 每镜 `script_excerpt` 必须由同一范围确定性派生：`sourceText.slice(startBoundary.sourceOffset, endBoundary.sourceOffset)`；持久化 source 起止及派生摘录，不能让 LLM 再独立切一份正文。新 planner 输出合同不要求摘录；若兼容输入仍带摘录，须与派生值逐段完全相等，否则结构校验失败。v2 不走旧 `indexOf/fuzzy` 重定位与 82% 覆盖容忍。资产 planner 的 `script_excerpt`、compiler 的 `source_excerpt` 与真实 interval 共同来自这一已验证范围；单镜视觉重生锁定边界、时间、来源及派生摘录。测试同时覆盖“时间按 ABC/DEF、摘录按 AB/CDEF”的双重完整覆盖反例和重复句，不能只查总覆盖率。

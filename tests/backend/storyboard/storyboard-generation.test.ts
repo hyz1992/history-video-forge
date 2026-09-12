@@ -833,6 +833,25 @@ describe("边界合同违反一次性重生", () => {
     expect(attempt).toBe(1);
   });
 
+  it("LLM 输出候选编号被还原为真实边界后投影", async () => {
+    const input = makeNarrationInput();
+    const gateway: LlmGateway = {
+      async invokeStructuredPrompt<T>(_options: InvokeStructuredPromptOptions): Promise<T> {
+        // 无标点无停顿 → 候选回退全量 19 个；C7=1500ms 边界、C19=末边界
+        return { plan_version: "storyboard_v2", source_script_record_id: "scr_001", source_topic_package_id: "topic_001",
+          global_visual_notes: [], segments: [
+            { ...visual, segment_id: "s0", order: 0, start_boundary_id: "C1", end_boundary_id: "C7" },
+            { ...visual, segment_id: "s1", order: 1, start_boundary_id: "C7", end_boundary_id: "C19" },
+          ] } as T;
+      },
+      invokeStrictStructured: vi.fn(),
+    };
+    const plan = await generateStoryboardPlan({ ...input, llmGateway: gateway });
+    expect(plan.segments[0]!.end_boundary_id).toBe("boundary:1500:6");
+    expect(plan.segments[0]!.script_excerpt).toBe("汉".repeat(6));
+    expect(plan.segments[1]!.end_boundary_id).toBe("boundary:4500:18");
+  });
+
   it("narration 来源哈希不一致（系统不变量）在 LLM 调用前拒绝", async () => {
     const input = makeNarrationInput();
     const f = { timingMap: input.narrationTiming.timingMap };

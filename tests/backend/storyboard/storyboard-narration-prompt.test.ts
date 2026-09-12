@@ -25,12 +25,17 @@ function fixture() {
 }
 
 describe("Task8 规划前已知真实口播", () => {
-  it("输入原文、完整tokens/sourceSpans/boundaries及冻结身份，第6字切点不丢失", () => {
+  it("输入原文、候选切点编号与冻结身份，首尾切点不丢失", () => {
     const { input } = fixture(); const p = buildStoryboardPlannerPromptInput(input) as any;
-    expect(p.narration_timing.timingMap).toEqual(input.narrationTiming.timingMap);
     expect(p.narration_timing.narrationReference).toEqual(input.narrationTiming.narrationReference);
-    expect(p.narration_timing.timingMap.boundaries[6].visualTimeMs).toBe(1500);
-    expect(p.narration_timing.timingMap.boundaries).toHaveLength(19);
+    expect(p.narration_timing.timingMap.boundaries).toBeUndefined();
+    const candidates = p.narration_timing.timingMap.boundary_candidates;
+    expect(Array.isArray(candidates)).toBe(true);
+    // 18 字无标点无停顿 → 粗筛不足 3 个回退全量（19 个边界），编号连续
+    expect(candidates).toHaveLength(19);
+    expect(candidates[0]).toMatchObject({ id: "C1", boundary_id: "boundary:0:0", visual_time_ms: 0 });
+    expect(candidates[6]).toMatchObject({ id: "C7", boundary_id: "boundary:1500:6", visual_time_ms: 1500 });
+    expect(candidates.at(-1)).toMatchObject({ id: "C19", boundary_id: "boundary:4500:18" });
   });
   it("v2选择真实边界，不读取估时重算，原始timing保持不变", async () => {
     const { input, raw } = fixture(); const before = canonicalStringify(input.narrationTiming.timingMap);
@@ -67,10 +72,10 @@ describe("Task8 规划前已知真实口播", () => {
       const p = registry.getPrompt(name); expect(p.metadata.language).toBe("zh-CN"); expect(p.body).toContain("storyboard_v2"); expect(p.body).toContain("start_boundary_id");
     }
     const planner = registry.getPrompt("storyboard.planner");
-    expect(planner.metadata.version).toBe("v1.4.1");
-    expect(planner.body).toContain("沿口播时间轴单向排列");
-    expect(planner.body).toContain("时间倒流");
-    expect(planner.body).toContain("逐字复制");
+    expect(planner.metadata.version).toBe("v1.5.0");
+    expect(planner.body).toContain("boundary_candidates");
+    expect(planner.body).toContain("候选编号");
+    expect(planner.body).toContain("编号必须原样使用");
     expect(planner.body).toContain("storyboard_narration_plan_invalid");
     expect(planner.body).toContain("不能输出规定之外的字段");
     expect(planner.body).toContain("api_video_suitability");

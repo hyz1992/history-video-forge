@@ -39,6 +39,50 @@ export class StoryboardBoundaryError extends Error {
   constructor(readonly violations: string[]) { super("storyboard_narration_boundary_invalid"); this.name = "StoryboardBoundaryError"; }
 }
 const boundaryFail = (violations: string[]): never => { throw new StoryboardBoundaryError(violations); };
+
+/** 粗切点候选：planner 从全部边界（450-464 个，长 ID 逐字复制实测三连败）缩减为
+ *  "句末 或 停顿 ≥400ms"的候选并按时间编号，复制负担降约 6 倍、选择余量仍近 10 倍。
+ *  首尾必含（首尾覆盖合同）；粗筛不足 3 个时退回全量（极端短稿保护）。 */
+export const COARSE_BOUNDARY_MIN_PAUSE_MS = 400;
+export interface StoryboardBoundaryCandidate { id: string; boundary_id: string; visual_time_ms: number; source_offset: number; }
+export function buildStoryboardBoundaryCandidates(timingMap: NarrationTimingMapV1): StoryboardBoundaryCandidate[] {
+  const boundaries = timingMap.boundaries;
+  const selected: number[] = [];
+  for (let i = 0; i < boundaries.length; i++) {
+    const boundary = boundaries[i]!;
+    if (i === 0 || i === boundaries.length - 1) { selected.push(i); continue; }
+    const prev = boundaries[i - 1]!, next = boundaries[i + 1]!;
+    const segment = timingMap.sourceText.slice(prev.sourceOffset, boundary.sourceOffset);
+    const sentenceEnd = /[。！？；…]/u.test(segment);
+    const pause = next.visualTimeMs - boundary.visualTimeMs >= COARSE_BOUNDARY_MIN_PAUSE_MS;
+    if (sentenceEnd || pause) selected.push(i);
+  }
+  const indices = selected.length >= 3 ? selected : boundaries.map((_, i) => i);
+  return indices.map((boundaryIndex, n) => {
+    const boundary = boundaries[boundaryIndex]!;
+    return { id: "C" + (n + 1), boundary_id: boundary.id, visual_time_ms: boundary.visualTimeMs, source_offset: boundary.sourceOffset };
+  });
+}
+const BOUNDARY_LABEL_PATTERN = /^C(\d+)$/;
+/** 把 planner 输出中的候选编号（C<n>）确定性还原为真实 boundary ID（纯查表）；
+ *  非编号格式（真实 ID/旧格式）与未知编号原样透传（投影拒绝后进入带反馈重生）。 */
+export function resolveStoryboardBoundaryLabels(plan: unknown, candidates: StoryboardBoundaryCandidate[]): unknown {
+  if (!plan || typeof plan !== "object") return plan;
+  const record = plan as Record<string, unknown>;
+  if (!Array.isArray(record.segments)) return plan;
+  const byLabel = new Map(candidates.map(c => [c.id, c.boundary_id]));
+  const segments = record.segments.map((segment) => {
+    if (!segment || typeof segment !== "object") return segment;
+    const item = segment as Record<string, unknown>;
+    const resolve = (value: unknown): unknown => {
+      if (typeof value !== "string") return value;
+      const match = BOUNDARY_LABEL_PATTERN.exec(value);
+      return match ? byLabel.get(value) ?? value : value;
+    };
+    return { ...item, start_boundary_id: resolve(item.start_boundary_id), end_boundary_id: resolve(item.end_boundary_id) };
+  });
+  return { ...record, segments };
+}
 export function projectStoryboardTiming(input: StoryboardTimingContext & { plan: unknown }): StoryboardPlanV2 {
   const { timingMap, reference } = source(input);
   const plan = PlanInput.parse(input.plan);

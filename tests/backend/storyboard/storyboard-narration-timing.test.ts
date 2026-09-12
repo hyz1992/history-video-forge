@@ -101,6 +101,40 @@ it("共享source span内即使存在raw token端点也不能切", async () => {
   value.plan.segments[0]!.end_boundary_id = "boundary:300:1";
   expect(() => a.projectStoryboardTiming(value)).toThrow();
 });
+
+describe("粗切点候选与编号还原", () => {
+  it("句末规则筛选、首尾必含、编号连续", async () => {
+    const text = "甲乙。丙丁。戊己。";
+    const timingMap = normalizeNarrationTiming({ sourceText: text, audioHash, durationMs: 2250,
+      sentences: [{ providerSentenceIndex: 0, originalText: text, normalizedText: text,
+        words: Array.from(text, (c, i) => ({ text: c, begin_index: i, end_index: i + 1, begin_time: i * 250, end_time: (i + 1) * 250 })) }] });
+    const a = await api();
+    const candidates = a.buildStoryboardBoundaryCandidates(timingMap);
+    expect(candidates.map(c => c.id)).toEqual(["C1", "C2", "C3", "C4"]);
+    expect(candidates.map(c => c.boundary_id)).toEqual([
+      timingMap.boundaries[0]!.id, timingMap.boundaries[3]!.id, timingMap.boundaries[6]!.id, timingMap.boundaries[9]!.id]);
+  });
+  it("无句末无停顿短稿回退全量边界表", async () => {
+    const f = fixture(), a = await api();
+    const candidates = a.buildStoryboardBoundaryCandidates(f.timingMap);
+    expect(candidates).toHaveLength(19);
+    expect(candidates[0]).toMatchObject({ id: "C1", boundary_id: "boundary:0:0" });
+    expect(candidates.at(-1)).toMatchObject({ id: "C19", boundary_id: "boundary:4500:18" });
+  });
+  it("编号还原：C<n> 查表还原，真实 ID 与未知编号原样透传", async () => {
+    const f = fixture(), a = await api();
+    const candidates = a.buildStoryboardBoundaryCandidates(f.timingMap);
+    const plan = { plan_version: "storyboard_v2", segments: [
+      { start_boundary_id: "C1", end_boundary_id: "C7" },
+      { start_boundary_id: "C7", end_boundary_id: "C19" },
+      { start_boundary_id: "boundary:100:1", end_boundary_id: "C99" },
+    ] };
+    const resolved = a.resolveStoryboardBoundaryLabels(plan, candidates) as { segments: Array<{ start_boundary_id: string; end_boundary_id: string }> };
+    expect(resolved.segments[0]).toMatchObject({ start_boundary_id: "boundary:0:0", end_boundary_id: "boundary:1500:6" });
+    expect(resolved.segments[1]).toMatchObject({ start_boundary_id: "boundary:1500:6", end_boundary_id: "boundary:4500:18" });
+    expect(resolved.segments[2]).toMatchObject({ start_boundary_id: "boundary:100:1", end_boundary_id: "C99" });
+  });
+});
 it.each(["token", "boundary", "missing_tail", "duplicate_id"])("完整来源与覆盖验证：%s", async mode => {
   const value = input(), a = await api();
   if (mode === "token") { value.timingMap.tokens[0]!.endMs = 999; value.narrationReference.timing_map_hash = hash(value.timingMap); }

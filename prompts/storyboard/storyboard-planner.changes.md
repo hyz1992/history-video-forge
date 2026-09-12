@@ -1,5 +1,9 @@
 # storyboard.storyboard-planner 变更记录
 
+## v1.5.0 - 2026-09-12
+- 候选切点精简：v2 输入由"完整 boundaries（450-464 个长 ID 逐字复制）"改为按时间编号的粗切点候选 `boundary_candidates`（句末 或 停顿 ≥400ms，含首尾，实测 62-73 个），每镜 start/end 直接用候选编号（C1..Cn），编号原样使用、禁止改数字/交换/自造。
+- 背景：长 ID 逐字复制在真实项目上三连败（编号漂移/start-end 互换/漏字段）；候选精简把复制负担降约 6 倍、输入 token 显著下降，选择余量仍近 10 倍。设计见 [分镜候选切点精简设计](../../docs/plans/2026-09-12-storyboard-coarse-candidates-design.md)。
+
 ## v1.4.1 - 2026-09-12
 - 每镜必含字段清单显式化（含 `api_video_suitability` 四档枚举），禁止缺字段与输出规定之外字段；`source_script_record_id` / `source_topic_package_id` 必须逐字复制输入值。
 - 背景：项目二（江都宫）第三次失败为 9 镜中 7 镜漏掉 `api_video_suitability` 必填字段；`regeneration_context` 分支同步覆盖 schema 错误与来源/时长抄写错误。
