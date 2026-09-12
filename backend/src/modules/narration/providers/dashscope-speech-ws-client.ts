@@ -36,6 +36,39 @@ export function splitNarrationParagraphs(text: string): string[] {
   if (parts.join('') !== text) return reject('narration_text_invalid');
   return parts;
 }
+
+/** 单条 continue-task 的安全输入长度：资格期实测 172/534 字单条通过；更长单段的
+ *  供应商句子切分行为未经验证（698 字单段曾整段合并为一句致时间校验失败），
+ *  因此超长自然段按句边界拆成多条，拼接仍逐字等于原文。 */
+const SAFE_INPUT_CHUNK_LENGTH = 534;
+const SENTENCE_END_PATTERN = /[。！？；…]/u;
+const TRAILING_QUOTE_PATTERN = /[”』）」"'）]/u;
+
+export function splitNarrationInputs(text: string): string[] {
+  const paragraphs = splitNarrationParagraphs(text);
+  const chunks: string[] = [];
+  for (const paragraph of paragraphs) {
+    if (paragraph.length <= SAFE_INPUT_CHUNK_LENGTH) {
+      chunks.push(paragraph);
+      continue;
+    }
+    let rest = paragraph;
+    while (rest.length > SAFE_INPUT_CHUNK_LENGTH) {
+      const window = rest.slice(0, SAFE_INPUT_CHUNK_LENGTH);
+      let cut = -1;
+      for (let i = window.length - 1; i >= Math.floor(SAFE_INPUT_CHUNK_LENGTH / 2); i -= 1) {
+        if (SENTENCE_END_PATTERN.test(window[i]!)) { cut = i + 1; break; }
+      }
+      if (cut === -1) cut = SAFE_INPUT_CHUNK_LENGTH;
+      // 句末标点后的闭合引号/括号一并归入当前块，避免下块以引号开头
+      while (cut < rest.length && TRAILING_QUOTE_PATTERN.test(rest[cut]!)) cut += 1;
+      chunks.push(rest.slice(0, cut));
+      rest = rest.slice(cut);
+    }
+    if (rest) chunks.push(rest);
+  }
+  return chunks;
+}
 export interface SpeechSocket {
   on(event: string, listener: (...args: any[]) => void): unknown;
   send(text: string): unknown;
@@ -62,7 +95,7 @@ const record = (value: unknown): value is Record<string, any> => !!value && type
 export class DashScopeSpeechWsClient implements NarrationSpeechClient {
   constructor(private readonly options: ClientOptions) {}
   async synthesize(value: unknown, options: NarrationCallOptions = {}): Promise<NarrationSpeechCapture> {
-    const input = parseNarrationSpeechRequest(value), parts = splitNarrationParagraphs(input.sourceText);
+    const input = parseNarrationSpeechRequest(value), parts = splitNarrationInputs(input.sourceText);
     if (options.signal?.aborted) return reject('narration_cancelled');
     if (typeof this.options.apiKey !== 'string' || !this.options.apiKey.trim()) return reject('narration_credentials_missing');
     const timeoutMs = this.options.timeoutMs ?? 180000;

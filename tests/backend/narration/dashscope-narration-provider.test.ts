@@ -50,13 +50,27 @@ describe('独立DashScope口播provider',()=>{
   it.each(['甲'.repeat(20001),''])('输入超限/空正文在联网前拒绝',async text=>{
     const {provider,socketFactory}=setup();await expect(provider.generate({sourceText:text,settings})).rejects.toThrow(/narration_(text|paragraph)/);expect(socketFactory).not.toHaveBeenCalled();
   });
-  it('单段超534（官方单条上限20000内）不再被伪限制拒绝，按单条continue-task发送',async()=>{
+  it('超长单段按句边界拆成多条continue-task且拼接不变',async()=>{
+    const {socket,client}=setup();
+    const sentence='甲'.repeat(200)+'。';
+    const text=sentence.repeat(6); // 6 句 × 201 字 = 1206 字单段
+    const pending=client.synthesize({sourceText:text,settings});const outcome=pending.catch(error=>error);
+    socket.emit('open');socket.json('task-started');
+    socket.emit('close'); const error=await outcome;
+    const messages=socket.sent.filter(m=>m.header.action==='continue-task');
+    expect(messages.map(m=>m.payload.input.text).join('')).toBe(text);
+    expect(messages.length).toBeGreaterThan(1);
+    for(const m of messages)expect(m.payload.input.text.length).toBeLessThanOrEqual(534);
+    expect(error).toBeInstanceOf(Error); expect(error.message).toBe('narration_socket_closed');
+  });
+  it('无标点超长段按安全长度硬切且拼接不变',async()=>{
     const {socket,client}=setup();const text='甲'.repeat(1500);
     const pending=client.synthesize({sourceText:text,settings});const outcome=pending.catch(error=>error);
     socket.emit('open');socket.json('task-started');
     socket.emit('close'); const error=await outcome;
     const messages=socket.sent.filter(m=>m.header.action==='continue-task');
-    expect(messages.map(m=>m.payload.input.text).join('')).toBe(text);expect(messages).toHaveLength(1);
+    expect(messages.map(m=>m.payload.input.text).join('')).toBe(text);expect(messages).toHaveLength(3);
+    for(const m of messages)expect(m.payload.input.text.length).toBeLessThanOrEqual(534);
     expect(error).toBeInstanceOf(Error); expect(error.message).toBe('narration_socket_closed');
   });
   it.each([null,{}, {sourceText:'甲乙',settings:{...settings,tone:'sad'}},{sourceText:'甲乙',settings:{...settings,model:'cosyvoice-v3-flash'}}])('外部未知请求和未验证参数联网前拒绝',async input=>{
