@@ -28,11 +28,17 @@ function source(context: StoryboardTimingContext) {
 /** 唯一投影：合法边界同时决定UTF-16正文切片和视觉毫秒；不重排、不缩放原生时间。
  *  对不存在的 boundary ID 做唯一最近吸附（见 snap-design）：LLM 从 450 个边界
  *  原样复制 ID 时有数字漂移，实测漂移 ≤320ms；仅当存在唯一最近真实边界且
- *  |Δ| ≤ 500ms 时修复，等距歧义或超限仍拒绝（不可拆 span 内切点不因此放行）。 */
+ *  |Δ| ≤ 500ms 时修复，等距歧义或超限仍拒绝（不可拆 span 内切点不因此放行）。
+ *  边界类失败抛出 StoryboardBoundaryError（携带可反馈给 planner 的结构化违反信息）。 */
 const MAX_BOUNDARY_SNAP_MS = 500;
 const BOUNDARY_ID_PATTERN = /^boundary:(\d+):(\d+)$/;
 const SNAP_REPORT_LIMIT = 8;
 interface ResolvedBoundary { boundary: NarrationBoundary; snapped: boolean; deltaMs: number; }
+/** 边界合同违反：violations 为中文可读描述，供一次性重生反馈给 planner。 */
+export class StoryboardBoundaryError extends Error {
+  constructor(readonly violations: string[]) { super("storyboard_narration_boundary_invalid"); this.name = "StoryboardBoundaryError"; }
+}
+const boundaryFail = (violations: string[]): never => { throw new StoryboardBoundaryError(violations); };
 export function projectStoryboardTiming(input: StoryboardTimingContext & { plan: unknown }): StoryboardPlanV2 {
   const { timingMap, reference } = source(input);
   const plan = PlanInput.parse(input.plan);
@@ -62,8 +68,10 @@ export function projectStoryboardTiming(input: StoryboardTimingContext & { plan:
   let nextBoundary = timingMap.boundaries[0]!.id;
   const segments = plan.segments.map((segment, index) => {
     const start = resolveBoundary(segment.start_boundary_id), end = resolveBoundary(segment.end_boundary_id);
-    if (!start || !end || start.boundary.id !== nextBoundary || end.boundary.visualTimeMs <= start.boundary.visualTimeMs || segment.order !== index)
-      throw new Error("storyboard_narration_boundary_invalid");
+    if (!start || !end) return boundaryFail([`第 ${index + 1} 镜的边界 ID 不在边界表内且无法唯一就近吸附：start_boundary_id="${segment.start_boundary_id}"、end_boundary_id="${segment.end_boundary_id}"；必须从边界表逐字复制合法 ID`]);
+    if (start.boundary.id !== nextBoundary) return boundaryFail([`第 ${index + 1} 镜起始边界 "${start.boundary.id}" 与上一镜结束边界 "${nextBoundary}" 不连续：相邻镜头必须共享同一端点`]);
+    if (end.boundary.visualTimeMs <= start.boundary.visualTimeMs) return boundaryFail([`第 ${index + 1} 镜结束时间 ${end.boundary.visualTimeMs}ms 不晚于开始时间 ${start.boundary.visualTimeMs}ms，时间倒流：镜头边界时间必须沿口播时间轴严格递增，禁止交换 start/end`]);
+    if (segment.order !== index) return boundaryFail([`第 ${index + 1} 镜的 order=${segment.order} 与其在数组中的位置 ${index} 不符：order 必须从 0 起按时间顺序连续编号`]);
     if (start.snapped && snaps.length < SNAP_REPORT_LIMIT) snaps.push({ segment: index, requested: segment.start_boundary_id, resolved: start.boundary.id, deltaMs: start.deltaMs });
     if (end.snapped && snaps.length < SNAP_REPORT_LIMIT) snaps.push({ segment: index, requested: segment.end_boundary_id, resolved: end.boundary.id, deltaMs: end.deltaMs });
     const derived = { source_start: start.boundary.sourceOffset, source_end: end.boundary.sourceOffset,
@@ -71,12 +79,12 @@ export function projectStoryboardTiming(input: StoryboardTimingContext & { plan:
       start_hint_sec: start.boundary.visualTimeMs / 1000, end_hint_sec: end.boundary.visualTimeMs / 1000,
       script_excerpt: timingMap.sourceText.slice(start.boundary.sourceOffset, end.boundary.sourceOffset) };
     for (const key of Object.keys(derived) as Array<keyof typeof derived>)
-      if (segment[key] !== undefined && segment[key] !== derived[key]) throw new Error("storyboard_narration_range_mismatch");
+      if (segment[key] !== undefined && segment[key] !== derived[key]) return boundaryFail([`第 ${index + 1} 镜自带 ${key} 与边界派生值不一致：不要输出 source offsets、visual 毫秒或摘录，这些由所选边界确定性派生`]);
     nextBoundary = end.boundary.id;
     // 持久化合同要求 boundary ID 指向真实边界：吸附后必须存解析结果，不能保留原始无效 ID。
     return { ...segment, start_boundary_id: start.boundary.id, end_boundary_id: end.boundary.id, ...derived };
   });
-  if (nextBoundary !== timingMap.boundaries.at(-1)!.id) throw new Error("storyboard_narration_coverage_invalid");
+  if (nextBoundary !== timingMap.boundaries.at(-1)!.id) boundaryFail([`最后一镜结束边界 "${nextBoundary}" 不是全文末尾边界 "${timingMap.boundaries.at(-1)!.id}"：首尾必须使用全文首尾边界`]);
   if (snaps.length) console.warn("[storyboard-boundary-snap]", JSON.stringify(snaps));
   return StoryboardPlanV2.parse({ ...plan, narration_reference: reference,
     estimated_total_duration_sec: timingMap.durationMs / 1000, segments });

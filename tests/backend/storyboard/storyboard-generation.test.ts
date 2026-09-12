@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { StoryboardPlan, type ScriptDraftPackage } from "../../../shared/src/index.js";
+import { createHash } from "node:crypto";
+import { StoryboardPlan, canonicalStringify, type ScriptDraftPackage } from "../../../shared/src/index.js";
 import type {
   InvokeStructuredPromptOptions,
   LlmGateway,
@@ -9,6 +10,7 @@ import { createLlmGateway } from "../../../backend/src/runtime/llm/llm-gateway.j
 import { createOpenAiCompatibleProvider } from "../../../backend/src/runtime/llm/openai-compatible-provider.js";
 import { LlmOutputError } from "../../../backend/src/runtime/llm/llm-output-error.js";
 import { createPromptRegistry } from "../../../backend/src/runtime/prompts/prompt-registry.js";
+import { normalizeNarrationTiming } from "../../../backend/src/modules/narration/narration-timing-normalizer.js";
 import {
   buildStoryboardPlannerPromptInput,
   generateStoryboardPlan,
@@ -653,5 +655,87 @@ describe("recalculateSegmentTimings", () => {
     expect(plan.estimated_total_duration_sec).toBe(draft.estimated_duration_sec);
     const total = plan.segments.reduce((sum, s) => sum + (s.end_hint_sec - s.start_hint_sec), 0);
     expect(total).toBe(draft.estimated_duration_sec);
+  });
+});
+
+describe("边界合同违反一次性重生", () => {
+  function narrationFixture() {
+    const text = "汉".repeat(18);
+    const audioHash = "a".repeat(64);
+    const timingMap = normalizeNarrationTiming({
+      sourceText: text, audioHash, durationMs: 4500,
+      sentences: [{ providerSentenceIndex: 0, originalText: text, normalizedText: text,
+        words: Array.from(text, (c, i) => ({ text: c, begin_index: i, end_index: i + 1, begin_time: i * 250, end_time: (i + 1) * 250 })) }],
+    });
+    const narrationReference = { narration_record_id: "n1", audio_hash: audioHash, timing_map_hash: createHash("sha256").update(canonicalStringify(timingMap)).digest("hex"), duration_ms: 4500 };
+    return { timingMap, narrationReference };
+  }
+  const visual = { narrative_role: "opening", visual_intent: "宫门", scene_description: "宫门", visual_elements: ["门"],
+    framing_hint: "wide", content_type: "live_action", motion_hint: "static", editing_hint: "single",
+    on_screen_text: [], linked_beats: [], linked_quotes: [], risk_notes: [], api_video_suitability: "remotion_sufficient" };
+  function makeNarrationInput(overrides: Partial<ReturnType<typeof makeInput>> = {}) {
+    const base = makeInput();
+    const { timingMap, narrationReference } = narrationFixture();
+    return { ...base, draft: { ...base.draft, script_text: timingMap.sourceText },
+      narrationTiming: { timingMap, narrationReference }, ...overrides };
+  }
+  function segmentsOf(f: { timingMap: { boundaries: Array<{ id: string }> } }, pairs: Array<[number, number]>) {
+    return pairs.map(([start, end], i) => ({ ...visual, segment_id: "s" + i, order: i,
+      start_boundary_id: f.timingMap.boundaries[start]!.id, end_boundary_id: f.timingMap.boundaries[end]!.id }));
+  }
+  function rawPlan(f: { timingMap: { boundaries: Array<{ id: string }> } }, pairs: Array<[number, number]>) {
+    return { plan_version: "storyboard_v2", source_script_record_id: "scr_001", source_topic_package_id: "topic_001",
+      global_visual_notes: [], segments: segmentsOf(f, pairs) };
+  }
+
+  it("首稿时间倒流时带具体错误反馈重生一次，二次成功", async () => {
+    const input = makeNarrationInput();
+    const f = { timingMap: input.narrationTiming.timingMap };
+    const calls: Array<{ regeneration_context?: { reason: string; errors: string[] } }> = [];
+    let attempt = 0;
+    const gateway: LlmGateway = {
+      async invokeStructuredPrompt<T>(options: InvokeStructuredPromptOptions): Promise<T> {
+        calls.push(options.input as never);
+        attempt++;
+        if (attempt === 1) return rawPlan(f, [[0, 6], [6, 3], [3, 18]]) as T; // 第二镜 1500→750 倒流
+        return rawPlan(f, [[0, 6], [6, 18]]) as T;
+      },
+      invokeStrictStructured: vi.fn(),
+    };
+    const plan = await generateStoryboardPlan({ ...input, llmGateway: gateway });
+    expect(attempt).toBe(2);
+    expect(calls[1]!.regeneration_context?.reason).toBe("storyboard_narration_plan_invalid");
+    expect(calls[1]!.regeneration_context!.errors.join("")).toContain("时间倒流");
+    expect(plan.segments).toHaveLength(2);
+  });
+
+  it("两次均违反则拒绝且恰好调用两次", async () => {
+    const input = makeNarrationInput();
+    const f = { timingMap: input.narrationTiming.timingMap };
+    let attempt = 0;
+    const gateway: LlmGateway = {
+      async invokeStructuredPrompt<T>(_options: InvokeStructuredPromptOptions): Promise<T> {
+        attempt++;
+        return rawPlan(f, [[0, 6], [6, 3], [3, 18]]) as T;
+      },
+      invokeStrictStructured: vi.fn(),
+    };
+    await expect(generateStoryboardPlan({ ...input, llmGateway: gateway })).rejects.toMatchObject({ code: "storyboard_narration_plan_invalid" });
+    expect(attempt).toBe(2);
+  });
+
+  it("非边界错误（来源不一致）不重生，仅调用一次", async () => {
+    const input = makeNarrationInput();
+    const f = { timingMap: input.narrationTiming.timingMap };
+    let attempt = 0;
+    const gateway: LlmGateway = {
+      async invokeStructuredPrompt<T>(_options: InvokeStructuredPromptOptions): Promise<T> {
+        attempt++;
+        return { ...rawPlan(f, [[0, 6], [6, 18]]), source_script_record_id: "other" } as T;
+      },
+      invokeStrictStructured: vi.fn(),
+    };
+    await expect(generateStoryboardPlan({ ...input, llmGateway: gateway })).rejects.toMatchObject({ code: "storyboard_narration_plan_invalid" });
+    expect(attempt).toBe(1);
   });
 });

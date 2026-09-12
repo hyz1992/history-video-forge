@@ -17,7 +17,7 @@ import type {
 } from "../../runtime/llm/provider-contract.js";
 import { createPromptRegistry } from "../../runtime/prompts/prompt-registry.js";
 
-import { projectStoryboardTiming, validateStoryboardTiming, type StoryboardTimingContext } from "./storyboard-timing-projector.js";
+import { projectStoryboardTiming, validateStoryboardTiming, StoryboardBoundaryError, type StoryboardTimingContext } from "./storyboard-timing-projector.js";
 import { verifyStoryboardNarrationContext } from "./storyboard-narration-context.js";
 
 export interface TopicBoundaryContext {
@@ -46,7 +46,7 @@ export interface GenerateStoryboardPlanInput {
    */
   snapshotCapabilities?: ResolvedCapabilityMap;
   regenerationContext?: {
-    reason: "storyboard_local_validation_regen_once";
+    reason: "storyboard_local_validation_regen_once" | "storyboard_narration_plan_invalid";
     errors: string[];
     metrics: Record<string, unknown>;
     user_feedback?: string;
@@ -78,31 +78,44 @@ export async function generateStoryboardPlan(input: GenerateStoryboardPlanInput)
   const narrationTiming = input.narrationTiming ? verifyStoryboardNarrationContext(input.narrationTiming, input.draft.script_text) : undefined;
   input = { ...input, narrationTiming };
   const gateway = input.llmGateway ?? createStoryboardPlannerGateway(input.snapshotCapabilities);
-  const rawPlan = await gateway.invokeStructuredPrompt<unknown>({
-    promptId: "storyboard.planner",
-    input: buildStoryboardPlannerPromptInput(input),
-    interactionLogWriter: input.interactionLogWriter,
-  });
+  // 边界合同违反（编号漂移无法吸附、时间倒流、链式断裂）带具体错误反馈重生一次：
+  // 二次失败才拒绝。来源不一致/schema 等非边界错误不重生（LLM 反馈无法修复）。
+  const maxAttempts = narrationTiming ? 2 : 1;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const rawPlan = await gateway.invokeStructuredPrompt<unknown>({
+      promptId: "storyboard.planner",
+      input: buildStoryboardPlannerPromptInput(input),
+      interactionLogWriter: input.interactionLogWriter,
+    });
 
-  if (narrationTiming) {
-    try {
-      const plan = projectStoryboardTiming({ ...narrationTiming, plan: rawPlan });
-      if (plan.source_script_record_id !== input.sourceScriptRecordId || plan.source_topic_package_id !== input.sourceTopicPackageId) throw new Error("storyboard_source_mismatch");
-      return plan;
-    } catch (cause) { throw new LlmOutputError("storyboard_narration_plan_invalid", { cause }); }
+    if (narrationTiming) {
+      try {
+        const plan = projectStoryboardTiming({ ...narrationTiming, plan: rawPlan });
+        if (plan.source_script_record_id !== input.sourceScriptRecordId || plan.source_topic_package_id !== input.sourceTopicPackageId) throw new Error("storyboard_source_mismatch");
+        return plan;
+      } catch (cause) {
+        if (attempt < maxAttempts && cause instanceof StoryboardBoundaryError) {
+          input = { ...input, regenerationContext: { reason: "storyboard_narration_plan_invalid", errors: cause.violations, metrics: {} } };
+          continue;
+        }
+        throw new LlmOutputError("storyboard_narration_plan_invalid", { cause });
+      }
+    }
+
+    const normalized = normalizeStoryboardPlan(rawPlan, input);
+    // 2026-09-05（时长校准）：LLM 按人类朗读语速常识排时间窗（本项目实测 3.9 字/秒），
+    // 而 TTS 实际语速 5.33 字/秒，导致段预估系统性虚高（118s vs 脚本 82s，+44%）并
+    // 一路传导到视频生成时长。时间窗与内容切分解耦：LLM 只负责切分与视觉意图，
+    // 时间窗由本地按各段正文字符占比 × draft.estimated_duration_sec 确定性重算，
+    // 总和恒等于脚本声明时长，误差收敛到脚本估算单点（82 vs 真实 86，≈5%）。
+    const plan = recalculateSegmentTimings(normalized, input.draft.estimated_duration_sec);
+    return parseLlmOutput(
+      StoryboardPlan,
+      plan,
+      "storyboard_plan_schema_invalid",
+    );
   }
-  const normalized = normalizeStoryboardPlan(rawPlan, input);
-  // 2026-09-05（时长校准）：LLM 按人类朗读语速常识排时间窗（本项目实测 3.9 字/秒），
-  // 而 TTS 实际语速 5.33 字/秒，导致段预估系统性虚高（118s vs 脚本 82s，+44%）并
-  // 一路传导到视频生成时长。时间窗与内容切分解耦：LLM 只负责切分与视觉意图，
-  // 时间窗由本地按各段正文字符占比 × draft.estimated_duration_sec 确定性重算，
-  // 总和恒等于脚本声明时长，误差收敛到脚本估算单点（82 vs 真实 86，≈5%）。
-  const plan = recalculateSegmentTimings(normalized, input.draft.estimated_duration_sec);
-  return parseLlmOutput(
-    StoryboardPlan,
-    plan,
-    "storyboard_plan_schema_invalid",
-  );
+  throw new LlmOutputError("storyboard_narration_plan_invalid");
 }
 
 /**

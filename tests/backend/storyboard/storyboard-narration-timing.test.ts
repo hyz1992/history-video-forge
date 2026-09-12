@@ -143,6 +143,24 @@ describe("边界ID数字漂移唯一最近吸附", () => {
     const a = await api(), p = a.projectStoryboardTiming(value);
     expect(a.validateStoryboardTiming(p, f).segments).toHaveLength(2);
   });
+  it("时间倒流抛结构化违反信息", async () => {
+    const a = await api();
+    const value = input(); value.plan.segments[1]!.end_boundary_id = value.timingMap.boundaries[0]!.id;
+    try { a.projectStoryboardTiming(value); throw new Error("should throw"); }
+    catch (e) {
+      expect(e).toBeInstanceOf(a.StoryboardBoundaryError);
+      expect((e as { violations: string[] }).violations.join("")).toContain("时间倒流");
+    }
+  });
+  it("链式断裂与不可吸附 ID 同样给出具体违反信息", async () => {
+    const a = await api();
+    const gap = input(); gap.plan.segments[1]!.start_boundary_id = gap.timingMap.boundaries[7]!.id;
+    try { a.projectStoryboardTiming(gap); throw new Error("should throw"); }
+    catch (e) { expect((e as { violations: string[] }).violations.join("")).toContain("不连续"); }
+    const unknown = input(); unknown.plan.segments[0]!.end_boundary_id = "inside_unsplittable_span";
+    try { a.projectStoryboardTiming(unknown); throw new Error("should throw"); }
+    catch (e) { expect((e as { violations: string[] }).violations.join("")).toContain("无法唯一就近吸附"); }
+  });
   it("吸附到与起点相同边界导致零时长仍拒绝", async () => {
     const f = fixture(), value = input(f, [0, 6, 18]);
     value.plan.segments[0]!.end_boundary_id = "boundary:100:1"; // 最近真实边界是起点 0

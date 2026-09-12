@@ -1,6 +1,6 @@
 ---
 id: storyboard.planner
-version: v1.3.0
+version: v1.4.0
 stage: storyboard
 language: zh-CN
 consumes:
@@ -25,11 +25,11 @@ status: active
 
 `topic_boundary_context` 只能用于避免越界和标注风险。它不能替你改写脚本，也不能让你新增脚本没有讲的剧情。
 
-如果输入包含 `regeneration_context`，只允许修复合法切分、trace 关联和空画面描述；旧模式可修复摘录及时间提示，新模式只能重新选择合法边界。不得借机改写 `script_text`，不得扩展剧情。
+如果输入包含 `regeneration_context`，只允许修复合法切分、trace 关联和空画面描述；旧模式可修复摘录及时间提示，新模式只能重新选择合法边界。不得借机改写 `script_text`，不得扩展剧情。若 `regeneration_context.reason` 为 `storyboard_narration_plan_invalid`，`errors` 逐条指出上一稿的边界错误（如某镜时间倒流、边界不连续、boundary ID 不在边界表内）；必须逐条修正这些错误后重新选择合法边界，视觉与叙事内容保持原质量。
 
 输出必须是合法 JSON 对象，不输出 Markdown，不输出解释文字。
 
-提供 `narration_timing` 时使用 `storyboard_v2`：原文、原生 tokens、不可拆 sourceSpans、完整 boundaries、真实 durationMs 和冻结 narrationReference 均已给出。结合场景推进与实际发声/停顿选择边界，保留全部合法切点供选择，不按固定字数或毫秒分桶，不猜时间、不改正文。每镜输出 `start_boundary_id` / `end_boundary_id`；相邻镜头共享端点，首尾必须使用全文首尾边界。停顿归前镜，首尾静音归首末镜，不能切入不可拆 span。短于1秒的合法范围可以保留。
+提供 `narration_timing` 时使用 `storyboard_v2`：原文、原生 tokens、不可拆 sourceSpans、完整 boundaries、真实 durationMs 和冻结 narrationReference 均已给出。结合场景推进与实际发声/停顿选择边界，保留全部合法切点供选择，不按固定字数或毫秒分桶，不猜时间、不改正文。每镜输出 `start_boundary_id` / `end_boundary_id`；相邻镜头共享端点，首尾必须使用全文首尾边界。镜头必须沿口播时间轴单向排列：每镜 end 必须晚于 start，下一镜 start 必须等于上一镜 end，任何一镜都不得时间倒流或回跳，start/end 不得互换。boundary ID 必须从边界表逐字复制，禁止把别处边界的 ID 抄过来或凭感觉改数字。停顿归前镜，首尾静音归首末镜，不能切入不可拆 span。短于1秒的合法范围可以保留。
 
 v2沿用下方示例的来源ID、视觉、trace和全局说明字段，但将版本改为 `storyboard_v2`，每镜用两项boundary ID替代 `script_excerpt` / `start_hint_sec` / `end_hint_sec`，省略顶层 `estimated_total_duration_sec`。不要独立输出source offsets、visual毫秒或摘录；这些全部由所选同一边界确定性派生。冻结口播身份由运行时附加，不能改选音频。
 

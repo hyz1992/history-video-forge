@@ -1,5 +1,10 @@
 # storyboard.storyboard-planner 变更记录
 
+## v1.4.0 - 2026-09-12
+- 边界时序硬约束显式化：镜头必须沿口播时间轴单向排列（end 晚于 start、下一镜 start 等于上一镜 end、禁止时间倒流/回跳/start-end 互换），boundary ID 必须从边界表逐字复制。
+- 背景：首个口播前置端到端项目实测 planner 对 464 个边界复制 ID 时出现编号漂移与相邻镜 start/end 互换（时间倒流），本地投影拒绝；见 [分镜边界就近吸附设计](../docs/plans/2026-09-12-storyboard-boundary-snap-design.md) 与 [分镜结构失败重生设计](../docs/plans/2026-09-12-storyboard-plan-structure-regen-design.md)。
+- `regeneration_context` 新增 `storyboard_narration_plan_invalid` 分支：errors 逐条指出上一稿边界错误，必须逐条修正后重选合法边界。
+
 ## v1.3.0 - 2026-09-08
 - 新增显式v2输入分支：消费完整原生时间图和冻结口播身份，只选择合法boundary范围；摘录与时间由同一边界派生。
 - 旧摘录及字符估时说明限定v1，保留既有视觉与叙事约束，避免新旧时间规则冲突。
