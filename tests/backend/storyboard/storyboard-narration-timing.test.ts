@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createHash } from "node:crypto";
 import { canonicalStringify, StoryboardPlan, type ScriptDraftPackage } from "../../../shared/src/index.js";
 import { normalizeNarrationTiming } from "../../../backend/src/modules/narration/narration-timing-normalizer.js";
@@ -143,4 +143,52 @@ describe("边界ID数字漂移唯一最近吸附", () => {
     const a = await api(), p = a.projectStoryboardTiming(value);
     expect(a.validateStoryboardTiming(p, f).segments).toHaveLength(2);
   });
+  it("吸附到与起点相同边界导致零时长仍拒绝", async () => {
+    const f = fixture(), value = input(f, [0, 6, 18]);
+    value.plan.segments[0]!.end_boundary_id = "boundary:100:1"; // 最近真实边界是起点 0
+    expect(() => (async () => (await api()).projectStoryboardTiming(value))()).rejects.toThrow();
+  });
+  it("阈值边界：Δ=500 吸附、Δ=501 拒绝", async () => {
+    const f = sparseFixture([0, 1000, 2500, 3500]), a = await api();
+    const accept = { ...f, plan: { plan_version: "storyboard_v2", source_script_record_id: "s1", source_topic_package_id: "t1", global_visual_notes: [], segments: [{ ...visual, segment_id: "s0", order: 0, start_boundary_id: "boundary:0:0", end_boundary_id: "boundary:1500:1" }, { ...visual, segment_id: "s1", order: 1, start_boundary_id: "boundary:1500:1", end_boundary_id: f.timingMap.boundaries.at(-1)!.id }] } };
+    expect(a.projectStoryboardTiming(accept).segments[0]!.end_boundary_id).toBe("boundary:1000:1");
+    const reject = { ...f, plan: { ...accept.plan, segments: [{ ...accept.plan.segments[0]!, end_boundary_id: "boundary:1501:1" }, { ...accept.plan.segments[1]!, start_boundary_id: "boundary:1501:1" }] } };
+    expect(() => a.projectStoryboardTiming(reject)).toThrow();
+  });
+  it("复刻真实失败工件的三个漂移ID吸附", async () => {
+    // 2026-09-12 玄武门项目 planner 输出的无效 ID 与真实边界邻域一致
+    const f = sparseFixture([0, 2880, 3040, 3520, 3760, 19360, 19600, 19840, 64800, 65040, 65840, 70000]);
+    const last = f.timingMap.boundaries.at(-1)!.id;
+    const plan = { plan_version: "storyboard_v2", source_script_record_id: "s1", source_topic_package_id: "t1", global_visual_notes: [], segments: [
+      { ...visual, segment_id: "s0", order: 0, start_boundary_id: "boundary:0:0", end_boundary_id: "boundary:3360:17" },
+      { ...visual, segment_id: "s1", order: 1, start_boundary_id: "boundary:3360:17", end_boundary_id: "boundary:19280:82" },
+      { ...visual, segment_id: "s2", order: 2, start_boundary_id: "boundary:19280:82", end_boundary_id: "boundary:65360:313" },
+      { ...visual, segment_id: "s3", order: 3, start_boundary_id: "boundary:65360:313", end_boundary_id: last }] };
+    const p = (await api()).projectStoryboardTiming({ ...f, plan });
+    expect(p.segments.map(s => s.end_boundary_id)).toEqual(["boundary:3520:3", "boundary:19360:5", "boundary:65040:9", last]);
+    expect(p.segments[0]!.script_excerpt).toBe("汉".repeat(3));
+  });
+  it("吸附报告截断在 8 条内且不影响成功", async () => {
+    const f = fixture();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const cuts = [0, 6, 18];
+      const value = { ...f, plan: { plan_version: "storyboard_v2", source_script_record_id: "s1", source_topic_package_id: "t1", global_visual_notes: [], segments: cuts.slice(0, -1).map((start, i) => ({ ...visual, segment_id: "s" + i, order: i, start_boundary_id: i === 0 ? f.timingMap.boundaries[start]!.id : "boundary:" + (start * 250 + 100) + ":" + start, end_boundary_id: "boundary:" + ((cuts[i + 1]!) * 250 + 100) + ":" + cuts[i + 1]! })) } };
+      const p = (await api()).projectStoryboardTiming(value);
+      expect(p.segments).toHaveLength(2);
+      const snapCalls = warn.mock.calls.filter(c => String(c[0]).startsWith("[storyboard-boundary-snap]"));
+      expect(snapCalls).toHaveLength(1);
+      expect((JSON.parse(String(snapCalls[0]![1])) as unknown[]).length).toBeLessThanOrEqual(8);
+    } finally { warn.mockRestore(); }
+  });
 });
+
+/** 自定义词级时间的稀疏边界夹具：每个字一个词，边界落在每个词起点。 */
+function sparseFixture(starts: number[]) {
+  const text = "汉".repeat(starts.length);
+  const audioHash = "a".repeat(64);
+  const words = starts.map((start, i) => ({ text: "汉", begin_index: i, end_index: i + 1, begin_time: start, end_time: i + 1 < starts.length ? starts[i + 1]! : start + 1000 }));
+  const durationMs = starts.at(-1)! + 1000;
+  const timingMap = normalizeNarrationTiming({ sourceText: text, audioHash, durationMs, sentences: [{ providerSentenceIndex: 0, originalText: text, normalizedText: text, words }] });
+  return { timingMap, narrationReference: { narration_record_id: "n1", audio_hash: audioHash, timing_map_hash: hash(timingMap), duration_ms: durationMs } };
+}
