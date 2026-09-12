@@ -4,9 +4,16 @@ import type {
   AssetPlan,
   AssetPlanningValidationResult,
 } from "../../../shared/src/index.js";
+import { createHash } from "node:crypto";
+import { canonicalStringify } from "../../../shared/src/index.js";
 import { createDbClient } from "../../../backend/src/db/client.js";
 import { createLegacyProject as createProject } from "./legacy-project.fixture.js";
 import { getProjectSnapshot } from "../../../backend/src/modules/projects/project-snapshot.service.js";
+import { buildPricingCatalogSeed } from "../../../backend/src/modules/generation-cost/pricing-catalog.seed.js";
+import { seedGlobalVoiceProfiles } from "../../../backend/src/modules/assets/voice/voice-profile.repository.js";
+import { findProjectConfigRecord } from "../../../backend/src/modules/generation-config/generation-config.repository.js";
+import { normalizeNarrationTiming } from "../../../backend/src/modules/narration/narration-timing-normalizer.js";
+import { projectStoryboardTiming } from "../../../backend/src/modules/storyboard/storyboard-timing-projector.js";
 import { saveAssetPlanRecord } from "../../../backend/src/modules/asset-planning/asset-plan-record.repository.js";
 import {
   saveAssetManifestRecord,
@@ -1606,5 +1613,96 @@ describe("project snapshot service", () => {
     expect(snapshot?.active_publish_package?.package).toMatchObject({
       readiness: "blocked",
     });
+  });
+
+  it("口播前置绑定音色时每镜路线投影不误报音色不可用", async () => {
+    const db = createDbClient();
+    for (const m of buildPricingCatalogSeed({ llm: { mode: "stub" }, media: { deploymentScope: "cn-beijing" } })) {
+      db.providerModelCatalog.set(m.id, m);
+    }
+    await seedGlobalVoiceProfiles(db);
+    const project = await createProject(db, { name: "Voice Bound Project" });
+    // 口播前置模式：创建时绑定系统音色（档案 ready/public）
+    const configRecord = findProjectConfigRecord(db, project.id)!;
+    (configRecord.configurationJson as { creative: { voice_profile_id: string | null } }).creative.voice_profile_id =
+      "voice_narration_qwen_longyimuling";
+
+    const topicPackage = await saveTopicPackage(db, {
+      projectId: project.id,
+      title: "晏子使楚",
+      selectedAngle: "楚王不是只压了晏子一次，而是连压三次。",
+      familyLabel: "外交压场型",
+      scopeLabel: "完整事件",
+      coreConflict: "楚王借公开场合连续羞辱晏子与齐国，晏子必须当场顶回去。",
+      strongScene: "楚王连续压场，晏子一句句顶回去。",
+      packagingSeed: "楚王连压三次，晏子一次没退。",
+      canonicalQuotesJson: ["橘生淮南则为橘"],
+      durationBandJson: { label: "medium" },
+      narrativeTensionMapJson: {
+        hook_claim: "楚王不是只压了晏子一次，而是连压三次",
+        pressure_escalation: "从羞辱身形升级到羞辱齐国",
+        mid_reveal: "晏子不是在逞口舌",
+        peak_payoff: "橘枳之喻把第三次压场原样顶回",
+        ending_residue: "这种场面，一退就不只是退掉自己",
+      },
+      mustIncludeBeatsJson: ["入楚受辱", "橘枳之喻"],
+      forbiddenExpansionsJson: ["不要扩写到未定 downstream 阶段"],
+      riskHintsJson: ["不要把内容写成课堂导入"],
+      sourceAnchorRefsJson: ["《晏子春秋》"],
+    });
+    const scriptRecord = await saveScriptRecord(db, {
+      projectId: project.id,
+      topicPackageId: topicPackage.id,
+      scriptText: "汉".repeat(18),
+      openingSpan: "开",
+      endingSpan: "尾",
+      estimatedDurationSec: 5,
+      beatTraceJson: [],
+      quoteTraceJson: [],
+      reviewStatus: "pass",
+      validationResultJson: { stage: "script_local_validation", decision: "pass", errors: [], warnings: [], metrics: {} },
+    });
+
+    // 真实 v2 计划（含每镜 api_video_suitability），与口播前置项目一致
+    const text = "汉".repeat(18);
+    const audioHash = "a".repeat(64);
+    const timingMap = normalizeNarrationTiming({
+      sourceText: text, audioHash, durationMs: 4500,
+      sentences: [{ providerSentenceIndex: 0, originalText: text, normalizedText: text,
+        words: Array.from(text, (c, i) => ({ text: c, begin_index: i, end_index: i + 1, begin_time: i * 250, end_time: (i + 1) * 250 })) }],
+    });
+    const reference = { narration_record_id: "n1", audio_hash: audioHash, timing_map_hash: createHash("sha256").update(canonicalStringify(timingMap)).digest("hex"), duration_ms: 4500 };
+    const visual = { narrative_role: "opening", visual_intent: "宫门", scene_description: "宫门", visual_elements: ["门"],
+      framing_hint: "wide", content_type: "live_action", motion_hint: "static", editing_hint: "single",
+      on_screen_text: [], linked_beats: [], linked_quotes: [], risk_notes: [], api_video_suitability: "remotion_sufficient" as const };
+    const plan = projectStoryboardTiming({ timingMap, narrationReference: reference, plan: {
+      plan_version: "storyboard_v2", source_script_record_id: scriptRecord.id, source_topic_package_id: topicPackage.id,
+      global_visual_notes: [], segments: [
+        { ...visual, segment_id: "sb_1", order: 0, start_boundary_id: timingMap.boundaries[0]!.id, end_boundary_id: timingMap.boundaries[6]!.id },
+        { ...visual, segment_id: "sb_2", order: 1, start_boundary_id: timingMap.boundaries[6]!.id, end_boundary_id: timingMap.boundaries[18]!.id },
+      ] } });
+
+    const storyboardRecord = await saveStoryboardRecord(db, {
+      projectId: project.id,
+      topicPackageId: topicPackage.id,
+      scriptRecordId: scriptRecord.id,
+      planJson: plan as unknown as Record<string, unknown>,
+      validationResultJson: { stage: "storyboard_local_validation", decision: "pass", errors: [], warnings: [], metrics: { segment_count: 2 } },
+      executionStateJson: { regenerate_used: false },
+      graphTraceSummaryJson: { steps: [] },
+      runtimeDiagnosticsJson: { checks: [] },
+    });
+    project.activeTopicPackageId = topicPackage.id;
+    project.activeScriptRecordId = scriptRecord.id;
+    project.activeStoryboardRecordId = storyboardRecord.id;
+    project.status = "storyboard_ready";
+
+    const snapshot = await getProjectSnapshot(db, project.id);
+    const strategies = (snapshot?.active_storyboard as { segment_strategies?: Array<{ unavailable_reason: string | null; resolved_route: string }> }).segment_strategies;
+    expect(strategies).toHaveLength(2);
+    for (const s of strategies!) {
+      expect(s.unavailable_reason).toBeNull();
+      expect(s.resolved_route).toBeTruthy();
+    }
   });
 });

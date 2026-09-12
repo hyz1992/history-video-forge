@@ -5,7 +5,8 @@ import { getStoryboardRecordById } from "./storyboard-record.repository";
 import { getSegmentOverride, upsertSegmentOverride } from "./storyboard-segment-override.repository";
 import { decodeStoredStoryboardPlan } from "./storyboard-plan-compatibility";
 import { guardOwnedRoute, requireUser } from "../../auth/authorization.js";
-import { resolveGenerationConfiguration } from "../../../../shared/src/index.js";
+import { resolveGenerationConfiguration, CREATIVE_PRESET_REGISTRY_SNAPSHOT_V1 } from "../../../../shared/src/index.js";
+import { listVoiceProfiles } from "../assets/voice/voice-profile.repository.js";
 import { getProjectGenerationConfiguration } from "../generation-config/generation-config.repository.js";
 import { resolveSystemGenerationConstraints, unavailableReasonFromRoute } from "../generation-config/system-constraints.js";
 
@@ -129,6 +130,9 @@ async function updateSegmentStrategyController(
       status: entry.status,
       is_default: entry.isDefault,
     })),
+    // 口播前置项目绑定音色：缺清单会误报"音色不可用"，与费用/快照路径同源补齐。
+    voiceProfiles: await listVoiceProfiles(context.app.db, { ownerId: user.userId }),
+    creativePresets: CREATIVE_PRESET_REGISTRY_SNAPSHOT_V1,
     operation: "assets.generate",
     segmentInputs: [{ segment_id: segment.segment_id, api_video_suitability: segment.api_video_suitability }],
     segmentOverrides: { [segment.segment_id]: payload.visual_strategy_override },

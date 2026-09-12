@@ -12,7 +12,8 @@ import type { DbClient, ScriptRecord } from "../../db/client";
 import { getProjectStorageProfile } from "../../runtime/trace/project-storage.js";
 import { getProjectGenerationConfiguration } from "../generation-config/generation-config.repository.js";
 import { decodeStoredStoryboardPlan } from "../storyboard/storyboard-plan-compatibility.js";
-import { resolveGenerationConfiguration } from "../../../../shared/src/index.js";
+import { resolveGenerationConfiguration, CREATIVE_PRESET_REGISTRY_SNAPSHOT_V1 } from "../../../../shared/src/index.js";
+import { listVoiceProfiles } from "../assets/voice/voice-profile.repository.js";
 import { resolveSystemGenerationConstraints, unavailableReasonFromRoute } from "../generation-config/system-constraints.js";
 
 function summarizeTraceRun(trace: Record<string, unknown> | null | undefined) {
@@ -141,6 +142,10 @@ async function buildStoryboardSnapshotSegment(
         status: entry.status,
         is_default: entry.isDefault,
       })),
+      // 口播前置项目绑定音色：解析器按传入清单校验，缺清单会误报"音色不可用"。
+      // 与 generation-cost 同源：公共 + 本人私有可见性过滤，preset 注册表只读快照。
+      voiceProfiles: await listVoiceProfiles(db, { ownerId: project.ownerId }),
+      creativePresets: CREATIVE_PRESET_REGISTRY_SNAPSHOT_V1,
       operation: "assets.generate",
       segmentInputs: plan.segments.map((s) => ({
         segment_id: s.segment_id,

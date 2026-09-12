@@ -4,11 +4,13 @@ import {
   StoryboardPlan,
   apiQualityToDashscopeResolution,
   resolveGenerationConfiguration,
+  CREATIVE_PRESET_REGISTRY_SNAPSHOT_V1,
   type AssetPlan,
   type AssetPlanningValidationResult,
   type ResolvedSegmentVisualRoute,
 } from "../../../../shared/src/index.js";
 import { canonicalStringify } from "../../../../shared/src/index.js";
+import { listVoiceProfiles } from "../assets/voice/voice-profile.repository.js";
 import { Prisma } from "../../generated/prisma/client.js";
 import { captureStoryboardNarrationSource, withStoryboardNarrationSource, NarrationSourceError } from "../narration/narration-invalidation.js";
 import { loadStoryboardNarrationTiming } from "../storyboard/storyboard-narration-context.js";
@@ -825,6 +827,9 @@ export async function runAssetPlanningGeneration(
       status: entry.status,
       is_default: entry.isDefault,
     })),
+    // 口播前置项目绑定音色：缺清单会导致解析失败直接 500，与费用/快照路径同源补齐。
+    voiceProfiles: await listVoiceProfiles(input.db, { ownerId: input.project.ownerId }),
+    creativePresets: CREATIVE_PRESET_REGISTRY_SNAPSHOT_V1,
     operation: "asset_plan.generate",
     segmentInputs: storyboard.segments.map((s) => ({
       segment_id: s.segment_id,
