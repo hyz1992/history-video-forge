@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events';
 import { describe, expect, it, vi } from 'vitest';
-import { DashScopeSpeechWsClient } from '../../../backend/src/modules/narration/providers/dashscope-speech-ws-client.js';
+import { DashScopeSpeechWsClient, findNarrationUnsupportedChars, isNarrationSocketRetryable, NarrationProviderError } from '../../../backend/src/modules/narration/providers/dashscope-speech-ws-client.js';
 import { DashScopeNarrationProvider } from '../../../backend/src/modules/narration/providers/dashscope-narration-provider.js';
 const settings = {model:'qwen-audio-3.0-tts-plus',voice:'qwen-audio-3.0-tts-plus-longyimuling',region:'cn-beijing',protocol:'dashscope_ws',parametersVersion:'neutral-pcm24k-v1',tone:'neutral',rate:1,pitch:1,volume:50,sampleRate:24000,format:'pcm',textType:'PlainText',wordTimestampEnabled:true,enableSsml:false,seed:0,inputMode:'natural_paragraphs_single_task'};
 class Socket extends EventEmitter {
@@ -178,5 +178,76 @@ describe('不可信request UUID不得悬挂错误结算',()=>{
    }catch(e){escaped=e;}
    await vi.advanceTimersByTimeAsync(1001);expect(escaped).toBeUndefined();expect(settled).toBe(true);expect(error?.code).toBe('narration_protocol_invalid');expect(socket.terminated).toBe(true);
   }}finally{vi.useRealTimers();}
+ });
+});
+
+describe('连接期瞬时失败限次重试',()=>{
+ function driveSuccess(socket:Socket){
+  socket.emit('open');socket.json('task-started');
+  socket.result('sentence-begin',{index:0},{original_text:'甲乙',normalized_text:'甲乙'});
+  const pcm=Buffer.alloc(24000);pcm.writeInt16LE(123,0);pcm.writeInt16LE(-456,23998);
+  socket.emit('message',pcm.subarray(0,17),true);end(socket);socket.emit('message',pcm.subarray(17),true);
+  socket.json('task-finished');
+ }
+ it('socket打开前error重试一次，第二次成功且不换task语义',async()=>{
+  const sockets=[new Socket(),new Socket()];
+  const socketFactory=vi.fn(()=>sockets[socketFactory.mock.calls.length-1]!);
+  const client=new DashScopeSpeechWsClient({apiKey:'test-key',socketFactory,taskIdFactory:()=> 'task-1',timeoutMs:1000});
+  const pending=client.synthesize({sourceText:'甲乙',settings});
+  sockets[0]!.emit('error');
+  await vi.waitFor(()=>expect(socketFactory).toHaveBeenCalledTimes(2));
+  driveSuccess(sockets[1]!);
+  const capture=await pending;
+  expect(capture.pcm.length).toBe(24000);expect(capture.usageCharacters).toBe(4);
+  expect(sockets[0]!.terminated).toBe(true);expect(sockets[1]!.closed).toBe(true);
+ });
+ it('重试耗尽后抛出原错误且只建两次连接',async()=>{
+  const sockets=[new Socket(),new Socket()];
+  const socketFactory=vi.fn(()=>sockets[socketFactory.mock.calls.length-1]!);
+  const client=new DashScopeSpeechWsClient({apiKey:'test-key',socketFactory,taskIdFactory:()=> 'task-1',timeoutMs:1000});
+  const outcome=client.synthesize({sourceText:'甲乙',settings}).catch(e=>e);
+  sockets[0]!.emit('error');
+  await vi.waitFor(()=>expect(socketFactory).toHaveBeenCalledTimes(2));
+  sockets[1]!.emit('error');
+  const error=await outcome;
+  expect(error.message).toBe('narration_socket_error');expect(error.receipt).toBeNull();
+  expect(socketFactory).toHaveBeenCalledTimes(2);
+ });
+ it('socket工厂连续失败重试后抛出连接失败',async()=>{
+  const socketFactory=vi.fn(()=>{throw new Error('dial');});
+  const client=new DashScopeSpeechWsClient({apiKey:'test-key',socketFactory,taskIdFactory:()=> 'task-1'});
+  await expect(client.synthesize({sourceText:'甲乙',settings})).rejects.toThrow('narration_socket_connect_failed');
+  expect(socketFactory).toHaveBeenCalledTimes(2);
+ });
+ it('open 之后（run-task 已发）任何失败都不重试',async()=>{
+  const {socket,client,socketFactory}=setup();
+  const outcome=client.synthesize({sourceText:'甲乙',settings}).catch(e=>e);
+  socket.emit('open');socket.json('task-started');socket.emit('close');
+  const error=await outcome;
+  expect(error.message).toBe('narration_socket_closed');expect(socketFactory).toHaveBeenCalledTimes(1);
+ });
+ it('isNarrationSocketRetryable 只放行未发 run-task 且无回执的连接期失败',()=>{
+  expect(isNarrationSocketRetryable(new NarrationProviderError('narration_socket_error',null,'not_started'))).toBe(true);
+  expect(isNarrationSocketRetryable(new NarrationProviderError('narration_socket_closed',null,'unknown'))).toBe(false);
+  expect(isNarrationSocketRetryable(new NarrationProviderError('narration_timeout',{characters:308,kind:'partial',providerTaskId:'task-1',providerRequestId:null},'unknown'))).toBe(false);
+  expect(isNarrationSocketRetryable(new NarrationProviderError('narration_cancelled',null,'not_started'))).toBe(false);
+  expect(isNarrationSocketRetryable(new Error('boom'))).toBe(false);
+ });
+});
+
+describe('生成前白名单预检',()=>{
+ it('常见中文、全角标点、间隔号与空白全部放行',()=>{
+  expect(findNarrationUnsupportedChars('公元九六〇年，晏子使楚——"橘生淮南则为橘"。\n《晏子春秋》·（一）……')).toEqual([]);
+  expect(findNarrationUnsupportedChars('甲乙')).toEqual([]);
+ });
+ it('白名单外字符被检出且限量报告',()=>{
+  expect(findNarrationUnsupportedChars('甲乙Ａ')).toEqual(['Ａ']);
+  expect(findNarrationUnsupportedChars('甲乙🙂丙🙂')).toEqual(['🙂']);
+  expect(findNarrationUnsupportedChars('甲乙①')).toEqual(['①']);
+ });
+ it('白名单外字符在联网前拒绝',async()=>{
+  const {provider,socketFactory}=setup();
+  await expect(provider.generate({sourceText:'甲乙Ａ',settings})).rejects.toThrow('narration_text_unsupported_chars');
+  expect(socketFactory).not.toHaveBeenCalled();
  });
 });

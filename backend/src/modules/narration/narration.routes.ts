@@ -30,7 +30,7 @@ function route(handler: (context: RouteContext, ownerId: string, actorId: string
             if (error instanceof z.ZodError)
                 return { statusCode: 422, body: { error: "narration_request_invalid" } };
             const code = error instanceof Error ? error.message : "narration_internal_error";
-            const status = code === "project_scope_denied" || code === "narration_not_found" ? 404 : code === "generation_run_persistence_failed" ? 500 : code === "narration_execution_incompatible" || code === "narration_request_invalid" || code === "narration_text_too_long" || code === "narration_paragraph_too_long" ? 422 : 409;
+            const status = code === "project_scope_denied" || code === "narration_not_found" ? 404 : code === "generation_run_persistence_failed" ? 500 : code === "narration_execution_incompatible" || code === "narration_request_invalid" || code === "narration_text_too_long" || code === "narration_paragraph_too_long" || code === "narration_text_unsupported_chars" ? 422 : 409;
             return { statusCode: status, body: { error: code } };
         }
     };

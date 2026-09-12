@@ -35,6 +35,7 @@ const failureLabels: Record<string, string> = {
   narration_provider_unknown: "供应商结果未知，请核对已有费用",
   narration_text_too_long: "正文超出供应商长度限制",
   narration_paragraph_too_long: "段落超出供应商长度限制",
+  narration_text_unsupported_chars: "文案包含口播未覆盖的字符，请改写或换用常见汉字与标点",
 };
 
 const editing = ref(false);
@@ -158,7 +159,7 @@ onBeforeUnmount(() => {
         <p v-if="d?.record.errorCode" class="failure" data-testid="narration-failure-reason">
           失败原因：{{ failureLabels[d.record.errorCode] ?? d.record.errorCode }}
         </p>
-        <p v-if="s.error" class="failure" role="alert">{{ s.error }}</p>
+        <p v-if="s.error" class="failure" role="alert">{{ failureLabels[s.error] ?? s.error }}</p>
         <p v-if="s.snapshot?.narration_readiness?.reason === 'narration_stale'" class="stale">正文或生效参数已变化，原口播已过期。</p>
 
         <!-- 设置（折叠） -->

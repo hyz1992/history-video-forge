@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
+import { appendFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { z } from 'zod';
 import { QualifiedNarrationSettings } from '../../../../../shared/src/index.js';
 import { NativeNarrationSentence } from '../narration-timing-normalizer.js';
@@ -25,7 +27,31 @@ export function parseNarrationSpeechRequest(value: unknown): NarrationSpeechRequ
   const result = Request.safeParse(value);
   if (!result.success) return reject('narration_request_invalid');
   splitNarrationParagraphs(result.data.sourceText);
+  const unsupported = findNarrationUnsupportedChars(result.data.sourceText);
+  if (unsupported.length) {
+    console.warn("[narration-text-precheck]", JSON.stringify(unsupported));
+    try {
+      appendFileSync(resolve(process.cwd(), "storage", "narration-timing-diagnosis.jsonl"), JSON.stringify({ at: new Date().toISOString(), kind: "text-precheck", chars: unsupported }) + "\n");
+    } catch { /* 落盘失败不影响主流程 */ }
+    return reject('narration_text_unsupported_chars');
+  }
   return result.data;
+}
+
+/** 生成前白名单预检：供应商归一化行为无法离线穷举，本地只放行"有原样透传
+ *  证据或已有归一化映射"的字形类；未覆盖字符先于付费调用廉价拒绝（fail-closed）。
+ *  放行：汉字、ASCII 可打印、通用标点（—…""）、CJK 符号/标点（、。《》〇）、
+ *  全角 CJK 标点（不含全角数字/字母）、间隔号·（人名常见）、空白（含全角空格）。 */
+const NARRATION_SAFE_GRAPHEME = /^(?:[\p{Script=Han}\x20-\x7E\u00B7\u2000-\u206F\u3000-\u303F\uFF01-\uFF0F\uFF1A-\uFF1F\uFF3B-\uFF40\uFF5B-\uFF65\t\r\n]|\r\n)$/u;
+export function findNarrationUnsupportedChars(text: string): string[] {
+  const segmenter = new Intl.Segmenter('zh-CN', { granularity: 'grapheme' });
+  const found: string[] = [];
+  for (const { segment } of segmenter.segment(text)) {
+    if (NARRATION_SAFE_GRAPHEME.test(segment)) continue;
+    if (!found.includes(segment)) found.push(segment);
+    if (found.length >= 8) break;
+  }
+  return found;
 }
 export function splitNarrationParagraphs(text: string): string[] {
   if (!text.length || !text.trim()) return reject('narration_text_empty');
@@ -70,6 +96,15 @@ export function splitNarrationInputs(text: string): string[] {
   }
   return chunks;
 }
+
+/** 瞬时失败限次重试：只重试"未发送 run-task 且无用量回执"的连接期失败。
+ *  一旦 socket 打开并发出 run-task，供应商可能已受理计费，绝不自动重发。 */
+const NARRATION_SOCKET_MAX_ATTEMPTS = 2;
+const RETRYABLE_SOCKET_CODES = new Set(['narration_socket_connect_failed', 'narration_socket_error', 'narration_socket_closed', 'narration_timeout']);
+export function isNarrationSocketRetryable(error: unknown): boolean {
+  return error instanceof NarrationProviderError && error.receipt === null && error.remoteOutcome === 'not_started' && RETRYABLE_SOCKET_CODES.has(error.code);
+}
+
 export interface SpeechSocket {
   on(event: string, listener: (...args: any[]) => void): unknown;
   send(text: string): unknown;
@@ -101,6 +136,17 @@ export class DashScopeSpeechWsClient implements NarrationSpeechClient {
     if (typeof this.options.apiKey !== 'string' || !this.options.apiKey.trim()) return reject('narration_credentials_missing');
     const timeoutMs = this.options.timeoutMs ?? 180000;
     if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0 || timeoutMs > 2147483647) return reject('narration_request_invalid');
+    for (let attempt = 1; attempt <= NARRATION_SOCKET_MAX_ATTEMPTS; attempt++) {
+      try {
+        return await this.attemptSynthesize(input, parts, options, timeoutMs);
+      } catch (error) {
+        if (attempt < NARRATION_SOCKET_MAX_ATTEMPTS && isNarrationSocketRetryable(error) && !options.signal?.aborted) continue;
+        throw error;
+      }
+    }
+    return reject('narration_socket_connect_failed');
+  }
+  private async attemptSynthesize(input: NarrationSpeechRequest, parts: string[], options: NarrationCallOptions, timeoutMs: number): Promise<NarrationSpeechCapture> {
     let socket: SpeechSocket, taskId: string;
     try {
       taskId = (this.options.taskIdFactory ?? randomUUID)();
@@ -113,7 +159,7 @@ export class DashScopeSpeechWsClient implements NarrationSpeechClient {
       const start = Date.now(), buffers: Buffer[] = [], rawEvents: NarrationRawEvent[] = [], sentences: NativeNarrationSentence[] = [];
       let bytes = 0, opened = false, started = false, finishSent = false, settled = false;
       let openSentence: number | null = null, beginOriginal: string | undefined, beginNormalized: string | undefined;
-      let receiptFinal = false, remoteOutcome: NarrationRemoteOutcome = 'unknown';
+      let receiptFinal = false, remoteOutcome: NarrationRemoteOutcome = 'not_started';
       let requestId: string | null = null, maxUsage: number | null = null, lastSentenceUsage: number | null = null;
       const cleanup = (success: boolean) => {
         clearTimeout(timer); options.signal?.removeEventListener('abort', abort);
@@ -139,6 +185,8 @@ export class DashScopeSpeechWsClient implements NarrationSpeechClient {
         if (settled) return;
         if (opened) { failure('narration_protocol_invalid'); return; }
         opened = true;
+        // run-task 一旦发出，供应商可能已受理计费：远端结果自此不可判定，禁止自动重发。
+        remoteOutcome = 'unknown';
         const s = input.settings;
         try { send('run-task', { task_group: 'audio', task: 'tts', function: 'SpeechSynthesizer', model: s.model,
           parameters: { voice: s.voice, text_type: s.textType, format: s.format, sample_rate: s.sampleRate,
