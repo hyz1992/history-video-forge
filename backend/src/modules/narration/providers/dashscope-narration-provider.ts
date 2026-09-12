@@ -1,4 +1,6 @@
 import { createHash } from 'node:crypto';
+import { appendFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { z } from 'zod';
 import { normalizeNarrationTiming, NativeNarrationSentence } from '../narration-timing-normalizer.js';
 import { NarrationProviderError, parseNarrationSpeechRequest, type NarrationSpeechClient, type NarrationCallOptions, type NarrationUsageReceipt, type NarrationRemoteOutcome } from './dashscope-speech-ws-client.js';
@@ -115,7 +117,7 @@ export class DashScopeNarrationProvider {
           for (let i = 0; i < Math.max(joined.length, input.sourceText.length); i += 1) {
             if (joined[i] !== input.sourceText[i]) { firstDiff = i; break; }
           }
-          console.warn("[narration-timing-diagnosis]", JSON.stringify({
+          const summary = {
             sourceLen: input.sourceText.length,
             sentenceCount: sentences.length,
             joinedLen: joined.length,
@@ -126,7 +128,15 @@ export class DashScopeNarrationProvider {
             } : null,
             sentenceLens: sentences.map((x) => x.originalText?.length ?? 0),
             wordCount: sentences.reduce((n, x) => n + (x.words?.length ?? 0), 0),
-          }));
+            zeroDurationWords: sentences.reduce((n, x) => n + ((x.words ?? []) as Array<{ begin_time?: number; end_time?: number }>).filter((w) => (w.begin_time ?? 0) === (w.end_time ?? 0)).length, 0),
+            maxSentWords: sentences.reduce((n, x) => Math.max(n, x.words?.length ?? 0), 0),
+            normLenDiff: sentences.map((x) => (x.normalizedText?.length ?? 0) - (x.originalText?.length ?? 0)),
+          };
+          console.warn("[narration-timing-diagnosis]", JSON.stringify(summary));
+          // 诊断落盘：dev 启动脚本的日志不落 storage/backend-dev.log，写独立诊断文件供离线排查。
+          try {
+            appendFileSync(resolve(process.cwd(), "storage", "narration-timing-diagnosis.jsonl"), JSON.stringify({ at: new Date().toISOString(), ...summary }) + "\n");
+          } catch { /* 落盘失败不影响主流程 */ }
         } catch { /* 诊断失败不影响主流程 */ }
       }
       throw new NarrationProviderError(error instanceof NarrationProviderError ? error.code : localErrorCode, receipt, remoteOutcome);
