@@ -108,8 +108,10 @@ export async function generateStoryboardPlan(input: GenerateStoryboardPlanInput)
   const narrationTiming = input.narrationTiming ? verifyStoryboardNarrationContext(input.narrationTiming, input.draft.script_text) : undefined;
   input = { ...input, narrationTiming };
   const gateway = input.llmGateway ?? createStoryboardPlannerGateway(input.snapshotCapabilities);
-  // 边界合同违反（编号漂移无法吸附、时间倒流、链式断裂）带具体错误反馈重生一次：
-  // 二次失败才拒绝。来源不一致/schema 等非边界错误不重生（LLM 反馈无法修复）。
+  // 边界合同违反（编号漂移无法吸附、时间倒流、链式断裂）、schema 形状错误
+  // （缺字段/枚举非法/多余字段）与来源/时长抄写错误均带具体错误反馈重生一次：
+  // 二次失败才拒绝。唯一不重试的是 narration 来源哈希不一致（系统不变量，
+  // 且已被 context 验证在 LLM 调用前拦截）。
   const maxAttempts = narrationTiming ? 2 : 1;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const rawPlan = await gateway.invokeStructuredPrompt<unknown>({

@@ -21,10 +21,10 @@
 2. **结构化违反信息**：`projectStoryboardTiming` 的边界类失败改抛 `StoryboardBoundaryError`（`violations: string[]`，中文可读描述，如"第 2 镜结束时间 17520ms 不晚于开始时间 48800ms，时间倒流…"）；schema 形状失败由 `generateStoryboardPlan` 把 ZodError issues 逐条转中文（"第 N 镜缺少必填字段 X"）。narration 来源哈希不一致行为不变（不可修、不重试）。
 3. **一次性带反馈重生**：`generateStoryboardPlan` 在口播模式下最多尝试 2 次——首次投影失败且为 **LLM 输出反馈可修错误**时，把具体违反信息转成中文 errors 重调一次；二次失败或不可修错误直接抛 `LlmOutputError("storyboard_narration_plan_invalid")`。可修类别：
    - `StoryboardBoundaryError`（边界漂移不可吸附/时间倒流/断链/order/覆盖）；
-   - `ZodError`（schema 形状：缺必填字段、枚举非法、多余字段、重复 segment_id 等，issues 逐条转中文，最多取 3 条）；
+   - `ZodError`（schema 形状：缺必填字段、枚举非法、多余字段、重复 segment_id 等；常见形状错误逐条转中文，custom 校验错误透传 zod 信息，最多取 3 条）；
    - 来源 ID 抄写错误（`storyboard_source_mismatch`）与时长字段多输出（`storyboard_narration_duration_mismatch`）。
-   不可修类别：narration 来源哈希不一致（`storyboard_narration_source_mismatch`，系统不变量，不是 LLM 输出）。v1（无 narration_timing）路径不重试。若外层已传入本地校验重生上下文（run service 的 local-validation regen 路径），内层重生**合并**其 errors 与 user_feedback（reason 以边界失败为准），不整体覆盖。
-4. **prompt regeneration 分支**：`regeneration_context.reason === storyboard_narration_plan_invalid` 时，errors 逐条指出上一稿边界错误，必须逐条修正后重选合法边界，视觉与叙事质量保持。
+   不可修类别：narration 来源哈希不一致（`storyboard_narration_source_mismatch`，系统不变量，不是 LLM 输出）。v1（无 narration_timing）路径不重试。若外层已传入本地校验重生上下文（run service 的 local-validation regen 路径），内层重生**合并**其 errors 与 user_feedback（reason 统一为 `storyboard_narration_plan_invalid`），不整体覆盖。
+4. **prompt regeneration 分支**：`regeneration_context.reason === storyboard_narration_plan_invalid` 时，errors 逐条指出上一稿的问题（边界错误、schema 形状错误或来源/时长抄写错误），必须逐条修正后重新输出，视觉与叙事质量保持。
 
 ## 明确不改
 
@@ -35,7 +35,7 @@
 
 ## 验证
 
-- 单测：投影器对倒流/断链/不可吸附 ID 抛 `StoryboardBoundaryError` 且 violations 命中要害；generation service 首次倒流→二次合法成功（gateway 调用 2 次、第二次输入含 regeneration_context 与错误详情）、两次都错→拒绝且恰好 2 次调用、非边界错误→不重试（1 次调用）。
+- 单测：投影器对倒流/断链/不可吸附 ID 抛 `StoryboardBoundaryError` 且 violations 命中要害；generation service 首次倒流→二次合法成功（gateway 调用 2 次、第二次输入含 regeneration_context 与错误详情）、两次都错→拒绝且恰好 2 次调用、来源 ID 抄错/缺字段/枚举非法/时长多输出→带反馈重生、narration 来源哈希不一致→LLM 调用前拒绝（0 次调用）。
 - prompt 断言：新增时序硬约束文本存在。
 - 真实工件回放：项目二失败计划现在得到"时间倒流"级诊断（而非笼统失败）。
 - 审查：T2（prompt + 跨阶段合同），diff_reviewer + contract_reviewer → final_reviewer R5 两阶段。

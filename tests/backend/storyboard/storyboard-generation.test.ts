@@ -798,6 +798,41 @@ describe("边界合同违反一次性重生", () => {
     expect(calls[1]!.regeneration_context!.errors.join("")).toContain("值非法");
   });
 
+  it("时长字段多输出同样带反馈重生，二次成功", async () => {
+    const input = makeNarrationInput();
+    const f = { timingMap: input.narrationTiming.timingMap };
+    const calls: Array<{ regeneration_context?: { errors: string[] } }> = [];
+    let attempt = 0;
+    const gateway: LlmGateway = {
+      async invokeStructuredPrompt<T>(options: InvokeStructuredPromptOptions): Promise<T> {
+        calls.push(options.input as never);
+        attempt++;
+        if (attempt === 1) return { ...rawPlan(f, [[0, 6], [6, 18]]), estimated_total_duration_sec: 999 } as T;
+        return rawPlan(f, [[0, 6], [6, 18]]) as T;
+      },
+      invokeStrictStructured: vi.fn(),
+    };
+    const plan = await generateStoryboardPlan({ ...input, llmGateway: gateway });
+    expect(attempt).toBe(2);
+    expect(calls[1]!.regeneration_context!.errors.join("")).toContain("estimated_total_duration_sec");
+    expect(plan.segments).toHaveLength(2);
+  });
+
+  it("plan 级 narration 引用不一致（系统不变量）不重试，仅调用一次", async () => {
+    const input = makeNarrationInput();
+    const f = { timingMap: input.narrationTiming.timingMap };
+    let attempt = 0;
+    const gateway: LlmGateway = {
+      async invokeStructuredPrompt<T>(_options: InvokeStructuredPromptOptions): Promise<T> {
+        attempt++;
+        return { ...rawPlan(f, [[0, 6], [6, 18]]), narration_reference: { ...input.narrationTiming.narrationReference, narration_record_id: "other" } } as T;
+      },
+      invokeStrictStructured: vi.fn(),
+    };
+    await expect(generateStoryboardPlan({ ...input, llmGateway: gateway })).rejects.toMatchObject({ code: "storyboard_narration_plan_invalid" });
+    expect(attempt).toBe(1);
+  });
+
   it("narration 来源哈希不一致（系统不变量）在 LLM 调用前拒绝", async () => {
     const input = makeNarrationInput();
     const f = { timingMap: input.narrationTiming.timingMap };
