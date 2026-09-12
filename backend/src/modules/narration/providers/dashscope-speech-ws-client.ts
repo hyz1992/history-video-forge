@@ -37,9 +37,10 @@ export function splitNarrationParagraphs(text: string): string[] {
   return parts;
 }
 
-/** 单条 continue-task 的安全输入长度：资格期实测 172/534 字单条通过；更长单段的
- *  供应商句子切分行为未经验证（698 字单段曾整段合并为一句致时间校验失败），
- *  因此超长自然段按句边界拆成多条，拼接仍逐字等于原文。 */
+/** 单段拆分阈值：非协议边界（官方单条上限 20000），也非质量测定值。
+ *  唯一依据：资格期实测通过的最大单段为 534 字；698 字单段实测被供应商
+ *  整段合并为一句（时间校验失败）。取 534 是保守落在"有通过证据的区间"内；
+ *  更高阈值可在付费实测后上调。 */
 const SAFE_INPUT_CHUNK_LENGTH = 534;
 const SENTENCE_END_PATTERN = /[。！？；…]/u;
 const TRAILING_QUOTE_PATTERN = /[”』）」"'）]/u;
