@@ -15,7 +15,7 @@ describe('原生时间归一化', () => {
     expect(result.boundaries[6]).toMatchObject({ sourceOffset: 6, visualTimeMs: 1500 });
     expect(NarrationTimingMapV1.safeParse(result).success).toBe(true);
   });
-  it.each([['12', '十二'], ['1024', '一千零二十四'], ['2026', '二零二六'], ['0', '零'], ['10010', '一万零一十'], ['12十二12', '十二十二十二'], ['A、B𠮷——3\n', 'A、B吉，三']])('有限规范化%s可追踪', (source, spoken) => {
+  it.each([['12', '十二'], ['1024', '一千零二十四'], ['2026', '二零二六'], ['0', '零'], ['10010', '一万零一十'], ['12十二12', '十二十二十二'], ['A、B𠮷——3\n', 'A、B吉，三'], ['公元九六〇年', '公元九六零年']])('有限规范化%s可追踪', (source, spoken) => {
     const result = normalizeNarrationTiming(input(source, spoken));
     expect(result?.sourceText).toBe(source);
     expect(result.spokenText).toBe(spoken);

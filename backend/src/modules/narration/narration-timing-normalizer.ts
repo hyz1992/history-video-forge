@@ -65,6 +65,7 @@ function mapSentence(original: string, normalized: string, sourceBase: number): 
     const choices = [choice(part.segment, part.index, part.index + part.segment.length)];
     if (part.segment === '\n' || part.segment === '\r\n') choices.push(choice('', part.index, part.index + part.segment.length));
     if (part.segment === '𠮷') choices.push(choice('吉', part.index, part.index + 2));
+    if (part.segment === '〇') choices.push(choice('零', part.index, part.index + 1));
     blocks.push(choices);
   }
   // 不找子串、不做编辑距离。保留所有精确解析；同位置多个来源解析也算歧义。
