@@ -75,10 +75,10 @@ export function captureStoryboardNarrationSource(db: DbClient, projectId: string
 }
 
 export async function activateNarrationStoryboard(db: DbClient, ownerId: string, expected: StoryboardNarrationSource, record: StoryboardRecord) {
+  const projectPatch = { ...narrationDownstreamReset(), activeStoryboardRecordId: record.id,
+    latestStoryboardRunTraceJson: record.graphTraceSummaryJson, status: "storyboard_ready", updatedAt: new Date() };
   const result = await withStoryboardNarrationSource(db, record.projectId, ownerId, expected, async ({ source }, tx) => {
     if (record.scriptRecordId !== expected.scriptRecordId || record.topicPackageId !== source.script?.topicPackageId) throw new NarrationSourceError("narration_stale");
-    const projectPatch = { ...narrationDownstreamReset(), activeStoryboardRecordId: record.id,
-      latestStoryboardRunTraceJson: record.graphTraceSummaryJson, status: "storyboard_ready", updatedAt: new Date() };
     if (tx) {
       const data = { ...record, planJson: record.planJson as Prisma.InputJsonValue,
         validationResultJson: record.validationResultJson as Prisma.InputJsonValue,
@@ -97,6 +97,10 @@ export async function activateNarrationStoryboard(db: DbClient, ownerId: string,
   });
   // 事务提交后才发布完整镜像，不能让页面继续读生成中的占位记录。
   db.storyboardRecords.set(record.id, structuredClone(result));
+  // Prisma 事务分支不触碰内存 Map 的项目对象：提交后同步指针，
+  // 否则读 Map 的路由（如策略切换 PATCH）仍看到旧 activeStoryboardRecordId 而误报 no_active_storyboard。
+  const mapProject = db.projects.get(record.projectId);
+  if (mapProject) Object.assign(mapProject, projectPatch);
   return result;
 }
 

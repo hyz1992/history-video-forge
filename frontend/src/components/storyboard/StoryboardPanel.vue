@@ -453,6 +453,24 @@ async function handleSetOverride(
   }
 }
 
+/** 当前生效路线：显式覆盖优先，否则取矩阵解析路线。 */
+function effectiveStrategy(segment: StoryboardSegment): "api_video" | "remotion_motion" {
+  const projection = strategyProjection(segment);
+  const route = projection.strategy_override ?? projection.resolved_route;
+  return route === "api_video" ? "api_video" : "remotion_motion";
+}
+
+function strategyToggleLabel(segment: StoryboardSegment): string {
+  return effectiveStrategy(segment) === "api_video" ? "切换为 Remotion" : "切换为 API 视频";
+}
+
+async function handleToggleOverride(segment: StoryboardSegment) {
+  await handleSetOverride(
+    segment,
+    effectiveStrategy(segment) === "api_video" ? "remotion_motion" : "api_video",
+  );
+}
+
 /* -------------------------------------------------------------------------- */
 /*  Back to top                                                               */
 /* -------------------------------------------------------------------------- */
@@ -693,23 +711,13 @@ function scrollToTop() {
                 >
                   ⚠ {{ strategyProjection(segment).unavailable_reason }}
                 </span>
-                <!-- 三态选择：API 视频 / Remotion / 继承 -->
+                <!-- 单切换按钮：当前生效路线为 AI 视频则提供切换 Remotion，反之切换 AI 视频 -->
                 <span class="storyboard-override-select">
                   <button
-                    :class="{ active: strategyProjection(segment).strategy_override === 'api_video' }"
+                    class="single"
                     :disabled="isSwitchingStrategy || isRegeneratingSegment"
-                    @click.stop.prevent="handleSetOverride(segment, 'api_video')"
-                  >AI 视频</button>
-                  <button
-                    :class="{ active: strategyProjection(segment).strategy_override === 'remotion_motion' }"
-                    :disabled="isSwitchingStrategy || isRegeneratingSegment"
-                    @click.stop.prevent="handleSetOverride(segment, 'remotion_motion')"
-                  >Remotion</button>
-                  <button
-                    :class="{ active: strategyProjection(segment).strategy_override === null }"
-                    :disabled="isSwitchingStrategy || isRegeneratingSegment"
-                    @click.stop.prevent="handleSetOverride(segment, null)"
-                  >继承</button>
+                    @click.stop.prevent="handleToggleOverride(segment)"
+                  >{{ strategyToggleLabel(segment) }}</button>
                 </span>
                 <button
                   class="storyboard-segment-regen-btn"

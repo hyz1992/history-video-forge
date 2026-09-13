@@ -23,7 +23,7 @@ import { buildPricingCatalogSeed } from "../../../backend/src/modules/generation
 import { seedGlobalVoiceProfiles } from "../../../backend/src/modules/assets/voice/voice-profile.repository.js";
 import { upsertProjectGenerationConfiguration } from "../../../backend/src/modules/generation-config/generation-config.repository.js";
 import { NARRATION_FIRST_MODEL_POLICY_V1 as policy } from "../../../backend/src/modules/narration/narration-model-policy.js";
-import { captureStoryboardNarrationSource, projectTtsHash } from "../../../backend/src/modules/narration/narration-invalidation.js";
+import { activateNarrationStoryboard, captureStoryboardNarrationSource, projectTtsHash } from "../../../backend/src/modules/narration/narration-invalidation.js";
 import { narrationTextHash } from "../../../backend/src/modules/narration/narration-readiness.js";
 import { NarrationRecord } from "../../../shared/src/index.js";
 import { computeRunPayloadFingerprint } from "../../../backend/src/modules/generation-run/generation-run.service.js";
@@ -135,6 +135,18 @@ describe("Task6 SQLite 事务与冷恢复", () => {
       const cold = createDbClient(); cold.narrationPersistence.prismaClient = f.client;
       expect((await captureStoryboardNarrationSource(cold, f.project.id, f.project.ownerId)).identity?.sourceTextSha256).toBe(f.record.sourceTextSha256);
       expect((await captureStoryboardNarrationSource(f.db, f.project.id, f.project.ownerId)).identity?.sourceTextSha256).toBe(f.record.sourceTextSha256);
+    } finally { await f.close(); }
+  });
+  it("激活分镜后内存Map项目指针同步（策略路由不再误报no_active_storyboard）", async () => {
+    const f = await sqliteFixture(); try {
+      const state = await captureStoryboardNarrationSource(f.db, f.project.id, f.project.ownerId);
+      const newStoryboard = { ...f.db.storyboardRecords.get("old")!, id: "new-sb" };
+      await activateNarrationStoryboard(f.db, f.project.ownerId, state.identity!, newStoryboard);
+      // 数据库权威值
+      expect((await f.client.project.findUnique({ where: { id: f.project.id } }))?.activeStoryboardRecordId).toBe("new-sb");
+      // 本次修复点：内存 Map 的项目对象必须同步，读 Map 的路由依赖它
+      expect(f.db.projects.get(f.project.id)?.activeStoryboardRecordId).toBe("new-sb");
+      expect(f.db.projects.get(f.project.id)?.status).toBe("storyboard_ready");
     } finally { await f.close(); }
   });
   it("switched：active正文保存与口播失效同事务，历史及字幕保留", async () => {
