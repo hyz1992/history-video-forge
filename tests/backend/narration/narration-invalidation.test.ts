@@ -807,6 +807,8 @@ describe("Task9A 资产规划来源门禁", () => {
     const active = "client" in f ? (await f.client.project.findUniqueOrThrow({ where: { id: f.project.id } })).activeAssetPlanRecordId : f.project.activeAssetPlanRecordId;
     expect(active).not.toBe("old");
     expect(f.db.assetPlanRecords.get(active!)!.planJson).toMatchObject({ plan_version: "asset_plan_v2" });
+    // 内存 Map 项目指针必须与数据库一致（读 Map 的路由依赖它）
+    expect(f.db.projects.get(f.project.id)?.activeAssetPlanRecordId).toBe(active);
   });
   it("冷实例数据库已变更正文确认时零派发", async () => {
     const f = await sqliteFixture();
