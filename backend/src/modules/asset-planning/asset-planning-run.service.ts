@@ -1218,11 +1218,14 @@ export async function runAssetPlanningGeneration(
   });
 
   if (narrationSource) {
+    const patch = { activeAssetPlanRecordId: assetPlanRecord.id, activeAssetManifestRecordId: null, activeComposeRecordId: null, activeRenderJobRecordId: null, activePublishPackageRecordId: null, latestAssetPlanRunTraceJson: graphTraceSummary, latestAssetsRunTraceJson: null, latestComposeRunTraceJson: null, latestRenderRunTraceJson: null, status: "asset_plan_ready", updatedAt: new Date() };
     await withStoryboardNarrationSource(input.db, input.project.id, input.project.ownerId, narrationSource, async ({ source }, tx) => {
-      const patch = { activeAssetPlanRecordId: assetPlanRecord.id, activeAssetManifestRecordId: null, activeComposeRecordId: null, activeRenderJobRecordId: null, activePublishPackageRecordId: null, latestAssetPlanRunTraceJson: graphTraceSummary, latestAssetsRunTraceJson: null, latestComposeRunTraceJson: null, latestRenderRunTraceJson: null, status: "asset_plan_ready", updatedAt: new Date() };
       if (tx) await tx.project.update({ where: { id: source.project.id }, data: { ...patch, latestAssetPlanRunTraceJson: graphTraceSummary as unknown as Prisma.InputJsonValue, latestAssetsRunTraceJson: Prisma.DbNull, latestComposeRunTraceJson: Prisma.DbNull, latestRenderRunTraceJson: Prisma.DbNull } });
       else Object.assign(source.project, patch);
     });
+    // Prisma 事务分支不触碰内存 Map：提交后同步指针（与故事板/资产激活同源修复）。
+    const mapProject = input.db.projects.get(input.project.id);
+    if (mapProject) Object.assign(mapProject, patch);
   } else {
   activationProjectSnapshot = {
     status: previousProjectStatus,

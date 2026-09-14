@@ -216,6 +216,15 @@ describe("Task9B R1 数据库重试基线",()=>{
     expect(imageJobs()).toBe(count);
     expect(AssetManifestV2.safeParse((second.body as any).manifest).success).toBe(true);
   });
+  it("激活后内存Map项目指针同步（artifacts文件路由不再404）",async()=>{
+    const f=await persistentRunnable();
+    const result=await runAssetsGeneration({db:f.db,project:f.project,voiceProfileId:"unused",executionMode:"auto_available",enabledProviderTypes:["image","bgm","sfx"]});
+    expect(result.statusCode,JSON.stringify(result.body)).toBe(200);
+    const row=await f.client.project.findUnique({where:{id:"p1"}});
+    expect(row?.activeAssetManifestRecordId).toBeTruthy();
+    // 本次修复点：读 Map 的路由（file-routes artifacts/:artifactId/file）依赖内存指针同步
+    expect(f.db.projects.get("p1")?.activeAssetManifestRecordId).toBe(row?.activeAssetManifestRecordId);
+  });
 });
 
 describe("Task9B R1 已派发费用留痕",()=>{

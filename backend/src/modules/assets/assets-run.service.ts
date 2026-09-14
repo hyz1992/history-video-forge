@@ -1421,10 +1421,10 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
   }
 
   if (narrationContext) {
+    const patch = { activeAssetManifestRecordId: assetManifestRecord.id, activeComposeRecordId: null, activeRenderJobRecordId: null, activePublishPackageRecordId: null,
+      status: localValidation.decision === "ready_for_compose" ? "assets_ready" : localValidation.decision === "partial" ? "assets_partial" : "assets_blocked",
+      latestAssetsRunTraceJson: traceSummary, latestComposeRunTraceJson: null, latestRenderRunTraceJson: null, updatedAt: new Date() };
     await withNarrationAssetsSource(db, project.id, project.ownerId, narrationContext.identity, async ({ project: current }, tx) => {
-      const patch = { activeAssetManifestRecordId: assetManifestRecord.id, activeComposeRecordId: null, activeRenderJobRecordId: null, activePublishPackageRecordId: null,
-        status: localValidation.decision === "ready_for_compose" ? "assets_ready" : localValidation.decision === "partial" ? "assets_partial" : "assets_blocked",
-        latestAssetsRunTraceJson: traceSummary, latestComposeRunTraceJson: null, latestRenderRunTraceJson: null, updatedAt: new Date() };
       if (tx) {
         await tx.assetManifestRecord.update({ where: { id: assetManifestRecord.id }, data: { executionStateJson: { ...executionState, activated: true } } });
         await tx.project.update({ where: { id: current.id }, data: { ...patch, latestAssetsRunTraceJson: traceSummary as unknown as Prisma.InputJsonValue, latestComposeRunTraceJson: Prisma.DbNull, latestRenderRunTraceJson: Prisma.DbNull } });
@@ -1433,6 +1433,10 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
         Object.assign(current, patch);
       }
     });
+    // Prisma 事务分支不触碰内存 Map：提交后同步指针，否则读 Map 的路由
+    // （如 artifacts/:artifactId/file 文件服务）拿不到新 activeAssetManifestRecordId 而 404。
+    const mapProject = db.projects.get(project.id);
+    if (mapProject) Object.assign(mapProject, patch);
     executionState.activated = true;
   } else {
   // Step 10: Update project status based on validation decision
