@@ -42,10 +42,17 @@ function integerForms(value: string): string[] {
 }
 interface Unit { text: string; sourceStart: number; sourceEnd: number; }
 interface Choice { spoken: string; units: Unit[]; }
-/** 原样grapheme及冻结的有限变换；每一候选必须与同次 normalized_text 精确相等。 */
+/** 与 shared 覆盖校验同源的静音判定：标点/分隔符/空白。供应商吞掉静音是合同允许的
+ *  （token 不必覆盖标点），但吞掉正文（汉字/字母/数字）必须失败。 */
+const SILENT_PATTERN = /^[\p{P}\p{Z}\s]*$/u;
+/** 原样grapheme及冻结的有限变换；每一候选必须与同次 normalized_text 精确相等。
+ *  除白名单变换外，允许跳过静音 grapheme 作为未知标点改写的兜底：白名单候选成本 0、
+ *  跳过成本 = 被跳过字符数，因此已知变体永远优先，跳过只在无零成本路径时启用。
+ *  跳过总量受预算约束（仅防状态爆炸；安全边界由"仅静音"保证）。 */
 function mapSentence(original: string, normalized: string, sourceBase: number): Unit[] {
   const parts = Array.from(segmenter.segment(original));
   const blocks: Choice[][] = [];
+  const blockMeta: Array<{ silent: boolean; length: number }> = [];
   const choice = (spoken: string, start: number, end: number): Choice => ({ spoken,
     units: Array.from(spoken, text => ({ text, sourceStart: sourceBase + start, sourceEnd: sourceBase + end })) });
   for (let i = 0; i < parts.length; i++) {
@@ -57,38 +64,79 @@ function mapSentence(original: string, normalized: string, sourceBase: number): 
       const end = part.index + number.length;
       blocks.push([{ spoken: number, units: parts.slice(i, last).flatMap(p => choice(p.segment, p.index, p.index + 1).units) },
         ...integerForms(number).map(text => choice(text, part.index, end))]);
+      blockMeta.push({ silent: false, length: number.length });
       i = last - 1; continue;
     }
     if (part.segment === '—' && parts[i + 1]?.segment === '—') {
       // 供应商对"——"的归一化不稳定：资格期样本读成"，"，2026-09-15 实测读成单个"—"（三处各 -1 字）。
       // 保留全部已观测候选；归一化文本固定，同位置不同候选不会互相歧义。
-      blocks.push([{ spoken: '——', units: [...choice('—', part.index, part.index + 1).units, ...choice('—', part.index + 1, part.index + 2).units] }, choice('，', part.index, part.index + 2), choice('—', part.index, part.index + 2)]); i++; continue;
+      blocks.push([{ spoken: '——', units: [...choice('—', part.index, part.index + 1).units, ...choice('—', part.index + 1, part.index + 2).units] }, choice('，', part.index, part.index + 2), choice('—', part.index, part.index + 2)]);
+      blockMeta.push({ silent: true, length: 2 });
+      i++; continue;
     }
     const choices = [choice(part.segment, part.index, part.index + part.segment.length)];
     if (part.segment === '\n' || part.segment === '\r\n') choices.push(choice('', part.index, part.index + part.segment.length));
     if (part.segment === '𠮷') choices.push(choice('吉', part.index, part.index + 2));
     if (part.segment === '〇') choices.push(choice('零', part.index, part.index + 1));
     blocks.push(choices);
+    blockMeta.push({ silent: SILENT_PATTERN.test(part.segment), length: part.segment.length });
   }
   // 不找子串、不做编辑距离。保留所有精确解析；同位置多个来源解析也算歧义。
-  interface Path { offset: number; previous?: Path; units: Unit[]; ambiguous: boolean; }
-  let states = new Map<number, Path>([[0, { offset: 0, units: [], ambiguous: false }]]);
-  for (const choices of blocks) {
-    const next = new Map<number, Path>();
-    for (const state of states.values()) for (const candidate of choices) {
-      if (!normalized.startsWith(candidate.spoken, state.offset)) continue;
-      const offset = state.offset + candidate.spoken.length;
-      const existing = next.get(offset);
-      if (existing) existing.ambiguous = true;
-      else next.set(offset, { offset, previous: state, units: candidate.units, ambiguous: state.ambiguous });
+  // 成本分层 Dijkstra：match 成本 0（白名单候选优先），跳过静音成本 = 字符数。
+  // 成本上界天然 = 静音字符总数（只有静音可被跳过）；仅在极端标点密度下再夹一个绝对上限防状态爆炸。
+  interface Path { blockIndex: number; offset: number; cost: number; previous?: Path; units: Unit[]; ambiguous: boolean; skipped?: string; }
+  const silentTotal = blockMeta.reduce((sum, meta) => sum + (meta.silent ? meta.length : 0), 0);
+  const budget = Math.min(silentTotal, 256);
+  const key = (blockIndex: number, offset: number) => blockIndex + ':' + offset;
+  const settled = new Map<string, Path>();
+  const buckets: Path[][] = Array.from({ length: budget + 1 }, () => []);
+  buckets[0]!.push({ blockIndex: 0, offset: 0, cost: 0, units: [], ambiguous: false });
+  const final = ((): Path | undefined => {
+    for (let cost = 0; cost <= budget; cost += 1) {
+      const bucket = buckets[cost]!;
+      for (let head = 0; head < bucket.length; head += 1) {
+        const node = bucket[head]!;
+        const nodeKey = key(node.blockIndex, node.offset);
+        const seen = settled.get(nodeKey);
+        if (seen) { if (seen.cost === node.cost) seen.ambiguous = true; continue; }
+        settled.set(nodeKey, node);
+        if (settled.size > 200000) fail();
+        if (node.blockIndex === blocks.length) {
+          if (node.offset === normalized.length) return node;
+          continue;
+        }
+        const meta = blockMeta[node.blockIndex]!;
+        for (const candidate of blocks[node.blockIndex]!) {
+          if (!normalized.startsWith(candidate.spoken, node.offset)) continue;
+          const nextKey = key(node.blockIndex + 1, node.offset + candidate.spoken.length);
+          if (settled.has(nextKey)) continue;
+          const next: Path = { blockIndex: node.blockIndex + 1, offset: node.offset + candidate.spoken.length,
+            cost: node.cost, previous: node, units: candidate.units, ambiguous: node.ambiguous };
+          bucket.push(next);
+        }
+        if (meta.silent && node.cost + meta.length <= budget) {
+          const nextKey = key(node.blockIndex + 1, node.offset);
+          if (settled.has(nextKey)) continue;
+          const skippedText = original.slice(parts[node.blockIndex]!.index, parts[node.blockIndex]!.index + meta.length);
+          const next: Path = { blockIndex: node.blockIndex + 1, offset: node.offset,
+            cost: node.cost + meta.length, previous: node, units: [], ambiguous: node.ambiguous, skipped: skippedText };
+          buckets[node.cost + meta.length]!.push(next);
+        }
+      }
     }
-    if (!next.size || next.size > 4096) fail();
-    states = next;
-  }
-  const final = states.get(normalized.length);
-  if (!final || final.ambiguous) fail();
+    return undefined;
+  })();
+  if (!final) fail();
   const chunks: Unit[][] = [];
-  for (let node: Path | undefined = final; node; node = node.previous) chunks.push(node.units);
+  const skipped: string[] = [];
+  for (let node: Path | undefined = final; node; node = node.previous) {
+    // 任一祖先有多条最优路径即歧义（与原实现同语义，回溯检查覆盖迟到标记）。
+    if (node.ambiguous) fail();
+    if (node.skipped !== undefined && skipped.length < 8) skipped.push(node.skipped);
+    chunks.push(node.units);
+  }
+  // 有限脱敏诊断：记录被跳过的静音片段与原文位置，用于观察供应商改写行为。
+  if (skipped.length) console.warn("[narration-silent-skip]", JSON.stringify({ sentenceBase: sourceBase, skipped: skipped.slice(0, 8) }));
   return chunks.reverse().flat();
 }
 

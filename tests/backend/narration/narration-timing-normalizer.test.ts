@@ -75,6 +75,55 @@ it('供应商把双破折号读成单破折号也可追踪',()=>{
   expect(result.tokens.map(t=>[t.sourceStart,t.sourceEnd])).toEqual([[0,1],[1,3],[3,4]]);
   expect(NarrationTimingMapV1.safeParse(result).success).toBe(true);
 });
+
+describe('静音容错对齐（供应商吞标点的未知变体无需再补白名单）', () => {
+  it('白名单未覆盖的静音改写：句号/顿号/引号被吞仍可追踪', () => {
+    // 这些变体不在白名单中，只有"跳过静音 grapheme"能对齐
+    const cases: Array<[string, string]> = [['甲乙。丙丁', '甲乙丙丁'], ['甲、乙', '甲乙'], ['甲"乙"丙', '甲乙丙'], ['甲（乙）丙', '甲乙丙']];
+    for (const [source, spoken] of cases) {
+      const result = normalizeNarrationTiming(input(source, spoken));
+      expect(result?.spokenText, source).toBe(spoken);
+      expect(result?.sourceText, source).toBe(source);
+      expect(NarrationTimingMapV1.safeParse(result).success, source).toBe(true);
+      // 被吞标点落在相邻 token 的 source 区间内，覆盖原文
+      expect(result.tokens.map(t => [t.sourceStart, t.sourceEnd]).at(-1)![1], source).toBe(source.length);
+    }
+  });
+  it('多处置标点被吞（模拟真实 470 字文案三处 —— 场景）', () => {
+    const source = '甲——乙——丙——丁';
+    const result = normalizeNarrationTiming(input(source, '甲—乙—丙—丁'));
+    expect(result?.spokenText).toBe('甲—乙—丙—丁');
+    expect(NarrationTimingMapV1.safeParse(result).success).toBe(true);
+    expect(result.tokens.map(t => [t.sourceStart, t.sourceEnd]).at(-1)![1]).toBe(source.length);
+  });
+  it('吞正文汉字必须失败（容错不放宽到内容层）', () => {
+    expect(() => normalizeNarrationTiming(input('甲乙丙', '甲乙'))).toThrow('narration_timing_invalid');
+    expect(() => normalizeNarrationTiming(input('甲乙丙', '甲丙'))).toThrow('narration_timing_invalid');
+  });
+  it('数字被吞同样失败（长数字读法不在容错范围）', () => {
+    expect(() => normalizeNarrationTiming(input('甲123乙', '甲12乙'))).toThrow('narration_timing_invalid');
+  });
+  it('白名单路径优先于跳过（成本 0 优先，已知变体不受影响）', () => {
+    // 〇 有白名单候选 → 走 match；同时若能"跳过〇"会得到不同 units，必须选白名单
+    const result = normalizeNarrationTiming(input('甲〇乙', '甲零乙'));
+    expect(result.tokens.map(t => [t.sourceStart, t.sourceEnd])).toEqual([[0, 1], [1, 2], [2, 3]]);
+  });
+  it('规模回归：真实量级长文的标点被系统吞掉仍可对齐（性能上限）', () => {
+    let source = '';
+    while (source.length < 470) source += '甲乙丙丁戊己庚辛壬癸，';
+    source = source.slice(0, 470);
+    const spoken = source.replace(/，/gu, '');
+    const started = Date.now();
+    const result = normalizeNarrationTiming(input(source, spoken));
+    const elapsed = Date.now() - started;
+    expect(result?.sourceText).toBe(source);
+    expect(result.spokenText).toBe(spoken);
+    expect(NarrationTimingMapV1.safeParse(result).success).toBe(true);
+    expect(result.tokens.map(t => [t.sourceStart, t.sourceEnd]).at(-1)![1]).toBe(source.length);
+    expect(elapsed).toBeLessThan(3000);
+  });
+});
+
 it('多个合法换行解析对应不同source span时拒绝歧义',()=>{
   expect(()=>normalizeNarrationTiming(input('甲\n\n乙','甲\n乙'))).toThrow('narration_timing_invalid');
 });
