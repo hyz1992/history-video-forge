@@ -131,6 +131,25 @@ describe('静音容错对齐（供应商吞标点的未知变体无需再补白�
       expect(JSON.parse(String(payload[0]![1]))).toMatchObject({ skipped: ['——', '。'] });
     } finally { warn.mockRestore(); }
   });
+  it('诊断回调收到跳过与限流事件（供离线落盘复盘）', () => {
+    const events: Array<{ kind: string; skipped?: string[]; budget?: number }> = [];
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      normalizeNarrationTiming(input('甲——乙。丙', '甲乙丙'), { onDiagnostic: (e) => events.push(e) });
+      expect(events).toHaveLength(1);
+      expect(events[0]).toMatchObject({ kind: 'silent_skip', skipped: ['——', '。'] });
+      events.length = 0;
+      expect(() => normalizeNarrationTiming(input('甲' + '。'.repeat(300) + '乙', '甲乙'), { onDiagnostic: (e) => events.push(e) })).toThrow();
+      expect(events.map(e => e.kind)).toContain('skip_budget');
+    } finally { warn.mockRestore(); }
+  });
+  it('诊断回调抛错不影响对齐结果', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const result = normalizeNarrationTiming(input('甲。乙', '甲乙'), { onDiagnostic: () => { throw new Error('落盘失败'); } });
+      expect(result?.spokenText).toBe('甲乙');
+    } finally { warn.mockRestore(); }
+  });
   it('CRLF 归一为 LF 也可追踪（相邻折叠形态）', () => {
     const result = normalizeNarrationTiming(input('甲\r\n乙', '甲\n乙'));
     expect(result?.spokenText).toBe('甲\n乙');

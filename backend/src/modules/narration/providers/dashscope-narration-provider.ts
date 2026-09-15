@@ -103,7 +103,14 @@ export class DashScopeNarrationProvider {
     const durationMs = Math.round(sampleCount * 1000 / 24000);
     const audioHash = createHash('sha256').update(wav).digest('hex');
     localErrorCode = 'narration_timing_invalid';
-    const timingMap = normalizeNarrationTiming({ sourceText: input.sourceText, durationMs, audioHash, sentences: parsed.data.sentences });
+    const timingMap = normalizeNarrationTiming({ sourceText: input.sourceText, durationMs, audioHash, sentences: parsed.data.sentences },
+      // 对齐诊断落盘：dev 启动脚本日志不落 storage/backend-dev.log，跳过/限流事件写既有诊断文件，
+      // 供离线复盘"供应商这次改写了什么"（决定是否需要新增白名单或容错规则）。
+      { onDiagnostic: (event) => {
+        try {
+          appendFileSync(resolve(process.cwd(), "storage", "narration-timing-diagnosis.jsonl"), JSON.stringify({ at: new Date().toISOString(), source: "alignment", ...event }) + "\n");
+        } catch { /* 落盘失败不影响对齐主流程 */ }
+      } });
     return { ...parsed.data, pcm, wav, sampleCount, sampleRate: 24000 as const, channels: 1 as const, bitDepth: 16 as const,
       durationMs, audioHash, timingMap, settings: input.settings };
     } catch (error) {

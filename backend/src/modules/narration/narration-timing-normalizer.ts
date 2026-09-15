@@ -58,7 +58,17 @@ const MAX_STATES = 2000000;
  *  除白名单变换外，允许跳过静音 grapheme 作为未知标点改写的兜底：白名单候选成本 0、
  *  跳过成本 = 被跳过字符数，因此已知变体永远优先，跳过只在无零成本路径时启用。
  *  跳过总量受预算约束（仅防状态爆炸；安全边界由"仅静音"保证）。 */
-function mapSentence(original: string, normalized: string, sourceBase: number): Unit[] {
+export interface NarrationTimingDiagnostic {
+  kind: "silent_skip" | "skip_budget" | "layer_limit" | "state_limit";
+  sentenceBase?: number; skipped?: string[]; budget?: number; silentTotal?: number;
+  blocks?: number; states?: number; layer?: number; count?: number;
+}
+function mapSentence(original: string, normalized: string, sourceBase: number,
+  onDiagnostic?: (event: NarrationTimingDiagnostic) => void): Unit[] {
+  const emit = (event: NarrationTimingDiagnostic) => {
+    console.warn(event.kind === "silent_skip" ? "[narration-silent-skip]" : "[narration-align-limit]", JSON.stringify(event));
+    try { onDiagnostic?.(event); } catch { /* 诊断回调失败不影响对齐主流程 */ }
+  };
   const parts = Array.from(segmenter.segment(original));
   const blocks: Choice[][] = [];
   /** 每 block 覆盖的原文范围（code unit，相对本句）与静音属性、长度：跳过成本与诊断都依赖它。 */
@@ -136,8 +146,8 @@ function mapSentence(original: string, normalized: string, sourceBase: number): 
         settled.set(nodeKey, node);
         const layerCount = (layerStates.get(node.blockIndex) ?? 0) + 1;
         layerStates.set(node.blockIndex, layerCount);
-        if (layerCount > MAX_LAYER_STATES) { console.warn("[narration-align-limit]", JSON.stringify({ kind: "layer_limit", layer: node.blockIndex, count: layerCount, blocks: blocks.length })); fail(); }
-        if (settled.size > MAX_STATES) { console.warn("[narration-align-limit]", JSON.stringify({ kind: "state_limit", states: settled.size, blocks: blocks.length })); fail(); }
+        if (layerCount > MAX_LAYER_STATES) { emit({ kind: "layer_limit", layer: node.blockIndex, count: layerCount, blocks: blocks.length }); fail(); }
+        if (settled.size > MAX_STATES) { emit({ kind: "state_limit", states: settled.size, blocks: blocks.length }); fail(); }
         if (node.blockIndex === blocks.length) {
           if (node.offset === normalized.length && !best) best = node;
           continue;
@@ -167,7 +177,7 @@ function mapSentence(original: string, normalized: string, sourceBase: number): 
     return best;
   })();
   if (!final) {
-    if (budgetTruncated) console.warn("[narration-align-limit]", JSON.stringify({ kind: "skip_budget", budget, silentTotal, blocks: blocks.length }));
+    if (budgetTruncated) emit({ kind: "skip_budget", budget, silentTotal, blocks: blocks.length });
     fail();
   }
   const chunks: Unit[][] = [];
@@ -179,7 +189,7 @@ function mapSentence(original: string, normalized: string, sourceBase: number): 
     chunks.push(node.units);
   }
   // 有限诊断：记录被跳过的静音片段（按文中顺序），用于观察供应商改写行为。
-  if (skipped.length) console.warn("[narration-silent-skip]", JSON.stringify({ sentenceBase: sourceBase, skipped: skipped.reverse().slice(0, 8) }));
+  if (skipped.length) emit({ kind: "silent_skip", sentenceBase: sourceBase, skipped: skipped.reverse().slice(0, 8) });
   return chunks.reverse().flat();
 }
 
@@ -235,14 +245,14 @@ function makeBoundaries(tokens: TimingToken[], spans: NarrationSourceSpan[], len
   });
 }
 /** 独立生产适配器：只处理同次供应商来源和原生端点，最终交由shared完整合同复验。 */
-export function normalizeNarrationTiming(value: unknown): NarrationTimingMapV1 {
+export function normalizeNarrationTiming(value: unknown, options?: { onDiagnostic?: (event: NarrationTimingDiagnostic) => void }): NarrationTimingMapV1 {
   try {
     const input = Input.parse(value);
     if (input.sentences.map(s => s.originalText).join('') !== input.sourceText) fail();
     const tokens: TimingToken[] = []; let sourceBase = 0;
     input.sentences.forEach((sentence, index) => {
       if (sentence.providerSentenceIndex !== index || sentence.words.map(w => w.text).join('') !== sentence.normalizedText) fail();
-      const units = mapSentence(sentence.originalText, sentence.normalizedText, sourceBase); let cursor = 0;
+      const units = mapSentence(sentence.originalText, sentence.normalizedText, sourceBase, options?.onDiagnostic); let cursor = 0;
       for (const word of sentence.words) {
         if (word.begin_index !== tokens.length || word.end_index !== word.begin_index + 1) fail();
         const letters = Array.from(word.text), members = units.slice(cursor, cursor + letters.length);
