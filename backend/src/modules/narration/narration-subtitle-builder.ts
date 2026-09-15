@@ -31,9 +31,19 @@ export async function buildNarrationSubtitles(value: unknown) {
   };
   for(let i=0;i<map.sourceSpans.length;i++){
     const span=map.sourceSpans[i]!, sourceStart=i===0?0:span.sourceStart;
-    const raw=map.sourceText.slice(sourceStart,map.sourceSpans[i+1]?.sourceStart??map.sourceText.length);
-    const unit=display(raw);
-    if(length(unit)>limit)throw new Error('narration_subtitle_unsplittable_span');
+    const gapEnd=map.sourceSpans[i+1]?.sourceStart??map.sourceText.length;
+    let raw=map.sourceText.slice(sourceStart,gapEnd);
+    let unit=display(raw);
+    if(length(unit)>limit){
+      // 供应商未发音的静音空隙（本 span 覆盖范围之外，如被吞掉的连续标点）不应挤爆字幕行：
+      // 剥离空隙后若覆盖部分本身合法则采用（显示与音频一致），否则维持原错误。
+      // cue 的 source 范围仍覆盖完整原文，来源映射不受影响。
+      const gap=map.sourceText.slice(span.sourceEnd,gapEnd);
+      const covered=display(map.sourceText.slice(sourceStart,span.sourceEnd));
+      if(!(gap.length>0&&/^[\p{P}\p{Z}\s]*$/u.test(gap)&&length(covered)>0&&length(covered)<=limit))
+        throw new Error('narration_subtitle_unsplittable_span');
+      raw=map.sourceText.slice(sourceStart,span.sourceEnd);unit=covered;
+    }
     // 空白仅在显示层归一化；来源范围始终覆盖完整原文。
     const separator=line && (pendingSpace||/^\s/u.test(raw))?' ':'';
     if(line && length(line+separator+unit)>limit){

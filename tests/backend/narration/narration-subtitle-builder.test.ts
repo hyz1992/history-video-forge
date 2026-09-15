@@ -64,4 +64,15 @@ describe('原生字幕确定性派生',()=>{
   it.each([null,{}, {timingMap:{tokens:[]},settingsSnapshot:settings()}, {timingMap:{...timing('甲'),durationMs:0},settingsSnapshot:settings()}, {timingMap:timing('甲'),settingsSnapshot:{presetId:'x'}}])('畸形完整输入或缺原生时间拒绝',async value=>{
     await expect(buildNarrationSubtitles(value)).rejects.toThrow('narration_subtitle_input_invalid');
   });
+  it('供应商吞掉的连续静音空隙不挤爆字幕行（显示剥离，来源范围仍完整）',async()=>{
+    // 单 span 后跟 30 个被吞句号：修复前 raw 含空隙会抛 narration_subtitle_unsplittable_span
+    const map=timing('甲'+'。'.repeat(30)+'乙','甲乙');
+    const result=await buildNarrationSubtitles({timingMap:map,settingsSnapshot:settings(18,2)});
+    expect(result.timeline.cues.length).toBeGreaterThan(0);
+    // 显示文本不含供应商未发音的标点堆积
+    expect(result.timeline.cues.map((c:any)=>c.text).join('')).not.toContain('。'.repeat(10));
+    // cue 来源范围仍覆盖完整原文（映射完整性不受显示剥离影响）
+    expect(result.timeline.cues.at(-1)!.sourceEnd).toBe(map.sourceText.length);
+    expect(NarrationSubtitleTimelineV1.safeParse(result.timeline).success).toBe(true);
+  });
 });
