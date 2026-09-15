@@ -60,7 +60,9 @@ function mapSentence(original: string, normalized: string, sourceBase: number): 
       i = last - 1; continue;
     }
     if (part.segment === '—' && parts[i + 1]?.segment === '—') {
-      blocks.push([{ spoken: '——', units: [...choice('—', part.index, part.index + 1).units, ...choice('—', part.index + 1, part.index + 2).units] }, choice('，', part.index, part.index + 2)]); i++; continue;
+      // 供应商对"——"的归一化不稳定：资格期样本读成"，"，2026-09-15 实测读成单个"—"（三处各 -1 字）。
+      // 保留全部已观测候选；归一化文本固定，同位置不同候选不会互相歧义。
+      blocks.push([{ spoken: '——', units: [...choice('—', part.index, part.index + 1).units, ...choice('—', part.index + 1, part.index + 2).units] }, choice('，', part.index, part.index + 2), choice('—', part.index, part.index + 2)]); i++; continue;
     }
     const choices = [choice(part.segment, part.index, part.index + part.segment.length)];
     if (part.segment === '\n' || part.segment === '\r\n') choices.push(choice('', part.index, part.index + part.segment.length));

@@ -68,6 +68,13 @@ it('原样双破折号保持每个grapheme的独立来源',()=>{
   const result=normalizeNarrationTiming(input('——'));
   expect(result.tokens.map(t=>[t.sourceStart,t.sourceEnd])).toEqual([[0,1],[1,2]]);
 });
+it('供应商把双破折号读成单破折号也可追踪',()=>{
+  // 2026-09-15 实测：三处"——"被供应商归一化为单个"—"，每处 -1 字
+  const result=normalizeNarrationTiming(input('甲——乙','甲—乙'));
+  expect(result?.spokenText).toBe('甲—乙');
+  expect(result.tokens.map(t=>[t.sourceStart,t.sourceEnd])).toEqual([[0,1],[1,3],[3,4]]);
+  expect(NarrationTimingMapV1.safeParse(result).success).toBe(true);
+});
 it('多个合法换行解析对应不同source span时拒绝歧义',()=>{
   expect(()=>normalizeNarrationTiming(input('甲\n\n乙','甲\n乙'))).toThrow('narration_timing_invalid');
 });
