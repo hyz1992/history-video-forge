@@ -17,6 +17,7 @@ export async function buildNarrationSubtitles(value: unknown) {
   if(!parsed.success)throw new Error('narration_subtitle_input_invalid');
   const {timingMap:map,settingsSnapshot}=parsed.data;
   const limit=settingsSnapshot.lineBreak.maxCharactersPerLine,maxLines=settingsSnapshot.resolvedStyle.max_lines;
+  const tokenById=new Map(map.tokens.map(t=>[t.id,t]));
   const cues:NarrationSubtitleCue[]=[];
   let first=0, lines:string[]=[], line='', pendingSpace=false;
   const flush=(last:number)=>{
@@ -35,14 +36,24 @@ export async function buildNarrationSubtitles(value: unknown) {
     let raw=map.sourceText.slice(sourceStart,gapEnd);
     let unit=display(raw);
     if(length(unit)>limit){
-      // 供应商未发音的静音空隙（本 span 覆盖范围之外，如被吞掉的连续标点）不应挤爆字幕行：
-      // 剥离空隙后若覆盖部分本身合法则采用（显示与音频一致），否则维持原错误。
-      // cue 的 source 范围仍覆盖完整原文，来源映射不受影响。
-      const gap=map.sourceText.slice(span.sourceEnd,gapEnd);
-      const covered=display(map.sourceText.slice(sourceStart,span.sourceEnd));
-      if(!(gap.length>0&&/^[\p{P}\p{Z}\s]*$/u.test(gap)&&length(covered)>0&&length(covered)<=limit))
+      // 显示单元超限时剥离"未发声的静音字符"（供应商没读的标点/空白），使显示与音频一致。
+      // token 区间会跨过未发声字符（供应商吞标点后两侧字符合并成一个 word），故用差额判定：
+      // 未发声数 = 区间字符数 − 该 span 发声文本长度（合同保证未覆盖字符必为静音）。
+      // 从后往前剥离且绝不触及非静音字符；剥离后仍超限或为空则维持原错误（fail-closed）。
+      // 只在超限分支生效：既有可容纳输入的输出逐字节不变；cue 的 source 范围仍覆盖完整原文。
+      const chars=Array.from(map.sourceText.slice(sourceStart,gapEnd));
+      const voiced=Array.from(span.tokenIds.map(id=>tokenById.get(id)?.spokenText??'').join('')).length;
+      let surplus=chars.length-voiced;
+      let stripped='';
+      for(let k=chars.length-1;k>=0;k-=1){
+        const ch=chars[k]!;
+        if(surplus>0&&/^[\p{P}\p{Z}\s]*$/u.test(ch)){surplus-=1;continue;}
+        stripped=ch+stripped;
+      }
+      const strippedUnit=display(stripped);
+      if(surplus>0||length(strippedUnit)===0||length(strippedUnit)>limit)
         throw new Error('narration_subtitle_unsplittable_span');
-      raw=map.sourceText.slice(sourceStart,span.sourceEnd);unit=covered;
+      raw=stripped;unit=strippedUnit;
     }
     // 空白仅在显示层归一化；来源范围始终覆盖完整原文。
     const separator=line && (pendingSpace||/^\s/u.test(raw))?' ':'';
