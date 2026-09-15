@@ -4,7 +4,7 @@
 
 截至 2026-09-15：
 
-- [口播静音容错对齐](./2026-09-15-narration-silent-skip-alignment-design.md)：治本白名单枚举的被动补丁模式——归一化 DP 增加"跳过静音 grapheme"转移（合同本就允许标点不被发音覆盖），未知标点改写（含整块 `——` 被吞）自动对齐；仅静音可跳、唯一最优 fail-closed、不支持插入。真实 470 字工件三场景经一次性探针验证（未入库；常驻回归为合成等价场景）。
+- [口播静音容错对齐](./2026-09-15-narration-silent-skip-alignment-design.md)：治本白名单枚举的被动补丁模式——归一化 DP 增加"跳过静音 grapheme"（静音删除类：供应商吞掉标点）与"重复静音折叠"（折叠类：`……`→`…`、两个换行→一个）两类转移，覆盖未知静音改写的两种形态；仅静音可跳、吞正文与插入仍 fail-closed。真实 470 字工件三场景经一次性探针验证（未入库；常驻回归为合成等价场景）。
 
 截至 2026-09-15：AutoDL H3视频接入已实现，设置与项目设置可选；87项回归及4项真实浏览器验证通过。见[验收记录](../records/2026-09-15-autodl-video-integration.md)、[设计](./archive/2026-09-15-autodl-video-design.md)和[计划](./archive/2026-09-15-autodl-video-implementation-plan.md)。集成后新增付费生成未验证。
 

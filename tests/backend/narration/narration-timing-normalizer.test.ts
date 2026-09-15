@@ -100,14 +100,21 @@ describe('静音容错对齐（供应商吞标点的未知变体无需再补白�
     expect(() => normalizeNarrationTiming(input('甲乙丙', '甲乙'))).toThrow('narration_timing_invalid');
     expect(() => normalizeNarrationTiming(input('甲乙丙', '甲丙'))).toThrow('narration_timing_invalid');
   });
-  it('末尾等成本多路径必须拒绝（不得因提前收敛而放行）', () => {
-    // 这些输入存在两条同成本最优对齐（静音归前/归后），基线逐层 DP 拒绝，容错实现必须保持
-    expect(() => normalizeNarrationTiming(input('甲\n\n', '甲\n'))).toThrow('narration_timing_invalid');
-    expect(() => normalizeNarrationTiming(input('甲乙\n\n', '甲乙\n'))).toThrow('narration_timing_invalid');
-    expect(() => normalizeNarrationTiming(input('甲。。', '甲。'))).toThrow('narration_timing_invalid');
-    expect(() => normalizeNarrationTiming(input('甲……', '甲…'))).toThrow('narration_timing_invalid');
-    // 中段同结构（既有对抗用例的对照）
-    expect(() => normalizeNarrationTiming(input('甲\n\n乙', '甲\n乙'))).toThrow('narration_timing_invalid');
+  it('重复相同标点折叠为单个时给出确定性映射（不走歧义拒绝）', () => {
+    // 供应商把重复标点读成单个（……→…、——→—、！！→！）：折叠是原子候选，
+    // 映射唯一（整个 run 由单字符代表），因此不落入"歧义必拒"。
+    for (const [source, spoken] of [['甲……乙', '甲…乙'], ['甲！！乙', '甲！乙'], ['甲？？乙', '甲？乙'], ['甲。。。乙', '甲。乙']] as const) {
+      const result = normalizeNarrationTiming(input(source, spoken));
+      expect(result?.spokenText, source).toBe(spoken);
+      // 折叠后的 unit 覆盖整个 run（token 区间跨过被折叠的重复标点）
+      expect(result.tokens[1]?.sourceStart, source).toBe(1);
+      expect(NarrationTimingMapV1.safeParse(result).success, source).toBe(true);
+    }
+  });
+  it('重复空白折叠同样确定性（\\n\\n → \\n）', () => {
+    const result = normalizeNarrationTiming(input('甲\n\n乙', '甲\n乙'));
+    expect(result?.spokenText).toBe('甲\n乙');
+    expect(NarrationTimingMapV1.safeParse(result).success).toBe(true);
   });
   it('白名单无法匹配时由跳过兜底（整块 —— 被吞）', () => {
     const result = normalizeNarrationTiming(input('甲——乙', '甲乙'));
@@ -143,16 +150,13 @@ describe('静音容错对齐（供应商吞标点的未知变体无需再补白�
       expect(JSON.parse(String(limit[0]![1]))).toMatchObject({ kind: 'skip_budget', budget: 256 });
     } finally { warn.mockRestore(); }
   });
-  it('DP 状态超全局上限时 fail-closed 并输出 state_limit 诊断', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    try {
-      // 单句 2000 个连续换行：零进度前沿使累计状态越过全局上限（病态输入，方向 fail-closed）
-      const source = '\n'.repeat(2000) + '甲';
-      expect(() => normalizeNarrationTiming(input(source, source))).toThrow('narration_timing_invalid');
-      const limit = warn.mock.calls.filter(c => String(c[0]).includes('narration-align-limit'));
-      expect(limit.length).toBeGreaterThanOrEqual(1);
-      expect(JSON.parse(String(limit[0]![1]))).toMatchObject({ kind: 'state_limit' });
-    } finally { warn.mockRestore(); }
+  it('病态超长输入不会挂死（有界失败）', () => {
+    // 状态/逐层上限为防御性保护：折叠候选消除零进度前沿后，构造上极难触顶；
+    // 本用例只断言极端输入下仍是有界失败而非挂死。
+    const source = '甲' + '。、'.repeat(4000) + '乙';
+    const started = Date.now();
+    expect(() => normalizeNarrationTiming(input(source, '甲乙'))).toThrow('narration_timing_invalid');
+    expect(Date.now() - started).toBeLessThan(10000);
   });
   it('白名单匹配与静音跳过竞争时取成本 0 的白名单路径', () => {
     // '。' 既可被 match（成本 0）也可被跳过（成本 1）；两处都是 match 才唯一最优
@@ -184,8 +188,13 @@ describe('静音容错对齐（供应商吞标点的未知变体无需再补白�
   });
 });
 
-it('多个合法换行解析对应不同source span时拒绝歧义',()=>{
-  expect(()=>normalizeNarrationTiming(input('甲\n\n乙','甲\n乙'))).toThrow('narration_timing_invalid');
+it('重复换行折叠为单个换行（确定性映射，不再按歧义拒绝）',()=>{
+  // 语义演进（2026-09-15 折叠候选）：`\n\n` 是相同静音字符 run，折叠候选给出
+  // 确定性 tie-break（整个 run 由单个换行代表），故映射唯一、可接受。
+  const result = normalizeNarrationTiming(input('甲\n\n乙','甲\n乙'));
+  expect(result?.spokenText).toBe('甲\n乙');
+  expect(result.tokens[0]?.sourceStart).toBe(0);
+  expect(NarrationTimingMapV1.safeParse(result).success).toBe(true);
 });
 it('跨句零点不能接到前句共享端点',()=>{
   const value=input('甲乙','甲乙',[[0,250],[250,250]]);

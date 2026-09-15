@@ -84,6 +84,20 @@ function mapSentence(original: string, normalized: string, sourceBase: number): 
       blockMeta.push({ silent: true, length: 2, start: part.index, end: part.index + 2 });
       i++; continue;
     }
+    // 连续相同标点的 run（长度 ≥2）：供应商把重复标点读成单个（……→…、！！→！）是"折叠"，
+    // 若按逐字符跳过处理会产生"保留哪一个"的同成本歧义而被拒；这里用原子折叠候选给出
+    // 确定性 tie-break（整个 run 由单个字符代表）。
+    if (SILENT_PATTERN.test(part.segment) && part.segment.length > 0) {
+      let same = i + 1;
+      while (same < parts.length && parts[same]!.segment === part.segment) same++;
+      if (same - i >= 2) {
+        const runText = part.segment.repeat(same - i), runEnd = part.index + runText.length;
+        blocks.push([{ spoken: runText, units: parts.slice(i, same).flatMap(p => choice(p.segment, p.index, p.index + 1).units) },
+          choice(part.segment, part.index, runEnd)]);
+        blockMeta.push({ silent: true, length: runText.length, start: part.index, end: runEnd });
+        i = same - 1; continue;
+      }
+    }
     const choices = [choice(part.segment, part.index, part.index + part.segment.length)];
     if (part.segment === '\n' || part.segment === '\r\n') choices.push(choice('', part.index, part.index + part.segment.length));
     if (part.segment === '𠮷') choices.push(choice('吉', part.index, part.index + 2));
