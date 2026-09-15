@@ -124,10 +124,14 @@ describe('静音容错对齐（供应商吞标点的未知变体无需再补白�
       expect(JSON.parse(String(payload[0]![1]))).toMatchObject({ skipped: ['——', '。'] });
     } finally { warn.mockRestore(); }
   });
-  it('CRLF 静音跳过按其 code unit 长度记账', () => {
-    const result = normalizeNarrationTiming(input('甲\r\n乙', '甲乙'));
-    expect(result.tokens.map(t => [t.sourceStart, t.sourceEnd])).toEqual([[0, 1], [3, 4]]);
-    expect(NarrationTimingMapV1.safeParse(result).success).toBe(true);
+  it('CRLF 由成本 0 的空候选匹配，不触发静音跳过记账', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const result = normalizeNarrationTiming(input('甲\r\n乙', '甲乙'));
+      expect(result.tokens.map(t => [t.sourceStart, t.sourceEnd])).toEqual([[0, 1], [3, 4]]);
+      expect(NarrationTimingMapV1.safeParse(result).success).toBe(true);
+      expect(warn.mock.calls.filter(c => String(c[0]).includes('narration-silent-skip'))).toHaveLength(0);
+    } finally { warn.mockRestore(); }
   });
   it('静音量超绝对上限时 fail-closed 并输出 skip_budget 诊断', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
