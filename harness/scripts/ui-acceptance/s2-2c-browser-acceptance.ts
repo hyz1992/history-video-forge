@@ -1,3 +1,5 @@
+import { DEFAULT_GENERATION_CONFIGURATION } from "../../../shared/src/index.js";
+import type { ProjectRecord } from "../../../backend/src/db/client.js";
 import { chromium, type Browser, type Page } from "@playwright/test";
 import { spawn, type ChildProcess } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -70,9 +72,40 @@ async function main(): Promise<void> {
 
     const page = await browser.newPage();
     await login(page, setup.frontendUrl);
-    await verifyCapabilitySlotsOnSettings(page);
-    await verifySingleAndEmptySlotCopy(page);
-    await verifyProjectSettingsCapabilityArea(page);
+    if (process.argv.includes('--autodl')) {
+      await page.goto(setup.frontendUrl+'/settings');
+      const selector='[data-testid="cap-candidate-video.image_to_video-video.image_to_video.autodl.minimax_h3_lightx2v_v5"]';
+      await page.locator(selector).check();
+      const saved=page.waitForResponse(r=>r.url().includes('/api/me/generation-preferences') && r.request().method()==='PATCH');
+      await page.locator('[data-testid="save-preference"]').click();
+      const response=await saved;
+      record('AutoDL设置保存接口',response.ok(),String(response.status()));
+      await page.reload();
+      await page.locator(selector).waitFor();
+      record('AutoDL设置保存并刷新恢复',await page.locator(selector).isChecked());
+      const owner = await setup.client.user.findUniqueOrThrow({where:{username:USER_USERNAME}});
+      // 隔离数据库中的存量项目夹具；不调用选题或口播付费链路。
+      const row = await setup.client.project.create({data:{ownerId:owner.id,createdById:owner.id,name:'AutoDL设置验收',storageKey:'autodl-acceptance',storageDisplayName:'AutoDL设置验收'}});
+      const project: ProjectRecord = {...row,storageShortId:'autodl',storageRootDir:setup.root,latestTopicRunTraceJson:null,latestScriptRunTraceJson:null,latestStoryboardRunTraceJson:null,latestAssetPlanRunTraceJson:null,latestAssetsRunTraceJson:null,latestComposeRunTraceJson:null,latestRenderRunTraceJson:null,narrationTimingMode:'legacy_estimated'};
+      setup.app.db.projects.set(row.id,project);
+      const config = await setup.client.projectGenerationConfiguration.create({data:{projectId:row.id,schemaVersion:'generation_configuration_v1',configurationJson:structuredClone(DEFAULT_GENERATION_CONFIGURATION)}});
+      setup.app.db.projectGenerationConfigurations.set(config.id,{...config,configurationJson:structuredClone(DEFAULT_GENERATION_CONFIGURATION)});
+      await page.goto(setup.frontendUrl+'/projects/'+row.id);
+      await page.locator('button:has-text("项目设置"), [data-testid="open-project-settings"]').first().click();
+      const projectSelector='[data-testid="project-cap-candidate-video.image_to_video-video.image_to_video.autodl.minimax_h3_lightx2v_v5"]';
+      await page.locator(projectSelector).check();
+      const projectSaved=page.waitForResponse(r=>r.url().includes('/generation-configuration') && r.request().method()==='PATCH');
+      await page.locator('[data-testid="save-project-config"]').click();
+      record('AutoDL项目设置保存接口',(await projectSaved).ok());
+      await page.reload();
+      await page.locator('button:has-text("项目设置"), [data-testid="open-project-settings"]').first().click();
+      await page.locator(projectSelector).waitFor();
+      record('AutoDL项目设置刷新恢复',await page.locator(projectSelector).isChecked());
+    } else {
+      await verifyCapabilitySlotsOnSettings(page);
+      await verifySingleAndEmptySlotCopy(page);
+      await verifyProjectSettingsCapabilityArea(page);
+    }
     await page.context().close();
   } finally {
     if (browser) await browser.close().catch(() => undefined);
@@ -131,12 +164,12 @@ async function startAcceptanceApp(): Promise<Setup> {
       flash: { providerKey: "zhipu", modelId: "glm-4" },
       candidates: LLM_MODEL_CANDIDATES_V1,
     },
-    media: { deploymentScope: "cn-beijing" },
+    media: { deploymentScope: "cn-beijing", includeAutodl: process.argv.includes("--autodl") },
   });
   await applyProviderModelCatalogSeed(app.db, seed);
   // 移除 video 槽目录行：验收"无候选槽位"文案（tts 保持单候选）
   for (const [id, entry] of [...app.db.providerModelCatalog.entries()]) {
-    if (entry.capability === "video.image_to_video") app.db.providerModelCatalog.delete(id);
+    if (!process.argv.includes("--autodl") && entry.capability === "video.image_to_video") app.db.providerModelCatalog.delete(id);
   }
 
   const sessionStore = new PrismaSessionStore(client);

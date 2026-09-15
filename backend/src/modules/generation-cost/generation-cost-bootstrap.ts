@@ -150,7 +150,7 @@ export function resolveGenerationCostBootstrapInput(
       llmCandidates,
       media: {
         registeredModels: autodlModels,
-        credentialConfiguredByProvider,
+        ...(deps.autodlCredentialConfigured === undefined ? {} : {credentialConfiguredByProvider}),
         credentialConfigured: false,
         deploymentScope: "cn-beijing",
       },
@@ -172,10 +172,10 @@ export function resolveGenerationCostBootstrapInput(
     llm,
     llmCandidates,
     media: {
-      credentialConfiguredByProvider,
+      ...(deps.autodlCredentialConfigured === undefined ? {} : {credentialConfiguredByProvider}),
       registeredModels:
         deploymentScope === "unknown"
-          ? [] // 区域未知：无已核实价格真相，不注册任何媒体模型（fail-closed）
+          ? autodlModels // DashScope区域未知不影响独立AutoDL供应商
           : [
               ...autodlModels,
               ...additionalModels.map((m) => ({

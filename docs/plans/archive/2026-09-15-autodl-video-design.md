@@ -8,7 +8,7 @@
 
 ## 方案
 
-沿用现有ProviderModelCatalog和video.image_to_video槽位，新增autodl供应商、minimax_h3_lightx2v_v5非默认候选，保留万相默认。设置组件消费目录，无独立设置页或数据库迁移。服务端使用AUTODL_COMFYUI_TOKEN，复用本地试调凭据配置到被忽略的.env，绝不在客户端返回。
+沿用现有ProviderModelCatalog和video.image_to_video槽位，新增autodl供应商、minimax_h3_lightx2v_v5非默认候选，保留万相默认；DashScope地区无法识别且仅AutoDL可用时，AutoDL作为唯一视频默认项。设置组件消费目录，无独立设置页或数据库迁移。服务端使用AUTODL_COMFYUI_TOKEN，复用本地试调凭据配置到被忽略的.env，绝不在客户端返回。
 
 现有standard_720p质量档映射为H3 768P，high_1080p映射为1080P；实际宽高以ffprobe为准，设置处说明768P映射。工作流最多10秒，长镜头按现有分段资产语义分片；以口播前置narrationRange确定总时长，不改变时间轴合同。
 

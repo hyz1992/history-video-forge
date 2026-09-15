@@ -1,3 +1,4 @@
+import { createAutodlImageToVideoProvider, AUTODL_VIDEO_MODEL } from './providers/autodl/autodl-image-to-video-provider.js';
 import { captureNarrationAssetsSource, withNarrationAssetsSource } from "./narration-assets-context.js";
 import { importNarrationManifest } from "./narration-manifest-importer.js";
 import { NarrationSourceError } from "../narration/narration-invalidation.js";
@@ -429,6 +430,14 @@ export function buildProviderRegistry(input: {
 }) {
   // S2-2A 任务 6：provider 授权只来自后端 env（API key 存在时启用真实 provider），
   // 客户端不得指定 provider_mode / model / api key。
+  const autodlSlot = input.resolvedCapabilities?.['video.image_to_video'];
+  const autodlKey = process.env.AUTODL_COMFYUI_TOKEN?.trim();
+  const autodlAdapters: AssetProviderAdapter[] = [];
+  if (autodlSlot?.provider_key === 'autodl' && autodlSlot.model_id === AUTODL_VIDEO_MODEL && autodlKey) {
+    const gate = checkProviderDispatchGate(input.db, {capability:'video.image_to_video',providerKey:'autodl',modelId:autodlSlot.model_id,deploymentScope:'autodl'});
+    if (gate.allowed) autodlAdapters.push(createAutodlImageToVideoProvider({apiKey:autodlKey,model:autodlSlot.model_id}));
+    else warnDispatchGateBlocked('video.image_to_video',gate);
+  }
   const providerMode: AssetsProviderMode | undefined =
     process.env.ALIYUN_DASHSCOPE_API_KEY ? "dashscope" : undefined;
   if (providerMode === "dashscope") {
@@ -548,10 +557,11 @@ export function buildProviderRegistry(input: {
       }
     }
 
-    return createAssetProviderRegistry(adapters);
+    return createAssetProviderRegistry([...autodlAdapters, ...adapters]);
   }
 
   return createAssetProviderRegistry([
+    ...autodlAdapters,
     createFakeTtsProvider(),
     createLocalSubtitleProvider(),
     createFakeImageProvider(),

@@ -185,6 +185,7 @@ const estimatedCost = computed(() => {
 });
 
 /** Post-generation cost from actual artifacts. */
+const hasAutodlVideo = computed(() => artifacts.value.some(a => a.artifact_type === "video" && a.metadata.provider_name === "autodl_image_to_video"));
 const costBreakdown = computed(() => {
   const arts = artifacts.value;
   const ttsPlan = activeAssetPlan.value?.plan as unknown as { tts_plan?: { chunks?: Array<{ script_excerpt?: string }> } } | null;
@@ -1122,7 +1123,7 @@ interface VideoPricingSnapshot {
   unitPerSec1080: number;
   displayName: string;
   modelId: string;
-  qualityLabel: "720P" | "1080P";
+  qualityLabel: "720P" | "768P" | "1080P";
 }
 
 interface ImagePricingSnapshot {
@@ -1178,7 +1179,7 @@ async function resolveGenerationPricingOnce(
               unitPerSec1080: hint1080!.unitPricePerSec,
               displayName: hint720.displayName,
               modelId: hint720.modelId,
-              qualityLabel: apiQuality === "high_1080p" ? "1080P" : "720P",
+              qualityLabel: apiQuality === "high_1080p" ? "1080P" : hint720.modelId === "minimax_h3_lightx2v_v5" ? "768P" : "720P",
             },
       image: imageHint,
     };
@@ -1198,7 +1199,7 @@ async function handleBatchUpgrade() {
     const video = pricing.video;
     if (video) {
       // 升级走后端默认 720P/5s，固定按 720P 档提示
-      rate = `约 ¥${video.unitPerSec720.toFixed(2)}/秒（720P），模型：${video.displayName}`;
+      rate = `约 ¥${video.unitPerSec720.toFixed(2)}/秒（${video.modelId === "minimax_h3_lightx2v_v5" ? "768P" : "720P"}），模型：${video.displayName}`;
       estimatedSingle = Math.round(5 * video.unitPerSec720 * 100) / 100;
     }
   }
@@ -1292,7 +1293,7 @@ async function handleUpgradeVideo(segmentId: string) {
     const pricing = await resolveGenerationPricingOnce(projectId.value);
     const video = pricing.video;
     if (video) {
-      rate = `约 ¥${video.unitPerSec720.toFixed(2)}/秒（720P），模型：${video.displayName}`;
+      rate = `约 ¥${video.unitPerSec720.toFixed(2)}/秒（${video.modelId === "minimax_h3_lightx2v_v5" ? "768P" : "720P"}），模型：${video.displayName}`;
       estimatedTotal = Math.round(5 * video.unitPerSec720 * 100) / 100;
     }
   }
@@ -1303,7 +1304,7 @@ async function handleUpgradeVideo(segmentId: string) {
   }
   try {
     await ElMessageBox.confirm(
-      `将为分镜 ${segLabel} 新增 API 视频任务（默认 720P / 5 秒，不影响图片+运镜路线）。\n费用：${rate}，预估 ¥${estimatedTotal.toFixed(2)}。\n切换后可在分镜卡片中手动生成或上传视频。`,
+      `将为分镜 ${segLabel} 新增 API 视频任务（默认标准档 / 5 秒，不影响图片+运镜路线）。\n费用：${rate}，预估 ¥${estimatedTotal.toFixed(2)}。\n切换后可在分镜卡片中手动生成或上传视频。`,
       "升级为 API 视频",
       { confirmButtonText: "确定升级", cancelButtonText: "取消", type: "info" },
     );
@@ -1648,7 +1649,8 @@ function handleConfirm() {
               <span v-if="costBreakdown.image.count > 0">
                 🖼 图片 {{ costBreakdown.image.count }} 张 · ¥{{ costBreakdown.image.total.toFixed(2) }}
               </span>
-              <span v-if="costBreakdown.video.durationSec > 0">
+              <span v-if="hasAutodlVideo">🎬 视频费用请查看项目顶部“费用”清单</span>
+              <span v-else-if="costBreakdown.video.durationSec > 0">
                 🎬 视频 {{ costBreakdown.video.durationSec.toFixed(1) }}s · ¥{{ costBreakdown.video.total.toFixed(2) }}
               </span>
               <span v-if="costBreakdown.tts.charCount > 0">
@@ -1656,7 +1658,7 @@ function handleConfirm() {
               </span>
             </div>
             <div class="asset-overview-cost-total">
-              合计 <strong>¥{{ costBreakdown.total.toFixed(2) }}</strong>
+              <template v-if="hasAutodlVideo">完整费用见项目费用清单</template><template v-else>合计 <strong>¥{{ costBreakdown.total.toFixed(2) }}</strong></template>
               <span class="asset-overview-cost-note">（按当前配置估算）</span>
             </div>
           </div>

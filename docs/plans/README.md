@@ -1,5 +1,7 @@
 # 当前计划入口
 
+截至2026-09-15：AutoDL H3视频接入已实现，设置与项目设置可选；87项回归及4项真实浏览器验证通过。见[验收记录](../records/2026-09-15-autodl-video-integration.md)、[设计](./archive/2026-09-15-autodl-video-design.md)和[计划](./archive/2026-09-15-autodl-video-implementation-plan.md)。集成后新增付费生成未验证。
+
 ## 用途与边界
 
 - `docs/plans/` 根目录只放准备执行、执行中或刚完成待收口的中文设计文档与 implementation plan。

@@ -20,3 +20,10 @@ describe('AutoDL目录',()=>{
  }
  });
 });
+
+it('未知DashScope区域仍可使用独立AutoDL',()=>{
+ const catalog=buildPricingCatalogSeed({llm:{mode:'stub'},media:{deploymentScope:'unknown',includeAutodl:true}});
+ const row=catalog.find(x=>x.providerKey==='autodl');expect(row).toBeDefined();
+ const result=evaluateGenerationCapabilityReadiness({catalog,llm:{mode:'stub'},media:{registeredModels:[{capability:'video.image_to_video',providerKey:'autodl',modelId:model}],credentialConfigured:false,credentialConfiguredByProvider:{autodl:true},deploymentScope:'unknown'},environment:{testEnv:false}});
+ expect(result.items[row!.id].quotable).toBe(true);
+});

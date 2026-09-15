@@ -254,3 +254,14 @@ describe("provider dispatch gate", () => {
     }
   });
 });
+
+ describe('AutoDL快照派发',()=>{
+ it('选中AutoDL时只注册AutoDL视频，不依赖DashScope令牌',()=>{
+ vi.stubEnv('AUTODL_COMFYUI_TOKEN','autodl-test');vi.stubEnv('ALIYUN_DASHSCOPE_API_KEY','');
+ const db=createDbClient();for(const row of buildPricingCatalogSeed({llm:{mode:'stub'},media:{deploymentScope:'cn-beijing',includeAutodl:true}}))db.providerModelCatalog.set(row.id,row);
+ const selected={'video.image_to_video':{provider_key:'autodl',model_id:'minimax_h3_lightx2v_v5'}} as any;
+ expect(buildProviderRegistry({db,resolvedCapabilities:selected}).findAdapter({taskType:'video_clip',enabledProviderTypes:['video']})?.providerName).toBe('autodl_image_to_video');
+ vi.stubEnv('AUTODL_COMFYUI_TOKEN','');
+ expect(buildProviderRegistry({db,resolvedCapabilities:selected}).findAdapter({taskType:'video_clip',enabledProviderTypes:['video']})).toBeNull();
+ });
+ });

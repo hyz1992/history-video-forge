@@ -343,3 +343,11 @@ describe("ProjectGenerationSettings 高级设置区（S2-2C 任务 8）", () => 
     );
   });
 });
+
+it('AutoDL视频可在全局设置中保存',async()=>{
+const store=createMockStore();store.state.capabilities=[...MULTI_CAPABILITIES,catalogEntry({id:'video.autodl',capability:'video.image_to_video',provider_key:'autodl',model_id:'minimax_h3_lightx2v_v5',display_name:'AutoDL H3'})];
+const wrapper=mountSettings(store);await flushPromises();
+await wrapper.find('[data-testid="cap-candidate-video.image_to_video-video.autodl"]').setValue();
+await wrapper.find('[data-testid="save-preference"]').trigger('click');await flushPromises();
+expect(store.saveUserPreference).toHaveBeenCalledWith(expect.objectContaining({capabilities:expect.objectContaining({'video.image_to_video':{mode:'fixed',provider_model_id:'video.autodl'}})}));
+});
