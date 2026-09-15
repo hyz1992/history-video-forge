@@ -50,7 +50,7 @@
 - `ffprobe`：768×1344、24 fps、241 帧、H.264 + AAC 48kHz 立体声、实际时长 10.041667 秒。
 - `ffmpeg -i … -f null -`：全片解码无错误。
 - 对比原视频：720×1280、30 fps、300 帧、AAC 44.1kHz 立体声、10.030998 秒；时长差 +0.011 秒。
-- 水印：**新视频整帧带 Protoface 平铺“P”水印**（原视频无）。实扣 6 credits 无法证明额度来源；平台未暴露该笔是否消耗赠送额度，故不能把实付金额当成单价结论。
+- 水印：**新视频整帧带 Protoface 平铺“P”水印**（原视频无）。来源已定位到计费口径而非模型或档位：官网定价页写明 “For accounts with no payment history, videos generated with free credits are for evaluation purposes only and will be watermarked.”，免费额度为 50 credits。据此推断本次消耗的 6 credits 属免费额度。模型参数面（`prompt/image_url/last_image_url/quality/aspect_ratio/duration_seconds/seed/generate_audio/enhance_prompt`）中不存在任何水印开关，故无法在请求侧关闭。平台未提供账户/余额接口（实测 `/v1/account`、`/v1/me`、`/v1/billing`、`/v1/credits`、`/v1/balance` 等 9 个路径均 404），剩余额度无法从 API 读取；官网也**未明文承诺**购买额度后自动去除水印，只能推断该限制随“有付款记录”不再适用。实扣 6 credits 不能用来反推单价结论。
 
 ## 音频与人声核验
 
@@ -69,4 +69,4 @@
 
 ## 自审与限制
 
-本次只证明鉴权、模型参数解析、资产上传、提交、轮询、下载、解码、账单对齐与人声核验链路可用，且只覆盖一个样本，不能推出长期稳定性与模型整体质量结论。未修改正式供应商配置、设置页、默认模型或业务数据库（DB 只读打开）。水印来源（赠送额度或该档默认水印）未证实。prompt_extend/enhance_prompt 的差异未做对照实验。
+本次只证明鉴权、模型参数解析、资产上传、提交、轮询、下载、解码、账单对齐与人声核验链路可用，且只覆盖一个样本，不能推出长期稳定性与模型整体质量结论。未修改正式供应商配置、设置页、默认模型或业务数据库（DB 只读打开）。水印已定位为“无付款记录 + 免费额度”的计费口径限制，但“购买额度或订阅后水印是否自动去除”平台未明文承诺，仍未证实。剩余免费额度无法通过 API 查询。prompt_extend/enhance_prompt 的差异未做对照实验。
