@@ -48,8 +48,9 @@ const SILENT_PATTERN = /^[\p{P}\p{Z}\s]*$/u;
 /** 跳过静音的总量上限（防状态爆炸）。只在"单个 provider 句子含数百个连续静音 block"
  *  的病态输入上才会触顶；触顶 fail-closed 并输出 narration-align-limit 诊断。 */
 const MAX_SILENT_SKIP = 256;
-/** 逐层状态数上限：与基线（原逐层 DP 的 next.size > 4096）同构，保证 accept 集不比基线窄。
- *  超过即 fail-closed 并输出诊断。 */
+/** 逐层状态数上限：与基线（原逐层 DP 的 next.size > 4096）同构。
+ *  @see MAX_STATES —— 全局上限可能先于本上限触顶，故 accept 集在"单句含约 2000+ 连续静音
+ *  block"的病态输入上比基线窄（方向 fail-closed，见设计文档边界实测）。 */
 const MAX_LAYER_STATES = 4096;
 /** 全局状态数硬上限（内存保护）。逐层上限已覆盖正常输入，此项只用于拦病态输入。 */
 const MAX_STATES = 2000000;
@@ -97,6 +98,8 @@ function mapSentence(original: string, normalized: string, sourceBase: number): 
   const silentTotal = blockMeta.reduce((sum, meta) => sum + (meta.silent ? meta.length : 0), 0);
   const budget = Math.min(silentTotal, MAX_SILENT_SKIP);
   const key = (blockIndex: number, offset: number) => blockIndex + ':' + offset;
+  /** 是否因 MAX_SILENT_SKIP 截断而放弃过跳过路径（仅用于失败归因诊断）。 */
+  let budgetTruncated = false;
   const settled = new Map<string, Path>();
   /** 按 blockIndex 统计每层 settle 状态数（逐层保护，与基线同构）。 */
   const layerStates = new Map<number, number>();
@@ -136,6 +139,7 @@ function mapSentence(original: string, normalized: string, sourceBase: number): 
             cost: node.cost, previous: node, units: candidate.units, ambiguous: node.ambiguous },
             key(node.blockIndex + 1, node.offset + candidate.spoken.length));
         }
+        if (meta.silent && node.cost + meta.length > budget) budgetTruncated = true;
         if (meta.silent && node.cost + meta.length <= budget) {
           push({ blockIndex: node.blockIndex + 1, offset: node.offset,
             cost: node.cost + meta.length, previous: node, units: [], ambiguous: node.ambiguous,
@@ -146,7 +150,10 @@ function mapSentence(original: string, normalized: string, sourceBase: number): 
     }
     return best;
   })();
-  if (!final) fail();
+  if (!final) {
+    if (budgetTruncated) console.warn("[narration-align-limit]", JSON.stringify({ kind: "skip_budget", budget, silentTotal, blocks: blocks.length }));
+    fail();
+  }
   const chunks: Unit[][] = [];
   const skipped: string[] = [];
   for (let node: Path | undefined = final; node; node = node.previous) {
@@ -163,7 +170,7 @@ function mapSentence(original: string, normalized: string, sourceBase: number): 
 function makeSpans(tokens: TimingToken[], source: string): NarrationSourceSpan[] {
   const links = new Array<number>(tokens.length + 1).fill(0);
   const link = (a: number, b: number) => { links[Math.min(a, b) + 1]!++; links[Math.max(a, b) + 1]!--; };
-  const adjacent = (a: TimingToken, b: TimingToken) => a.sourceEnd >= b.sourceStart || /^[\p{P}\p{Z}\s]*$/u.test(source.slice(a.sourceEnd, b.sourceStart));
+  const adjacent = (a: TimingToken, b: TimingToken) => a.sourceEnd >= b.sourceStart || SILENT_PATTERN.test(source.slice(a.sourceEnd, b.sourceStart));
   for (let i = 1; i < tokens.length; i++) {
     const p = tokens[i - 1]!, n = tokens[i]!;
     if (p.sourceStart === n.sourceStart && p.sourceEnd === n.sourceEnd) link(i - 1, i);

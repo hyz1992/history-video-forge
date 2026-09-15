@@ -129,15 +129,38 @@ describe('静音容错对齐（供应商吞标点的未知变体无需再补白�
     expect(result.tokens.map(t => [t.sourceStart, t.sourceEnd])).toEqual([[0, 1], [3, 4]]);
     expect(NarrationTimingMapV1.safeParse(result).success).toBe(true);
   });
-  it('静音量超绝对上限时 fail-closed（已知上限，非静默放宽）', () => {
-    const source = '甲' + '。'.repeat(300) + '乙';
-    expect(() => normalizeNarrationTiming(input(source, '甲乙'))).toThrow('narration_timing_invalid');
+  it('静音量超绝对上限时 fail-closed 并输出 skip_budget 诊断', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const source = '甲' + '。'.repeat(300) + '乙';
+      expect(() => normalizeNarrationTiming(input(source, '甲乙'))).toThrow('narration_timing_invalid');
+      const limit = warn.mock.calls.filter(c => String(c[0]).includes('narration-align-limit'));
+      expect(limit).toHaveLength(1);
+      expect(JSON.parse(String(limit[0]![1]))).toMatchObject({ kind: 'skip_budget', budget: 256 });
+    } finally { warn.mockRestore(); }
+  });
+  it('DP 状态超全局上限时 fail-closed 并输出 state_limit 诊断', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      // 单句 2000 个连续换行：零进度前沿使累计状态越过全局上限（病态输入，方向 fail-closed）
+      const source = '\n'.repeat(2000) + '甲';
+      expect(() => normalizeNarrationTiming(input(source, source))).toThrow('narration_timing_invalid');
+      const limit = warn.mock.calls.filter(c => String(c[0]).includes('narration-align-limit'));
+      expect(limit.length).toBeGreaterThanOrEqual(1);
+      expect(JSON.parse(String(limit[0]![1]))).toMatchObject({ kind: 'state_limit' });
+    } finally { warn.mockRestore(); }
+  });
+  it('白名单匹配与静音跳过竞争时取成本 0 的白名单路径', () => {
+    // '。' 既可被 match（成本 0）也可被跳过（成本 1）；两处都是 match 才唯一最优
+    const result = normalizeNarrationTiming(input('甲。\n乙', '甲。乙'));
+    expect(result.tokens.map(t => [t.sourceStart, t.sourceEnd])).toEqual([[0, 1], [1, 2], [3, 4]]);
+    expect(NarrationTimingMapV1.safeParse(result).success).toBe(true);
   });
   it('数字被吞同样失败（长数字读法不在容错范围）', () => {
     expect(() => normalizeNarrationTiming(input('甲123乙', '甲12乙'))).toThrow('narration_timing_invalid');
   });
   it('白名单路径优先于跳过（成本 0 优先，已知变体不受影响）', () => {
-    // 〇 有白名单候选 → 走 match；同时若能"跳过〇"会得到不同 units，必须选白名单
+    // 〇 有白名单候选（成本 0）；〇 不属静音类，故此处只验证白名单命中与逐字来源
     const result = normalizeNarrationTiming(input('甲〇乙', '甲零乙'));
     expect(result.tokens.map(t => [t.sourceStart, t.sourceEnd])).toEqual([[0, 1], [1, 2], [2, 3]]);
   });
