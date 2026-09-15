@@ -117,11 +117,17 @@ describe('静音容错对齐（供应商吞标点的未知变体无需再补白�
   it('诊断payload记录被跳过的静音片段而非正文', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
-      normalizeNarrationTiming(input('甲——乙——丙', '甲乙丙'));
+      normalizeNarrationTiming(input('甲——乙。丙', '甲乙丙'));
       const payload = warn.mock.calls.filter(c => String(c[0]).includes('narration-silent-skip'));
       expect(payload).toHaveLength(1);
-      expect(JSON.parse(String(payload[0]![1]))).toMatchObject({ skipped: ['——', '——'] });
+      // 非对称片段 + 文中顺序（—— 在 。 之前）
+      expect(JSON.parse(String(payload[0]![1]))).toMatchObject({ skipped: ['——', '。'] });
     } finally { warn.mockRestore(); }
+  });
+  it('CRLF 静音跳过按其 code unit 长度记账', () => {
+    const result = normalizeNarrationTiming(input('甲\r\n乙', '甲乙'));
+    expect(result.tokens.map(t => [t.sourceStart, t.sourceEnd])).toEqual([[0, 1], [3, 4]]);
+    expect(NarrationTimingMapV1.safeParse(result).success).toBe(true);
   });
   it('静音量超绝对上限时 fail-closed（已知上限，非静默放宽）', () => {
     const source = '甲' + '。'.repeat(300) + '乙';

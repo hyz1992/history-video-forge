@@ -45,6 +45,14 @@ interface Choice { spoken: string; units: Unit[]; }
 /** 与 shared 覆盖校验同源的静音判定：标点/分隔符/空白。供应商吞掉静音是合同允许的
  *  （token 不必覆盖标点），但吞掉正文（汉字/字母/数字）必须失败。 */
 const SILENT_PATTERN = /^[\p{P}\p{Z}\s]*$/u;
+/** 跳过静音的总量上限（防状态爆炸）。只在"单个 provider 句子含数百个连续静音 block"
+ *  的病态输入上才会触顶；触顶 fail-closed 并输出 narration-align-limit 诊断。 */
+const MAX_SILENT_SKIP = 256;
+/** 逐层状态数上限：与基线（原逐层 DP 的 next.size > 4096）同构，保证 accept 集不比基线窄。
+ *  超过即 fail-closed 并输出诊断。 */
+const MAX_LAYER_STATES = 4096;
+/** 全局状态数硬上限（内存保护）。逐层上限已覆盖正常输入，此项只用于拦病态输入。 */
+const MAX_STATES = 2000000;
 /** 原样grapheme及冻结的有限变换；每一候选必须与同次 normalized_text 精确相等。
  *  除白名单变换外，允许跳过静音 grapheme 作为未知标点改写的兜底：白名单候选成本 0、
  *  跳过成本 = 被跳过字符数，因此已知变体永远优先，跳过只在无零成本路径时启用。
@@ -87,9 +95,11 @@ function mapSentence(original: string, normalized: string, sourceBase: number): 
   // 成本上界天然 = 静音字符总数（只有静音可被跳过）；仅在极端标点密度下再夹一个绝对上限防状态爆炸。
   interface Path { blockIndex: number; offset: number; cost: number; previous?: Path; units: Unit[]; ambiguous: boolean; skipped?: string; }
   const silentTotal = blockMeta.reduce((sum, meta) => sum + (meta.silent ? meta.length : 0), 0);
-  const budget = Math.min(silentTotal, 256);
+  const budget = Math.min(silentTotal, MAX_SILENT_SKIP);
   const key = (blockIndex: number, offset: number) => blockIndex + ':' + offset;
   const settled = new Map<string, Path>();
+  /** 按 blockIndex 统计每层 settle 状态数（逐层保护，与基线同构）。 */
+  const layerStates = new Map<number, number>();
   const buckets: Path[][] = Array.from({ length: budget + 1 }, () => []);
   buckets[0]!.push({ blockIndex: 0, offset: 0, cost: 0, units: [], ambiguous: false });
   // 必须排空全部成本 ≤ 最优成本的节点后才判定：目标态 settle 后仍可能被同成本路径重复到达，
@@ -105,7 +115,10 @@ function mapSentence(original: string, normalized: string, sourceBase: number): 
         const seen = settled.get(nodeKey);
         if (seen) { if (seen.cost === node.cost) seen.ambiguous = true; continue; }
         settled.set(nodeKey, node);
-        if (settled.size > 200000) fail();
+        const layerCount = (layerStates.get(node.blockIndex) ?? 0) + 1;
+        layerStates.set(node.blockIndex, layerCount);
+        if (layerCount > MAX_LAYER_STATES) { console.warn("[narration-align-limit]", JSON.stringify({ kind: "layer_limit", layer: node.blockIndex, count: layerCount, blocks: blocks.length })); fail(); }
+        if (settled.size > MAX_STATES) { console.warn("[narration-align-limit]", JSON.stringify({ kind: "state_limit", states: settled.size, blocks: blocks.length })); fail(); }
         if (node.blockIndex === blocks.length) {
           if (node.offset === normalized.length && !best) best = node;
           continue;
@@ -139,11 +152,11 @@ function mapSentence(original: string, normalized: string, sourceBase: number): 
   for (let node: Path | undefined = final; node; node = node.previous) {
     // 任一祖先有多条最优路径即歧义（与原实现同语义；回溯覆盖祖先的迟到标记）。
     if (node.ambiguous) fail();
-    if (node.skipped !== undefined && skipped.length < 8) skipped.push(node.skipped);
+    if (node.skipped !== undefined) skipped.push(node.skipped);
     chunks.push(node.units);
   }
   // 有限诊断：记录被跳过的静音片段（按文中顺序），用于观察供应商改写行为。
-  if (skipped.length) console.warn("[narration-silent-skip]", JSON.stringify({ sentenceBase: sourceBase, skipped: skipped.reverse() }));
+  if (skipped.length) console.warn("[narration-silent-skip]", JSON.stringify({ sentenceBase: sourceBase, skipped: skipped.reverse().slice(0, 8) }));
   return chunks.reverse().flat();
 }
 
