@@ -131,6 +131,12 @@ describe('静音容错对齐（供应商吞标点的未知变体无需再补白�
       expect(JSON.parse(String(payload[0]![1]))).toMatchObject({ skipped: ['——', '。'] });
     } finally { warn.mockRestore(); }
   });
+  it('CRLF 归一为 LF 也可追踪（相邻折叠形态）', () => {
+    const result = normalizeNarrationTiming(input('甲\r\n乙', '甲\n乙'));
+    expect(result?.spokenText).toBe('甲\n乙');
+    expect(result.tokens.map(t => [t.sourceStart, t.sourceEnd])).toEqual([[0, 1], [1, 3], [3, 4]]);
+    expect(NarrationTimingMapV1.safeParse(result).success).toBe(true);
+  });
   it('CRLF 由成本 0 的空候选匹配，不触发静音跳过记账', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {

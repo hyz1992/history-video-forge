@@ -99,7 +99,9 @@ function mapSentence(original: string, normalized: string, sourceBase: number): 
       }
     }
     const choices = [choice(part.segment, part.index, part.index + part.segment.length)];
-    if (part.segment === '\n' || part.segment === '\r\n') choices.push(choice('', part.index, part.index + part.segment.length));
+    if (part.segment === '\n') choices.push(choice('', part.index, part.index + part.segment.length));
+    // CRLF：供应商可能省略（空候选）或归一为 LF（同样属"重复静音折叠"的相邻形态）
+    if (part.segment === '\r\n') choices.push(choice('', part.index, part.index + part.segment.length), choice('\n', part.index, part.index + part.segment.length));
     if (part.segment === '𠮷') choices.push(choice('吉', part.index, part.index + 2));
     if (part.segment === '〇') choices.push(choice('零', part.index, part.index + 1));
     blocks.push(choices);
