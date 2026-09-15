@@ -82,11 +82,23 @@ describe('原生字幕确定性派生',()=>{
     expect(result.timeline.cues.at(-1)!.sourceEnd).toBe(map.sourceText.length);
     expect(NarrationSubtitleTimelineV1.safeParse(result.timeline).success).toBe(true);
   });
-  it('词内空档（单个 word 跨过被吞标点）同样按未发声差额剥离',async()=>{
+  it('数字读法膨胀（发声长于源覆盖）不因剥离被误拒',async()=>{
+    // 1024（源 4 字符）读作 一千零二十四（6 字符）：差额式剥离会少算未发声数而误拒，
+    // 故剥离只针对确定未发声的空隙，数字膨胀区域按旧行为处理。
+    const map=timingWithWords('1024'+'。'.repeat(30),[{text:'一千零二十四',t0:0,t1:500}]);
+    const result=await buildNarrationSubtitles({timingMap:map,settingsSnapshot:settings(4,2)});
+    expect(result.timeline.cues.map((c:any)=>c.text).join('')).toBe('1024');
+  });
+  it('重复标点折叠（发声短于源覆盖）不误删发声标点',async()=>{
+    // —— 被读成 ，：差额式剥离会多算未发声数而删掉发声的 ，；现按 span 覆盖保留。
+    const map=timingWithWords('。'.repeat(30)+'——此',[{text:'，',t0:0,t1:250},{text:'此',t0:250,t1:500}]);
+    const result=await buildNarrationSubtitles({timingMap:map,settingsSnapshot:settings(3,2)});
+    expect(result.timeline.cues.map((c:any)=>c.text).join('|')).toContain('——此');
+  });
+  it('span 内部的未发声静音不在剥离范围（无法精确区分，维持 fail-closed）',async()=>{
+    // 单个 word 跨过被吞标点：token 区间含未发声字符，剥离会误删发声标点，故不处理
     const map=timingWithWords('甲。乙',[{text:'甲乙',t0:0,t1:500}]);
-    const result=await buildNarrationSubtitles({timingMap:map,settingsSnapshot:settings(2,2)});
-    expect(result.timeline.cues.map((c:any)=>c.text).join('')).toBe('甲乙');
-    expect(result.timeline.cues.at(-1)!.sourceEnd).toBe(map.sourceText.length);
+    await expect(buildNarrationSubtitles({timingMap:map,settingsSnapshot:settings(2,2)})).rejects.toThrow('narration_subtitle_unsplittable_span');
   });
   it('发声内容本身超限时仍拒绝（fail-closed 未被放宽）',async()=>{
     const map=timingWithWords('一千零二十四'+'。'.repeat(30),[{text:'一千零二十四',t0:0,t1:500}]);
