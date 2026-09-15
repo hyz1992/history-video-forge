@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { NarrationTimingMapV1 } from '../../../shared/src/index.js';
 import { normalizeNarrationTiming } from '../../../backend/src/modules/narration/narration-timing-normalizer.js';
 const hash = 'a'.repeat(64);
@@ -85,7 +85,7 @@ describe('静音容错对齐（供应商吞标点的未知变体无需再补白�
       expect(result?.spokenText, source).toBe(spoken);
       expect(result?.sourceText, source).toBe(source);
       expect(NarrationTimingMapV1.safeParse(result).success, source).toBe(true);
-      // 被吞标点落在相邻 token 的 source 区间内，覆盖原文
+      // 被吞标点留下"静音空档"（不被 token 覆盖），由 shared 覆盖检查放行；token 区间仍覆盖到全文末尾
       expect(result.tokens.map(t => [t.sourceStart, t.sourceEnd]).at(-1)![1], source).toBe(source.length);
     }
   });
@@ -99,6 +99,33 @@ describe('静音容错对齐（供应商吞标点的未知变体无需再补白�
   it('吞正文汉字必须失败（容错不放宽到内容层）', () => {
     expect(() => normalizeNarrationTiming(input('甲乙丙', '甲乙'))).toThrow('narration_timing_invalid');
     expect(() => normalizeNarrationTiming(input('甲乙丙', '甲丙'))).toThrow('narration_timing_invalid');
+  });
+  it('末尾等成本多路径必须拒绝（不得因提前收敛而放行）', () => {
+    // 这些输入存在两条同成本最优对齐（静音归前/归后），基线逐层 DP 拒绝，容错实现必须保持
+    expect(() => normalizeNarrationTiming(input('甲\n\n', '甲\n'))).toThrow('narration_timing_invalid');
+    expect(() => normalizeNarrationTiming(input('甲乙\n\n', '甲乙\n'))).toThrow('narration_timing_invalid');
+    expect(() => normalizeNarrationTiming(input('甲。。', '甲。'))).toThrow('narration_timing_invalid');
+    expect(() => normalizeNarrationTiming(input('甲……', '甲…'))).toThrow('narration_timing_invalid');
+    // 中段同结构（既有对抗用例的对照）
+    expect(() => normalizeNarrationTiming(input('甲\n\n乙', '甲\n乙'))).toThrow('narration_timing_invalid');
+  });
+  it('白名单无法匹配时由跳过兜底（整块 —— 被吞）', () => {
+    const result = normalizeNarrationTiming(input('甲——乙', '甲乙'));
+    expect(result.tokens.map(t => [t.sourceStart, t.sourceEnd])).toEqual([[0, 1], [3, 4]]);
+    expect(NarrationTimingMapV1.safeParse(result).success).toBe(true);
+  });
+  it('诊断payload记录被跳过的静音片段而非正文', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      normalizeNarrationTiming(input('甲——乙——丙', '甲乙丙'));
+      const payload = warn.mock.calls.filter(c => String(c[0]).includes('narration-silent-skip'));
+      expect(payload).toHaveLength(1);
+      expect(JSON.parse(String(payload[0]![1]))).toMatchObject({ skipped: ['——', '——'] });
+    } finally { warn.mockRestore(); }
+  });
+  it('静音量超绝对上限时 fail-closed（已知上限，非静默放宽）', () => {
+    const source = '甲' + '。'.repeat(300) + '乙';
+    expect(() => normalizeNarrationTiming(input(source, '甲乙'))).toThrow('narration_timing_invalid');
   });
   it('数字被吞同样失败（长数字读法不在容错范围）', () => {
     expect(() => normalizeNarrationTiming(input('甲123乙', '甲12乙'))).toThrow('narration_timing_invalid');

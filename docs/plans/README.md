@@ -1,6 +1,12 @@
 # 当前计划入口
 
-截至2026-09-15：AutoDL H3视频接入已实现，设置与项目设置可选；87项回归及4项真实浏览器验证通过。见[验收记录](../records/2026-09-15-autodl-video-integration.md)、[设计](./archive/2026-09-15-autodl-video-design.md)和[计划](./archive/2026-09-15-autodl-video-implementation-plan.md)。集成后新增付费生成未验证。
+## 当前状态
+
+截至 2026-09-15：
+
+- [口播静音容错对齐](./2026-09-15-narration-silent-skip-alignment-design.md)：治本白名单枚举的被动补丁模式——归一化 DP 增加"跳过静音 grapheme"转移（合同本就允许标点不被发音覆盖），未知标点改写（含整块 `——` 被吞）自动对齐；仅静音可跳、唯一最优 fail-closed、不支持插入。真实 470 字工件三场景验证通过。
+
+截至 2026-09-15：AutoDL H3视频接入已实现，设置与项目设置可选；87项回归及4项真实浏览器验证通过。见[验收记录](../records/2026-09-15-autodl-video-integration.md)、[设计](./archive/2026-09-15-autodl-video-design.md)和[计划](./archive/2026-09-15-autodl-video-implementation-plan.md)。集成后新增付费生成未验证。
 
 ## 用途与边界
 
