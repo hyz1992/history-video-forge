@@ -306,6 +306,29 @@ async function main() {
     return;
   }
 
+  if (mode === 'archive-previous') {
+    // 用户再次授权新一次试调时，把上一轮（必须已到终态）证据整体归档，再允许新提交。
+    // 终态未知一律拒绝，避免在不清楚是否已扣费的情况下重复下单。
+    const statePath = outPath('submission.json');
+    if (!existsSync(statePath)) throw new Error('没有提交记录，无需归档。');
+    const submission = load('submission.json');
+    const result = existsSync(outPath('result.json')) ? load('result.json') : null;
+    const status = String(result?.status ?? '').toLowerCase();
+    if (![...TERMINAL_OK, ...TERMINAL_BAD].includes(status)) {
+      throw new Error(`上一任务未到终态（status=${status || '未知'}），不允许归档后重投。`);
+    }
+    const tag = (submission.run_id || 'unknown').replace(/^run_/, '');
+    const moved = [];
+    for (const name of ['submission.json', 'result.json', 'request.json', 'artifact.json', 'credits.json', 'events.json', 'compare.json']) {
+      if (!existsSync(outPath(name))) continue;
+      const target = name.replace(/\.json$/, `-${tag}-${status}.json`);
+      renameSync(outPath(name), outPath(target));
+      moved.push(target);
+    }
+    console.log(`上一任务 ${submission.run_id} 状态 ${status}、实扣 ${result?.credits?.charged ?? '未知'} credits，已归档：${moved.join('、')}；现在可以提交新一轮。`);
+    return;
+  }
+
   if (mode === 'reset-after-failed') {
     // 仅在“已到终态失败且实扣 0 credits”时归档旧提交记录，允许修正后重投一次。
     // 结果未知或已扣费一律不清理，避免掩盖重复扣费。
@@ -324,7 +347,7 @@ async function main() {
   }
 
   if (!['submit', 'poll'].includes(mode)) {
-    throw new Error('用法：node harness/scripts/runtime/protoface-ltx-video-smoke.mjs prepare|inspect|upload|submit|poll|usage|compare|reset-after-failed');
+    throw new Error('用法：node harness/scripts/runtime/protoface-ltx-video-smoke.mjs prepare|inspect|upload|submit|poll|usage|compare|reset-after-failed|archive-previous');
   }
 
   const stateFile = outPath('submission.json');
