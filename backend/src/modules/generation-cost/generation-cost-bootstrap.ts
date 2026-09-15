@@ -75,6 +75,7 @@ export interface GenerationCostBootstrapEnvDeps {
   resolveTierSnapshot: () => TierProviderSnapshot;
   /** env.generation.mediaCredentialConfigured。 */
   mediaCredentialConfigured: boolean;
+  autodlCredentialConfigured?: boolean;
   /** DashScope 媒体运行配置（只在凭据已配置时才会被调用）。 */
   readDashscopeMediaConfig: () => DashscopeMediaConfigProjection;
 
@@ -141,12 +142,15 @@ export function resolveGenerationCostBootstrapInput(
     }
   }
 
+  const autodlModels: GenerationCapabilityReadinessInput['media']['registeredModels'] = deps.autodlCredentialConfigured ? [{ capability: 'video.image_to_video', providerKey: 'autodl', modelId: 'minimax_h3_lightx2v_v5' }] : [];
+  const credentialConfiguredByProvider = { autodl: Boolean(deps.autodlCredentialConfigured) };
   if (!deps.mediaCredentialConfigured) {
     return {
       llm,
       llmCandidates,
       media: {
-        registeredModels: [],
+        registeredModels: autodlModels,
+        credentialConfiguredByProvider,
         credentialConfigured: false,
         deploymentScope: "cn-beijing",
       },
@@ -168,10 +172,12 @@ export function resolveGenerationCostBootstrapInput(
     llm,
     llmCandidates,
     media: {
+      credentialConfiguredByProvider,
       registeredModels:
         deploymentScope === "unknown"
           ? [] // 区域未知：无已核实价格真相，不注册任何媒体模型（fail-closed）
           : [
+              ...autodlModels,
               ...additionalModels.map((m) => ({
                 capability: m.capability,
                 providerKey: m.providerKey,
@@ -195,6 +201,7 @@ export function resolveGenerationCostBootstrapInputFromEnv(): GenerationCostBoot
     llmProvider: env.llm.provider,
     resolveTierSnapshot: resolveTierProviderSnapshot,
     mediaCredentialConfigured: env.generation.mediaCredentialConfigured,
+    autodlCredentialConfigured: Boolean(process.env.AUTODL_COMFYUI_TOKEN?.trim()),
     readDashscopeMediaConfig: () => {
       const config = readDashscopeConfig(undefined);
       return {
@@ -247,6 +254,7 @@ export async function bootstrapGenerationCostCatalog(
       media: {
         deploymentScope: input.media.deploymentScope,
         additionalModels: mediaAdditionalModels,
+        includeAutodl: Boolean(input.media.credentialConfiguredByProvider?.autodl),
       },
     }),
   );

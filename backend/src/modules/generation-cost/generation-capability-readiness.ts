@@ -73,6 +73,7 @@ export interface GenerationCapabilityReadinessInput {
     registeredModels: MediaRegisteredModel[];
     /** 服务端媒体凭据是否已配置（非空）。 */
     credentialConfigured: boolean;
+    credentialConfiguredByProvider?: Record<string, boolean>;
     /** 当前 DashScope 部署区域（由运行 baseUrl 推导）。 */
     deploymentScope: DashscopeDeploymentScope;
   };
@@ -370,7 +371,7 @@ function validateMediaEntry(
   const declaredScope =
     (entry.parameterCapabilitiesJson as Record<string, unknown>)["deployment_scope"];
   if (
-    input.media.deploymentScope !== "unknown" &&
+    entry.providerKey === "dashscope" && input.media.deploymentScope !== "unknown" &&
     declaredScope !== input.media.deploymentScope
   ) {
     pushIssue(entry, {
@@ -380,7 +381,7 @@ function validateMediaEntry(
       message: `媒体目录项 ${entry.id} 的部署区域 (${String(declaredScope)}) 与当前运行区域 (${input.media.deploymentScope}) 不一致，不得报价`,
     });
   }
-  if (!input.media.credentialConfigured) {
+  if (!(input.media.credentialConfiguredByProvider?.[entry.providerKey] ?? (entry.providerKey === "dashscope" && input.media.credentialConfigured))) {
     pushIssue(entry, {
       code: "media_credential_unconfigured",
       capability: entry.capability,

@@ -230,6 +230,7 @@ export function buildPricingCatalogSeed(input: {
   media: {
     deploymentScope: DashscopeDeploymentScope;
     additionalModels?: MediaAdditionalModel[];
+    includeAutodl?: boolean;
   };
 }): ProviderModelCatalogRecord[] {
   const scope = input.media.deploymentScope;
@@ -406,6 +407,15 @@ export function buildPricingCatalogSeed(input: {
     pricingJson: { unit_type: "tts_character", currency: "CNY", price_micros_per_10k_characters: "1400000",
       effective_at: "2026-09-07T00:00:00+08:00",
       source_note: "北京公开价1.4元/万字符，2026-09-07核验：https://help.aliyun.com/zh/model-studio/qwen-audio-3-0-tts-plus；不代表账户折扣账单" },
+    isDefault: false,
+  }));
+  if (input.media.includeAutodl) entries.push(toRecord({
+    id: 'video.image_to_video.autodl.minimax_h3_lightx2v_v5',
+    capability: 'video.image_to_video', providerKey: 'autodl', modelId: 'minimax_h3_lightx2v_v5',
+    displayName: 'AutoDL H3 多图参考视频（标准档768P）', qualityTier: 'standard', speedTier: 'fast',
+    parameterCapabilitiesJson: { deployment_scope: 'autodl', api_video_qualities: ['standard_720p','high_1080p'], min_duration_seconds_per_task: 1, max_duration_seconds_per_task: 10 },
+    pricingVersion: 'autodl-h3-2026-09-15',
+    pricingJson: { unit_type: 'video_second', currency: 'CNY', price_micros_per_second_by_quality: { standard_720p: '40000', high_1080p: '90000' }, effective_at: '2026-09-15T00:00:00+08:00', source_note: 'AutoDL工作流公开白天价估算；768P 0.04元/秒，1080P 0.09元/秒。夜间优惠及实际扣费以平台账单为准。https://autodl.art/large-model/comfyui/minimax_h3_lightx2v_v5' },
     isDefault: false,
   }));
   entries.push(...buildLlmSeedEntries(input.llm));
