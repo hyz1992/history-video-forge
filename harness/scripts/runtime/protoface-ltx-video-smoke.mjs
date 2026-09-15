@@ -5,9 +5,12 @@ import { createHash } from 'node:crypto';
 
 // 独立试调：只读已有运行记录与 prompts/ 下的正式 prompt，不写业务数据库，不改正式视频生成链路。
 // 鉴权、单次提交保护、轮询、产物保存沿用 autodl-video-smoke.mjs 的既有约定。
-const OUT = resolve('harness/scripts/runtime/output/protoface-ltx-s029');
-const PROMPT_FILE = resolve('prompts/asset/protoface-ltx-video-smoke.prompt.md');
-const MODEL_ID = 'lightricks/ltx-2.5-fast';
+// 模型与输出目录可用环境变量切换，便于在同一个分镜上横向试不同模型。
+// 未设置时保持默认（LTX 2.5 Fast），不影响既有用法。
+const MODEL_ID = process.env.PROTOFACE_MODEL ?? 'lightricks/ltx-2.5-fast';
+const OUT = resolve(process.env.PROTOFACE_OUT ?? 'harness/scripts/runtime/output/protoface-ltx-s029');
+const PROMPT_FILE = resolve(process.env.PROTOFACE_PROMPT ?? 'prompts/asset/protoface-ltx-video-smoke.prompt.md');
+const VIDEO_NAME = process.env.PROTOFACE_VIDEO_NAME ?? 'protoface-ltx-s029.mp4';
 const BASE = 'https://api.protoface.com/v1';
 const TOKEN_ENV = 'PROTOFACE_API_KEY';
 // 官网公开标价：720p 档 $0.006/秒；平台计费单位为 credit，1 credit = $0.01。
@@ -27,13 +30,22 @@ const SOURCE = {
   originalParameters: { resolution: '720P', duration: 10, prompt_extend: true, watermark: false },
   originalVideoRelative: 'assets-runs/assets_run_a98c3500-22a0-49ea-bde1-1a3281bd0bd9/videos/dashscope_video_029.mp4',
 };
-// 本次意图：恰好 10 秒、官网 720p 档（该档实际输出 768p）、竖屏 9:16（与参考图一致）。
-// quality 必须传档位名 "720p"（平台枚举 480p/720p/1080p），不能传实际画布 "768p"。
-// generate_audio 默认 true：音频与画面同一次推理产出，关掉也不降价，且本次需要取出音轨做人声检查。
-const INTENT = { durationSeconds: 10, quality: '720p', aspectRatio: '9:16', generateAudio: true };
+// 本次意图：恰好 10 秒、竖屏 9:16（与参考图一致）、开启音频以便做人声检查。
+// quality 必须传平台档位名，各模型枚举不同且都不是实际画布名：
+//   LTX 2.5 Fast 是 480p/720p/1080p（720p 档实际输出 768p）；
+//   MiniMax H3   是 480p/768p/2k（768p 档实际输出 768p）。
+// 因此档位用环境变量按模型指定，默认保持 LTX 的 720p。
+// generate_audio 默认 true：关掉不降价，且本次需要取出音轨做人声检查。
+const INTENT = {
+  durationSeconds: Number(process.env.PROTOFACE_DURATION ?? 10),
+  quality: process.env.PROTOFACE_QUALITY ?? '720p',
+  aspectRatio: process.env.PROTOFACE_ASPECT ?? '9:16',
+  generateAudio: process.env.PROTOFACE_GENERATE_AUDIO !== 'false',
+};
 const AUDIO_LINE_PREFIX = '【音频约束】';
 // 字段名一律以 GET /v1/models/{id} 返回的 schema 为准，不猜接口。
-// 实测 LTX 2.5 Fast（video.general）的首帧字段是 image_url，不是 first_frame。
+// 实测：LTX 2.5 Fast（video.general）首帧字段是 image_url；MiniMax H3 是 first_frame。
+// 候选列表按优先级匹配，谁在 schema 里出现就用谁。
 const FIELD_CANDIDATES = {
   prompt: ['prompt'],
   duration_seconds: ['duration_seconds', 'duration'],
@@ -247,7 +259,7 @@ async function main() {
       };
     };
     const original = probe(load('source.json').original_video);
-    const generated = probe(outPath('protoface-ltx-s029.mp4'));
+    const generated = probe(outPath(VIDEO_NAME));
     save('compare.json', { original, generated, note: '仅 ffprobe 客观量测；音轨未被静音、裁剪或修改。人声有无需听感或 ASR 转写另行验证。' });
     console.log(JSON.stringify({ original, generated }, null, 2));
     if (original && generated) {
@@ -372,7 +384,13 @@ async function main() {
       [resolved.quality]: intent.quality,
       [resolved.aspect_ratio]: intent.aspectRatio,
     };
-    if (resolved.operation) body[resolved.operation] = 'video.animate';
+    // operation 只在平台 schema 真的声明该字段时才传，取值从模型自己的 operations 推导，
+    // 不硬编码成某个具体操作名。
+    if (resolved.operation) {
+      const operationNames = Object.keys(model.operations ?? {});
+      if (operationNames.length !== 1) throw new Error(`平台要求 operation 但有 ${operationNames.length} 个可选操作：${operationNames.join('/')}；不猜操作名，请先核对 model.json。`);
+      body[resolved.operation] = operationNames[0];
+    }
     if (resolved.generate_audio && intent.generateAudio === true) body[resolved.generate_audio] = true;
     if (existsSync(outPath('asset.json'))) body[resolved.first_frame] = load('asset.json').id;
     else body[resolved.first_frame] = 'data:image/png;base64,' + readFileSync(outPath('reference.png')).toString('base64');
@@ -456,7 +474,7 @@ async function main() {
       if (!response.ok) throw new Error('视频下载失败 HTTP ' + response.status);
       const bytes = Buffer.from(await response.arrayBuffer());
       if (bytes.length < 12 || bytes.toString('ascii', 4, 8) !== 'ftyp') throw new Error('下载内容不是有效 MP4 容器');
-      writeFileSync(outPath('protoface-ltx-s029.mp4'), bytes);
+      writeFileSync(outPath(VIDEO_NAME), bytes);
       save('artifact.json', {
         run_id: state.run_id,
         url_host: new URL(file.url).host,
@@ -471,7 +489,7 @@ async function main() {
         generation_seconds: run.started_at && run.completed_at ? (new Date(run.completed_at) - new Date(run.started_at)) / 1000 : null,
         audio_untouched: '原样保存下载流，未静音、未裁剪、未改音轨',
       });
-      console.log('视频已保存：' + outPath('protoface-ltx-s029.mp4') + '（' + bytes.length + ' 字节）');
+      console.log('视频已保存：' + outPath(VIDEO_NAME) + '（' + bytes.length + ' 字节）');
       return;
     }
     if (TERMINAL_BAD.includes(status)) throw new Error('任务终止：' + status + '；详见 result.json，不自动重试。');
