@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { NarrationTimingMapV1 } from '../../../shared/src/index.js';
-import { REPLACEABLE_SILENT, normalizeNarrationTiming } from '../../../backend/src/modules/narration/narration-timing-normalizer.js';
+import { normalizeNarrationTiming } from '../../../backend/src/modules/narration/narration-timing-normalizer.js';
 const hash = 'a'.repeat(64);
 function input(sourceText: string, spoken = sourceText, times?: number[][]) {
   const words = Array.from(spoken).map((text, i) => ({ text, begin_index: i, end_index: i + 1,
@@ -249,15 +249,6 @@ describe('静音受控替换（供应商未知标点改写）', () => {
       expect(result?.spokenText, source + '->' + target).toBe('甲' + target + '乙');
       expect(NarrationTimingMapV1.safeParse(result).success).toBe(true);
     }
-  });
-  it('替换目标集本身必须全属静音类且无重复', () => {
-    const silentOnly = /^[\p{P}\p{Z}\s]*$/u;
-    expect(REPLACEABLE_SILENT.length).toBeGreaterThan(0);
-    for (const target of REPLACEABLE_SILENT) expect(silentOnly.test(target), target).toBe(true);
-    expect(new Set(REPLACEABLE_SILENT).size).toBe(REPLACEABLE_SILENT.length);
-    // 符号类不属静音：加入目标集会被模块加载期断言拒绝
-    expect(silentOnly.test('+')).toBe(false);
-    expect(silentOnly.test('～')).toBe(false);
   });
   it('两个不同标点竞争同一目标时拒绝（唯一最优保持 fail-closed）', () => {
     expect(() => normalizeNarrationTiming(input('甲。、乙', '甲，乙'))).toThrow('narration_timing_invalid');

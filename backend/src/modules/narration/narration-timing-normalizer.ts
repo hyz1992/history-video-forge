@@ -42,23 +42,9 @@ function integerForms(value: string): string[] {
 }
 interface Unit { text: string; sourceStart: number; sourceEnd: number; }
 interface Choice { spoken: string; units: Unit[]; cost?: number; }
-/** 静音替换候选集：供应商可能把某个标点改写成另一个标点（——→；、。→，）。
- *  只作为未知替换的兜底：成本 = 被替换源范围字符数 + 1（严格高于同块跳过成本：过低会把长 run 的替换
- *  排在跳过之前而引到错误源字符，与跳过持平则会与空候选打平误判歧义）；原样/白名单/折叠仍为成本 0 优先。 */
-export const REPLACEABLE_SILENT = [
-  // 中文标点
-  '，','。','！','？','；','：','、','“','”','‘','’','（','）','《','》','—','…','·',
-  // 半角 ASCII 标点（全角↔半角规范化方向；仅限 \p{P} 标点类，符号类如 + = < > $ ~ 不属静音）
-  '.',',','!','?',';',':','"',"'",'(',')','[',']','{','}','-','_','/','\\','@','#','%','&','*',
-  // 其他常见静音（波浪线、全角空格、制表与换行）
-  '〜','\u3000','\n','\t',' ',
-];
 /** 与 shared 覆盖校验同源的静音判定：标点/分隔符/空白。供应商吞掉静音是合同允许的
  *  （token 不必覆盖标点），但吞掉正文（汉字/字母/数字）必须失败。 */
 const SILENT_PATTERN = /^[\p{P}\p{Z}\s]*$/u;
-/** 目标集必须全属静音类：否则"正文被读成正文"会被放行，突破正文不可替换的边界。 */
-for (const target of REPLACEABLE_SILENT)
-  if (!SILENT_PATTERN.test(target) || target.length === 0) throw new Error("narration_replaceable_silent_invalid");
 /** 跳过静音的总量上限（防状态爆炸）。只在"单个 provider 句子含数百个连续静音 block"
  *  的病态输入上才会触顶；触顶 fail-closed 并输出 narration-align-limit 诊断。 */
 const MAX_SILENT_SKIP = 256;
@@ -73,7 +59,8 @@ const MAX_STATES = 2000000;
  *  跳过成本 = 被跳过字符数，因此已知变体永远优先，跳过只在无零成本路径时启用。
  *  跳过总量受预算约束（仅防状态爆炸；安全边界由"仅静音"保证）。 */
 export interface NarrationTimingDiagnostic {
-  kind: "silent_skip" | "skip_budget" | "layer_limit" | "state_limit";
+  kind: "silent_skip" | "skip_budget" | "layer_limit" | "state_limit" | "no_alignment";
+  around?: { src: string; norm: string } | null;
   sentenceBase?: number; skipped?: string[]; budget?: number; silentTotal?: number;
   blocks?: number; states?: number; layer?: number; count?: number;
 }
@@ -105,12 +92,6 @@ function mapSentence(original: string, normalized: string, sourceBase: number,
       // 供应商对"——"的归一化不稳定：资格期样本读成"，"，2026-09-15 实测读成单个"—"（三处各 -1 字）。
       // 保留全部已观测候选；归一化文本固定，同位置不同候选不会互相歧义。
       const dashChoices: Choice[] = [{ spoken: '——', units: [...choice('—', part.index, part.index + 1).units, ...choice('—', part.index + 1, part.index + 2).units] }, choice('，', part.index, part.index + 2), choice('—', part.index, part.index + 2)];
-      const dashSeen = new Set(dashChoices.map(c => c.spoken));
-      for (const target of REPLACEABLE_SILENT) {
-        if (dashSeen.has(target)) continue;
-        dashSeen.add(target);
-        dashChoices.push({ ...choice(target, part.index, part.index + 2), cost: 3 });
-      }
       blocks.push(dashChoices);
       blockMeta.push({ silent: true, length: 2, start: part.index, end: part.index + 2 });
       i++; continue;
@@ -125,12 +106,6 @@ function mapSentence(original: string, normalized: string, sourceBase: number,
         const runText = part.segment.repeat(same - i), runEnd = part.index + runText.length;
         const runChoices: Choice[] = [{ spoken: runText, units: parts.slice(i, same).flatMap(p => choice(p.segment, p.index, p.index + 1).units) },
           choice(part.segment, part.index, runEnd)];
-        const runSeen = new Set(runChoices.map(c => c.spoken));
-        for (const target of REPLACEABLE_SILENT) {
-          if (runSeen.has(target)) continue;
-          runSeen.add(target);
-          runChoices.push({ ...choice(target, part.index, runEnd), cost: runText.length + 1 });
-        }
         blocks.push(runChoices);
         blockMeta.push({ silent: true, length: runText.length, start: part.index, end: runEnd });
         i = same - 1; continue;
@@ -143,15 +118,6 @@ function mapSentence(original: string, normalized: string, sourceBase: number,
     if (part.segment === '𠮷') choices.push(choice('吉', part.index, part.index + 2));
     if (part.segment === '〇') choices.push(choice('零', part.index, part.index + 1));
     const silentBlock = SILENT_PATTERN.test(part.segment) && part.segment.length > 0;
-    if (silentBlock) {
-      // 未知标点替换兜底：排除自身与已有候选文本，避免与白名单/折叠产生同成本重复路径。
-      const seen = new Set(choices.map(c => c.spoken));
-      for (const target of REPLACEABLE_SILENT) {
-        if (seen.has(target)) continue;
-        seen.add(target);
-        choices.push({ ...choice(target, part.index, part.index + part.segment.length), cost: part.segment.length + 1 });
-      }
-    }
     blocks.push(choices);
     blockMeta.push({ silent: silentBlock, length: part.segment.length, start: part.index, end: part.index + part.segment.length });
   }
@@ -199,6 +165,18 @@ function mapSentence(original: string, normalized: string, sourceBase: number,
           if (existing) { if (existing.cost === next.cost) existing.ambiguous = true; return; }
           buckets[next.cost]!.push(next);
         };
+        // 动态标点替换：静音 block 可被供应商读成任意单个标点类字符（不枚举目标，
+        // 覆盖各类 dash/引号/变体），成本 = 源范围长度 + 1（严格高于同块跳过与折叠）。
+        if (meta.silent && node.offset < normalized.length) {
+          const ch = normalized[node.offset]!;
+          if (SILENT_PATTERN.test(ch) && ch.length > 0 && ch !== original.slice(meta.start, meta.end)) {
+            const replaceCost = meta.length + 1;
+            if (node.cost + replaceCost > budget) budgetTruncated = true;
+            else push({ blockIndex: node.blockIndex + 1, offset: node.offset + ch.length,
+              cost: node.cost + replaceCost, previous: node, units: choice(ch, meta.start, meta.end).units, ambiguous: node.ambiguous },
+              key(node.blockIndex + 1, node.offset + ch.length));
+          }
+        }
         for (const candidate of blocks[node.blockIndex]!) {
           if (!normalized.startsWith(candidate.spoken, node.offset)) continue;
           const stepCost = candidate.cost ?? 0;
@@ -221,6 +199,14 @@ function mapSentence(original: string, normalized: string, sourceBase: number,
   })();
   if (!final) {
     if (budgetTruncated) emit({ kind: "skip_budget", budget, silentTotal, blocks: blocks.length });
+    else {
+      // 无法对齐时输出首处差异上下文（限 12 字），用于定位供应商的未知改写字符。
+      let diff = -1;
+      for (let k = 0; k < Math.max(original.length, normalized.length); k += 1)
+        if (original[k] !== normalized[k]) { diff = k; break; }
+      emit({ kind: "no_alignment", sentenceBase: sourceBase,
+        around: diff < 0 ? null : { src: original.slice(Math.max(0, diff - 6), diff + 6), norm: normalized.slice(Math.max(0, diff - 6), diff + 6) } });
+    }
     fail();
   }
   const chunks: Unit[][] = [];
