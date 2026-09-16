@@ -264,3 +264,23 @@ describe('静音受控替换（供应商未知标点改写）', () => {
     expect(dash.tokens[1]!.sourceEnd).toBe(3);
   });
 });
+
+describe('正文单字等长替换（供应商同音/形近归一化）', () => {
+  it('生僻字被归一化为常用字可追踪（实测 怛罗斯→达罗斯）', () => {
+    const result = normalizeNarrationTiming(input('在怛罗斯河畔撞上', '在达罗斯河畔撞上'));
+    expect(result?.spokenText).toBe('在达罗斯河畔撞上');
+    expect(result?.sourceText).toBe('在怛罗斯河畔撞上');
+    expect(NarrationTimingMapV1.safeParse(result).success).toBe(true);
+    // 来源仍指向原文位置：字幕与切片保持原文写法
+    expect(result.tokens[1]!.sourceStart).toBe(1);
+  });
+  it('多处等长替换与标点混合仍可对齐', () => {
+    const result = normalizeNarrationTiming(input('东进——怛罗斯', '东进，达罗斯'));
+    expect(result?.spokenText).toBe('东进，达罗斯');
+    expect(NarrationTimingMapV1.safeParse(result).success).toBe(true);
+  });
+  it('正文替换不放宽漏读与新增', () => {
+    expect(() => normalizeNarrationTiming(input('甲乙丙', '甲乙'))).toThrow('narration_timing_invalid');
+    expect(() => normalizeNarrationTiming(input('甲乙', '甲丙丁'))).toThrow('narration_timing_invalid');
+  });
+});

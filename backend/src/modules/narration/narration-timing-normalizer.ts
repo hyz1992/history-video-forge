@@ -127,9 +127,8 @@ function mapSentence(original: string, normalized: string, sourceBase: number,
   // 成本上界 = 跳过预算 + 每个静音 block 的替换额外开销；仅在极端标点密度下再夹一个绝对上限防状态爆炸。
   interface Path { blockIndex: number; offset: number; cost: number; previous?: Path; units: Unit[]; ambiguous: boolean; skipped?: string; }
   const silentTotal = blockMeta.reduce((sum, meta) => sum + (meta.silent ? meta.length : 0), 0);
-  // 预算 = 跳过预算（静音字符数，上限 MAX_SILENT_SKIP）+ 替换额外开销（每个静音 block 的 +1，同上限）。
-  const silentBlocks = blockMeta.reduce((n, meta) => n + (meta.silent ? 1 : 0), 0);
-  const budget = Math.min(silentTotal, MAX_SILENT_SKIP) + Math.min(silentBlocks, MAX_SILENT_SKIP);
+  // 预算 = 跳过预算（静音字符数）+ 替换额外开销（每个 block 至多一次替换的 +1，覆盖标点替换与正文单字替换）。
+  const budget = Math.min(silentTotal, MAX_SILENT_SKIP) + Math.min(blockMeta.length, MAX_SILENT_SKIP);
   const key = (blockIndex: number, offset: number) => blockIndex + ':' + offset;
   /** 是否因 MAX_SILENT_SKIP 截断而放弃过跳过路径（仅用于失败归因诊断）。 */
   let budgetTruncated = false;
@@ -166,6 +165,21 @@ function mapSentence(original: string, normalized: string, sourceBase: number,
           if (existing) { if (existing.cost === next.cost) existing.ambiguous = true; return; }
           buckets[next.cost]!.push(next);
         };
+        // 正文单字等长替换：供应商对生僻字做同音/形近归一化（实测 怛→达），
+        // 单字符 block 与目标同为正文类时才允许；成本 = 2（严格高于原样匹配），
+        // 唯一最优仍 fail-closed（漏读+替换的组合会同成本而拒绝）。
+        if (meta.length === 1 && node.offset < normalized.length) {
+          const ch = normalized[node.offset]!;
+          const raw = original.slice(meta.start, meta.end);
+          if (ch !== raw && !SILENT_PATTERN.test(ch) && !SILENT_PATTERN.test(raw) &&
+            !/^[0-9]$/.test(ch) && !/^[0-9]$/.test(raw)) {
+            const glyphCost = meta.length + 1;
+            if (node.cost + glyphCost > budget) budgetTruncated = true;
+            else push({ blockIndex: node.blockIndex + 1, offset: node.offset + ch.length,
+              cost: node.cost + glyphCost, previous: node, units: choice(ch, meta.start, meta.end).units, ambiguous: node.ambiguous },
+              key(node.blockIndex + 1, node.offset + ch.length));
+          }
+        }
         // 动态标点替换：静音 block 可被供应商读成任意单个标点类字符（不枚举目标，
         // 覆盖各类 dash/引号/变体），成本 = 源范围长度 + 1（严格高于同块跳过与折叠）。
         if (meta.silent && node.offset < normalized.length) {
