@@ -41,7 +41,11 @@ function integerForms(value: string): string[] {
   return [...new Set([...forms, text])];
 }
 interface Unit { text: string; sourceStart: number; sourceEnd: number; }
-interface Choice { spoken: string; units: Unit[]; }
+interface Choice { spoken: string; units: Unit[]; cost?: number; }
+/** 静音替换候选集：供应商可能把某个标点改写成另一个标点（——→；、。→，）。
+ *  只作为未知替换的兜底：成本 = 被替换源范围的字符数（与跳过同尺度，避免长 run 的替换
+ *  比跳过它更便宜而把对齐引到错误源字符）；原样/白名单/折叠仍为成本 0 优先。 */
+const REPLACEABLE_SILENT = ['，','。','！','？','；','：','、','“','”','‘','’','（','）','《','》','—','…','·','\n',' '];
 /** 与 shared 覆盖校验同源的静音判定：标点/分隔符/空白。供应商吞掉静音是合同允许的
  *  （token 不必覆盖标点），但吞掉正文（汉字/字母/数字）必须失败。 */
 const SILENT_PATTERN = /^[\p{P}\p{Z}\s]*$/u;
@@ -90,7 +94,14 @@ function mapSentence(original: string, normalized: string, sourceBase: number,
     if (part.segment === '—' && parts[i + 1]?.segment === '—') {
       // 供应商对"——"的归一化不稳定：资格期样本读成"，"，2026-09-15 实测读成单个"—"（三处各 -1 字）。
       // 保留全部已观测候选；归一化文本固定，同位置不同候选不会互相歧义。
-      blocks.push([{ spoken: '——', units: [...choice('—', part.index, part.index + 1).units, ...choice('—', part.index + 1, part.index + 2).units] }, choice('，', part.index, part.index + 2), choice('—', part.index, part.index + 2)]);
+      const dashChoices: Choice[] = [{ spoken: '——', units: [...choice('—', part.index, part.index + 1).units, ...choice('—', part.index + 1, part.index + 2).units] }, choice('，', part.index, part.index + 2), choice('—', part.index, part.index + 2)];
+      const dashSeen = new Set(dashChoices.map(c => c.spoken));
+      for (const target of REPLACEABLE_SILENT) {
+        if (dashSeen.has(target)) continue;
+        dashSeen.add(target);
+        dashChoices.push({ ...choice(target, part.index, part.index + 2), cost: 2 });
+      }
+      blocks.push(dashChoices);
       blockMeta.push({ silent: true, length: 2, start: part.index, end: part.index + 2 });
       i++; continue;
     }
@@ -102,8 +113,15 @@ function mapSentence(original: string, normalized: string, sourceBase: number,
       while (same < parts.length && parts[same]!.segment === part.segment) same++;
       if (same - i >= 2) {
         const runText = part.segment.repeat(same - i), runEnd = part.index + runText.length;
-        blocks.push([{ spoken: runText, units: parts.slice(i, same).flatMap(p => choice(p.segment, p.index, p.index + 1).units) },
-          choice(part.segment, part.index, runEnd)]);
+        const runChoices: Choice[] = [{ spoken: runText, units: parts.slice(i, same).flatMap(p => choice(p.segment, p.index, p.index + 1).units) },
+          choice(part.segment, part.index, runEnd)];
+        const runSeen = new Set(runChoices.map(c => c.spoken));
+        for (const target of REPLACEABLE_SILENT) {
+          if (runSeen.has(target)) continue;
+          runSeen.add(target);
+          runChoices.push({ ...choice(target, part.index, runEnd), cost: runText.length });
+        }
+        blocks.push(runChoices);
         blockMeta.push({ silent: true, length: runText.length, start: part.index, end: runEnd });
         i = same - 1; continue;
       }
@@ -114,8 +132,18 @@ function mapSentence(original: string, normalized: string, sourceBase: number,
     if (part.segment === '\r\n') choices.push(choice('', part.index, part.index + part.segment.length), choice('\n', part.index, part.index + part.segment.length));
     if (part.segment === '𠮷') choices.push(choice('吉', part.index, part.index + 2));
     if (part.segment === '〇') choices.push(choice('零', part.index, part.index + 1));
+    const silentBlock = SILENT_PATTERN.test(part.segment) && part.segment.length > 0;
+    if (silentBlock) {
+      // 未知标点替换兜底：排除自身与已有候选文本，避免与白名单/折叠产生同成本重复路径。
+      const seen = new Set(choices.map(c => c.spoken));
+      for (const target of REPLACEABLE_SILENT) {
+        if (seen.has(target)) continue;
+        seen.add(target);
+        choices.push({ ...choice(target, part.index, part.index + part.segment.length), cost: part.segment.length });
+      }
+    }
     blocks.push(choices);
-    blockMeta.push({ silent: SILENT_PATTERN.test(part.segment), length: part.segment.length, start: part.index, end: part.index + part.segment.length });
+    blockMeta.push({ silent: silentBlock, length: part.segment.length, start: part.index, end: part.index + part.segment.length });
   }
   // 不找子串、不做编辑距离。保留所有精确解析；同位置多个来源解析也算歧义。
   // 成本分层 Dijkstra：match 成本 0（白名单候选优先），跳过静音成本 = 该 block 字符数。
@@ -162,7 +190,7 @@ function mapSentence(original: string, normalized: string, sourceBase: number,
         for (const candidate of blocks[node.blockIndex]!) {
           if (!normalized.startsWith(candidate.spoken, node.offset)) continue;
           push({ blockIndex: node.blockIndex + 1, offset: node.offset + candidate.spoken.length,
-            cost: node.cost, previous: node, units: candidate.units, ambiguous: node.ambiguous },
+            cost: node.cost + (candidate.cost ?? 0), previous: node, units: candidate.units, ambiguous: node.ambiguous },
             key(node.blockIndex + 1, node.offset + candidate.spoken.length));
         }
         if (meta.silent && node.cost + meta.length > budget) budgetTruncated = true;

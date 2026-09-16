@@ -231,3 +231,29 @@ it('同source的正零正token闭包不抬高零时长',()=>{
   expect(result.tokens[1]).toMatchObject({startMs:100,endMs:100});
   expect(result.sourceSpans).toHaveLength(1);expect(result.boundaries).toHaveLength(2);
 });
+
+describe('静音受控替换（供应商未知标点改写）', () => {
+  it.each([['——', '；'], ['——', '，'], ['——', '！'], ['。', '，'], ['！', '？'], ['，', '、']])(
+    '%s 被读成 %s 可追踪且来源指向原标点范围',
+    (source, target) => {
+      const result = normalizeNarrationTiming(input('甲' + source + '乙', '甲' + target + '乙'));
+      expect(result?.spokenText).toBe('甲' + target + '乙');
+      expect(result.tokens[1]!.sourceStart).toBe(1);
+      expect(result.tokens[1]!.sourceEnd).toBe(1 + source.length);
+      expect(NarrationTimingMapV1.safeParse(result).success).toBe(true);
+    },
+  );
+  it('两个不同标点竞争同一目标时拒绝（唯一最优保持 fail-closed）', () => {
+    expect(() => normalizeNarrationTiming(input('甲。、乙', '甲，乙'))).toThrow('narration_timing_invalid');
+  });
+  it('替换不放宽正文与插入边界', () => {
+    expect(() => normalizeNarrationTiming(input('甲乙丙', '甲乙'))).toThrow('narration_timing_invalid');
+    expect(() => normalizeNarrationTiming(input('甲乙', '甲，乙'))).toThrow('narration_timing_invalid');
+  });
+  it('白名单与折叠仍按成本 0 优先于替换', () => {
+    const whitelist = normalizeNarrationTiming(input('甲——乙', '甲—乙'));
+    expect(whitelist.tokens[1]!.sourceEnd).toBe(3);
+    const dash = normalizeNarrationTiming(input('甲——乙', '甲，乙'));
+    expect(dash.tokens[1]!.sourceEnd).toBe(3);
+  });
+});
