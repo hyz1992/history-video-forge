@@ -39,6 +39,8 @@
    触顶时 fail-closed 并输出 `narration-align-limit` 诊断。可达性：`skip_budget` 可达（有用例）；`state_limit` / `layer_limit` 为防御性分支——单层 offset 差受 `budget ≤ 256` 约束（数字候选长度差是唯一额外来源），故单层状态数远低于逐层上限 4096，两者在实际输入下均未触发。
    实测边界（一次性探针，未入库）：单句 631/1500 个连续换行与基线同为 ACCEPT；**临界点为 1999**（K≥1999 由全局上限拦下，诊断 `state_limit`），基线临界点为 4095（其逐层上限）。即 **[1999, 4095] 区间本实现比基线更早 fail-closed**：基线以约 485MB 堆为代价接受，本实现接受到 K=1998 时堆约 759MB。触发需"单句约 2000+ 连续静音 block"，真实文案（句内换行为个位数）差约 3 个数量级；方向 fail-closed，不影响正确性。
 
+> 2026-09-16 更新（[静音受控替换](./2026-09-16-narration-silent-replacement-design.md)）：因新增替换转移，DP 成本上界改为 `min(silentTotal, 256) + min(silentBlocks, 256)`（≤512），本节此前记录的 256 上界与实测临界点按新上界失效；替换候选均为单字符，分支度基本不变。
+
 ## 明确不改
 
 - shared schema（`silent` 覆盖规则、token 非零宽约束均不变）；
