@@ -60,10 +60,8 @@ const MAX_STATES = 2000000;
  *  跳过总量受预算约束（仅防状态爆炸；安全边界由"仅静音"保证）。 */
 export interface NarrationTimingDiagnostic {
   kind: "silent_skip" | "skip_budget" | "layer_limit" | "state_limit" | "no_alignment";
-  around?: { i: number; src: string; norm: string } | null;
-  head?: { src: string; norm: string };
-  tail?: { src: string; norm: string };
-  srcLen?: number; normLen?: number;
+  diffRegion?: { src: string; norm: string };
+  srcLen?: number; normLen?: number; commonPrefix?: number; commonSuffix?: number;
   sentenceBase?: number; skipped?: string[]; budget?: number; silentTotal?: number;
   blocks?: number; states?: number; layer?: number; count?: number;
 }
@@ -204,15 +202,16 @@ function mapSentence(original: string, normalized: string, sourceBase: number,
     if (budgetTruncated) emit({ kind: "skip_budget", budget, silentTotal, blocks: blocks.length });
     else {
       // 无法对齐时输出首处差异上下文（限 12 字），用于定位供应商的未知改写字符。
-      // 首处差异未必是失败点（长度差会让其后全部错位），故同时给出前后片段供对照定位。
-      let diff = -1;
-      for (let k = 0; k < Math.max(original.length, normalized.length); k += 1)
-        if (original[k] !== normalized[k]) { diff = k; break; }
+      // 逐位置对比在长度不等时会整体错位，只报首处会掩盖真正卡住的位置。
+      // 用"公共前缀 + 公共后缀"聚焦出差异区（三处 ——→， 与任何等长汉字改写都会落在这里）。
+      let pre = 0;
+      while (pre < Math.min(original.length, normalized.length) && original[pre] === normalized[pre]) pre += 1;
+      let suf = 0;
+      while (suf < Math.min(original.length, normalized.length) - pre &&
+        original[original.length - 1 - suf] === normalized[normalized.length - 1 - suf]) suf += 1;
       emit({ kind: "no_alignment", sentenceBase: sourceBase, blocks: blocks.length,
-        srcLen: original.length, normLen: normalized.length,
-        around: diff < 0 ? null : { i: diff, src: original.slice(Math.max(0, diff - 6), diff + 6), norm: normalized.slice(Math.max(0, diff - 6), diff + 6) },
-        head: { src: original.slice(0, 60), norm: normalized.slice(0, 60) },
-        tail: { src: original.slice(-60), norm: normalized.slice(-60) } });
+        srcLen: original.length, normLen: normalized.length, commonPrefix: pre, commonSuffix: suf,
+        diffRegion: { src: original.slice(pre, original.length - suf), norm: normalized.slice(pre, normalized.length - suf) } });
     }
     fail();
   }
