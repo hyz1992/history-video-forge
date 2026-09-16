@@ -172,7 +172,7 @@ describe('静音容错对齐（供应商吞标点的未知变体无需再补白�
       expect(() => normalizeNarrationTiming(input(source, '甲乙'))).toThrow('narration_timing_invalid');
       const limit = warn.mock.calls.filter(c => String(c[0]).includes('narration-align-limit'));
       expect(limit).toHaveLength(1);
-      expect(JSON.parse(String(limit[0]![1]))).toMatchObject({ kind: 'skip_budget', budget: 256 });
+      expect(JSON.parse(String(limit[0]![1]))).toMatchObject({ kind: 'skip_budget', silentTotal: 300 });
     } finally { warn.mockRestore(); }
   });
   it('病态超长输入不会挂死（有界失败）', () => {

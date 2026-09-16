@@ -43,12 +43,15 @@ function integerForms(value: string): string[] {
 interface Unit { text: string; sourceStart: number; sourceEnd: number; }
 interface Choice { spoken: string; units: Unit[]; cost?: number; }
 /** 静音替换候选集：供应商可能把某个标点改写成另一个标点（——→；、。→，）。
- *  只作为未知替换的兜底：成本 = 被替换源范围的字符数（与跳过同尺度，避免长 run 的替换
- *  比跳过它更便宜而把对齐引到错误源字符）；原样/白名单/折叠仍为成本 0 优先。 */
+ *  只作为未知替换的兜底：成本 = 被替换源范围字符数 + 1（严格高于同块跳过成本：过低会把长 run 的替换
+ *  排在跳过之前而引到错误源字符，与跳过持平则会与空候选打平误判歧义）；原样/白名单/折叠仍为成本 0 优先。 */
 const REPLACEABLE_SILENT = ['，','。','！','？','；','：','、','“','”','‘','’','（','）','《','》','—','…','·','\n',' '];
 /** 与 shared 覆盖校验同源的静音判定：标点/分隔符/空白。供应商吞掉静音是合同允许的
  *  （token 不必覆盖标点），但吞掉正文（汉字/字母/数字）必须失败。 */
 const SILENT_PATTERN = /^[\p{P}\p{Z}\s]*$/u;
+/** 目标集必须全属静音类：否则"正文被读成正文"会被放行，突破正文不可替换的边界。 */
+for (const target of REPLACEABLE_SILENT)
+  if (!SILENT_PATTERN.test(target) || target.length === 0) throw new Error("narration_replaceable_silent_invalid");
 /** 跳过静音的总量上限（防状态爆炸）。只在"单个 provider 句子含数百个连续静音 block"
  *  的病态输入上才会触顶；触顶 fail-closed 并输出 narration-align-limit 诊断。 */
 const MAX_SILENT_SKIP = 256;
@@ -99,7 +102,7 @@ function mapSentence(original: string, normalized: string, sourceBase: number,
       for (const target of REPLACEABLE_SILENT) {
         if (dashSeen.has(target)) continue;
         dashSeen.add(target);
-        dashChoices.push({ ...choice(target, part.index, part.index + 2), cost: 2 });
+        dashChoices.push({ ...choice(target, part.index, part.index + 2), cost: 3 });
       }
       blocks.push(dashChoices);
       blockMeta.push({ silent: true, length: 2, start: part.index, end: part.index + 2 });
@@ -119,7 +122,7 @@ function mapSentence(original: string, normalized: string, sourceBase: number,
         for (const target of REPLACEABLE_SILENT) {
           if (runSeen.has(target)) continue;
           runSeen.add(target);
-          runChoices.push({ ...choice(target, part.index, runEnd), cost: runText.length });
+          runChoices.push({ ...choice(target, part.index, runEnd), cost: runText.length + 1 });
         }
         blocks.push(runChoices);
         blockMeta.push({ silent: true, length: runText.length, start: part.index, end: runEnd });
@@ -139,7 +142,7 @@ function mapSentence(original: string, normalized: string, sourceBase: number,
       for (const target of REPLACEABLE_SILENT) {
         if (seen.has(target)) continue;
         seen.add(target);
-        choices.push({ ...choice(target, part.index, part.index + part.segment.length), cost: part.segment.length });
+        choices.push({ ...choice(target, part.index, part.index + part.segment.length), cost: part.segment.length + 1 });
       }
     }
     blocks.push(choices);
@@ -147,10 +150,12 @@ function mapSentence(original: string, normalized: string, sourceBase: number,
   }
   // 不找子串、不做编辑距离。保留所有精确解析；同位置多个来源解析也算歧义。
   // 成本分层 Dijkstra：match 成本 0（白名单候选优先），跳过静音成本 = 该 block 字符数。
-  // 成本上界天然 = 静音字符总数（只有静音可被跳过）；仅在极端标点密度下再夹一个绝对上限防状态爆炸。
+  // 成本上界 = 跳过预算 + 每个静音 block 的替换额外开销；仅在极端标点密度下再夹一个绝对上限防状态爆炸。
   interface Path { blockIndex: number; offset: number; cost: number; previous?: Path; units: Unit[]; ambiguous: boolean; skipped?: string; }
   const silentTotal = blockMeta.reduce((sum, meta) => sum + (meta.silent ? meta.length : 0), 0);
-  const budget = Math.min(silentTotal, MAX_SILENT_SKIP);
+  // 预算 = 跳过预算（静音字符数，上限 MAX_SILENT_SKIP）+ 替换额外开销（每个静音 block 的 +1，同上限）。
+  const silentBlocks = blockMeta.reduce((n, meta) => n + (meta.silent ? 1 : 0), 0);
+  const budget = Math.min(silentTotal, MAX_SILENT_SKIP) + Math.min(silentBlocks, MAX_SILENT_SKIP);
   const key = (blockIndex: number, offset: number) => blockIndex + ':' + offset;
   /** 是否因 MAX_SILENT_SKIP 截断而放弃过跳过路径（仅用于失败归因诊断）。 */
   let budgetTruncated = false;
@@ -189,8 +194,11 @@ function mapSentence(original: string, normalized: string, sourceBase: number,
         };
         for (const candidate of blocks[node.blockIndex]!) {
           if (!normalized.startsWith(candidate.spoken, node.offset)) continue;
+          const stepCost = candidate.cost ?? 0;
+          // 与跳过同构的预算守卫：超预算的替换只记录截断，绝不让 cost 越界写 bucket
+          if (node.cost + stepCost > budget) { budgetTruncated = true; continue; }
           push({ blockIndex: node.blockIndex + 1, offset: node.offset + candidate.spoken.length,
-            cost: node.cost + (candidate.cost ?? 0), previous: node, units: candidate.units, ambiguous: node.ambiguous },
+            cost: node.cost + stepCost, previous: node, units: candidate.units, ambiguous: node.ambiguous },
             key(node.blockIndex + 1, node.offset + candidate.spoken.length));
         }
         if (meta.silent && node.cost + meta.length > budget) budgetTruncated = true;
