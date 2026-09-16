@@ -243,6 +243,19 @@ describe('静音受控替换（供应商未知标点改写）', () => {
       expect(NarrationTimingMapV1.safeParse(result).success).toBe(true);
     },
   );
+  it('全角↔半角与其他常见静音目标同样可追踪', () => {
+    for (const [source, target] of [['。', '.'], ['——', ','], ['。', '?'], ['，', ';'], ['，', '\u3000'], ['——', '〜'], ['。', '\t']] as const) {
+      const result = normalizeNarrationTiming(input('甲' + source + '乙', '甲' + target + '乙'));
+      expect(result?.spokenText, source + '->' + target).toBe('甲' + target + '乙');
+      expect(NarrationTimingMapV1.safeParse(result).success).toBe(true);
+    }
+  });
+  it('替换目标集必须全属静音类（符号类不入集）', () => {
+    const silentOnly = /^[\p{P}\p{Z}\s]*$/u;
+    expect(silentOnly.test('.')).toBe(true);
+    expect(silentOnly.test('+')).toBe(false);
+    expect(silentOnly.test('~')).toBe(false);
+  });
   it('两个不同标点竞争同一目标时拒绝（唯一最优保持 fail-closed）', () => {
     expect(() => normalizeNarrationTiming(input('甲。、乙', '甲，乙'))).toThrow('narration_timing_invalid');
   });
