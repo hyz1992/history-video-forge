@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { NarrationTimingMapV1 } from '../../../shared/src/index.js';
-import { normalizeNarrationTiming } from '../../../backend/src/modules/narration/narration-timing-normalizer.js';
+import { normalizeNarrationTiming, type NarrationTimingDiagnostic } from '../../../backend/src/modules/narration/narration-timing-normalizer.js';
 const hash = 'a'.repeat(64);
 function input(sourceText: string, spoken = sourceText, times?: number[][]) {
   const words = Array.from(spoken).map((text, i) => ({ text, begin_index: i, end_index: i + 1,
@@ -100,9 +100,9 @@ describe('静音容错对齐（供应商吞标点的未知变体无需再补白�
     expect(() => normalizeNarrationTiming(input('甲乙丙', '甲乙'))).toThrow('narration_timing_invalid');
     expect(() => normalizeNarrationTiming(input('甲乙丙', '甲丙'))).toThrow('narration_timing_invalid');
   });
-  it('重复相同标点折叠为单个时给出确定性映射（不走歧义拒绝）', () => {
+  it('重复相同标点折叠为单个时给出确定性映射（不依赖仲裁）', () => {
     // 供应商把重复标点读成单个（……→…、——→—、！！→！）：折叠是原子候选，
-    // 映射唯一（整个 run 由单字符代表），因此不落入"歧义必拒"。
+    // 整个 run 由单字符代表，映射不由"先被 settle 的路径"决定（2026-09-17 起同成本多解走仲裁而非拒绝）。
     for (const [source, spoken] of [['甲……乙', '甲…乙'], ['甲！！乙', '甲！乙'], ['甲？？乙', '甲？乙'], ['甲。。。乙', '甲。乙']] as const) {
       const result = normalizeNarrationTiming(input(source, spoken));
       expect(result?.spokenText, source).toBe(spoken);
@@ -165,6 +165,20 @@ describe('静音容错对齐（供应商吞标点的未知变体无需再补白�
       expect(warn.mock.calls.filter(c => String(c[0]).includes('narration-silent-skip'))).toHaveLength(0);
     } finally { warn.mockRestore(); }
   });
+  it('CRLF run（空行分段）原样返回不再整篇失败', () => {
+    // 折叠复合候选曾按 1 grapheme = 1 code unit 取范围：`\r\n` 是长度 2 的单个 grapheme，
+    // 按 +1 取会让 token 区间切在 grapheme 内部（[1,2]/[3,4]），被 shared 合同的切点校验拒绝。
+    const source = '甲\r\n\r\n乙';
+    const result = normalizeNarrationTiming(input(source));
+    expect(result?.sourceText).toBe(source);
+    expect(NarrationTimingMapV1.safeParse(result).success).toBe(true);
+    const cuts = new Set<number>([0, source.length]);
+    for (const part of new Intl.Segmenter('zh-CN', { granularity: 'grapheme' }).segment(source)) cuts.add(part.index);
+    for (const token of result.tokens) {
+      expect(cuts.has(token.sourceStart)).toBe(true);
+      expect(cuts.has(token.sourceEnd)).toBe(true);
+    }
+  });
   it('静音量超绝对上限时 fail-closed 并输出 skip_budget 诊断', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
@@ -184,7 +198,7 @@ describe('静音容错对齐（供应商吞标点的未知变体无需再补白�
     expect(Date.now() - started).toBeLessThan(10000);
   });
   it('白名单匹配与静音跳过竞争时取成本 0 的白名单路径', () => {
-    // '。' 既可被 match（成本 0）也可被跳过（成本 1）；两处都是 match 才唯一最优
+    // '。' 既可被 match（成本 0）也可被跳过（成本 1）；该输入的最优解唯一，故不走仲裁
     const result = normalizeNarrationTiming(input('甲。\n乙', '甲。乙'));
     expect(result.tokens.map(t => [t.sourceStart, t.sourceEnd])).toEqual([[0, 1], [1, 2], [3, 4]]);
     expect(NarrationTimingMapV1.safeParse(result).success).toBe(true);
@@ -250,9 +264,6 @@ describe('静音受控替换（供应商未知标点改写）', () => {
       expect(NarrationTimingMapV1.safeParse(result).success).toBe(true);
     }
   });
-  it('两个不同标点竞争同一目标时拒绝（唯一最优保持 fail-closed）', () => {
-    expect(() => normalizeNarrationTiming(input('甲。、乙', '甲，乙'))).toThrow('narration_timing_invalid');
-  });
   it('替换不放宽正文与插入边界', () => {
     expect(() => normalizeNarrationTiming(input('甲乙丙', '甲乙'))).toThrow('narration_timing_invalid');
     expect(() => normalizeNarrationTiming(input('甲乙', '甲，乙'))).toThrow('narration_timing_invalid');
@@ -262,6 +273,135 @@ describe('静音受控替换（供应商未知标点改写）', () => {
     expect(whitelist.tokens[1]!.sourceEnd).toBe(3);
     const dash = normalizeNarrationTiming(input('甲——乙', '甲，乙'));
     expect(dash.tokens[1]!.sourceEnd).toBe(3);
+  });
+});
+
+describe('同成本多解确定性仲裁', () => {
+  it('两个不同标点竞争同一目标时仲裁通过，不再整篇失败', () => {
+    const events: NarrationTimingDiagnostic[] = [];
+    const result = normalizeNarrationTiming(input('甲。、乙', '甲，乙'), { onDiagnostic: e => events.push(e) });
+    // 正文源位置与原生时间不受仲裁影响（多解差异只落在静音区；含标点的粘合 token 见下一条用例）
+    expect(result.tokens[0]).toMatchObject({ sourceStart: 0, sourceEnd: 1, startMs: 0, endMs: 250 });
+    expect(result.tokens[2]).toMatchObject({ sourceStart: 3, sourceEnd: 4, startMs: 500, endMs: 750 });
+    // ，的来源必须是 。 或 、 的整块范围之一，不允许被挪到正文位置
+    expect([[1, 2], [2, 3]]).toContainEqual([result.tokens[1]!.sourceStart, result.tokens[1]!.sourceEnd]);
+    expect(result.tokens[1]).toMatchObject({ startMs: 250, endMs: 500 });
+    expect(NarrationTimingMapV1.safeParse(result).success).toBe(true);
+    expect(events.map(e => e.kind)).toContain('tie_arbitrated');
+  });
+  it('仲裁结果确定可重放（同一输入两次运行逐字节一致）', () => {
+    expect(JSON.stringify(normalizeNarrationTiming(input('甲。、乙', '甲，乙'))))
+      .toBe(JSON.stringify(normalizeNarrationTiming(input('甲。、乙', '甲，乙'))));
+  });
+  it('无多解时不产出仲裁诊断', () => {
+    const events: NarrationTimingDiagnostic[] = [];
+    normalizeNarrationTiming(input('甲，乙'), { onDiagnostic: e => events.push(e) });
+    expect(events.map(e => e.kind)).not.toContain('tie_arbitrated');
+  });
+  it('仲裁诊断带完整负载与专用警告前缀', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const events: NarrationTimingDiagnostic[] = [];
+      normalizeNarrationTiming(input('甲。、乙', '甲，乙'), { onDiagnostic: e => events.push(e) });
+      const tie = events.find(e => e.kind === 'tie_arbitrated');
+      expect(tie).toMatchObject({ sentenceBase: 0, blocks: 4, ties: 1, cost: 3 });
+      expect(tie!.arbitratedAt!.length).toBeGreaterThan(0);
+      const logged = warn.mock.calls.filter(c => String(c[0]).includes('narration-tie-arbitrated'));
+      expect(logged).toHaveLength(1);
+      expect(JSON.parse(String(logged[0]![1]))).toMatchObject({ kind: 'tie_arbitrated' });
+    } finally { warn.mockRestore(); }
+  });
+  it('仲裁不得把正文 unit 挪到别的 block（第 j 个正文字符仍落在第 j 个正文源位置，时间仍取原生端点）', () => {
+    // 对抗断言：正文位置与正文 block 逐一对应、且时间逐字对齐原生端点，是"放宽不影响正文映射"的直接守卫。
+    // 下标按 UTF-16 code unit 累计（不能用 Array.from 的码点下标，否则非 BMP 字符会算错）。
+    for (const [source, spoken] of [['甲。、乙', '甲，乙'], ['甲。、；乙', '甲，乙'], ['甲。、；，乙', '甲，乙']] as const) {
+      const result = normalizeNarrationTiming(input(source, spoken));
+      const isSilent = (text: string) => /^[\p{P}\p{Z}\s]*$/u.test(text);
+      const bodySource: number[][] = [];
+      for (let i = 0; i < source.length; i += 1) if (!isSilent(source[i]!)) bodySource.push([i, i + 1]);
+      const bodyTokens = result.tokens.filter(t => !isSilent(t.spokenText));
+      expect(bodyTokens.map(t => [t.sourceStart, t.sourceEnd]), source).toEqual(bodySource);
+      // 时间：第 k 个 normalized 字符的 word 端点为 [k*250, (k+1)*250]（见 input()），与路径无关
+      let bodyCursor = 0;
+      for (let i = 0; i < spoken.length; i += 1) {
+        if (isSilent(spoken[i]!)) continue;
+        const token = bodyTokens[bodyCursor++]!;
+        expect([token.startMs, token.endMs], `${source} @${i}`).toEqual([i * 250, (i + 1) * 250]);
+      }
+    }
+  });
+  it('三个以上标点竞争同一目标时同样仲裁而非失败', () => {
+    // 最优成本 4 由三条等成本路径共享（替换 。／替换 、／替换 ；），故必然产出仲裁
+    const events: NarrationTimingDiagnostic[] = [];
+    const run = () => normalizeNarrationTiming(input('甲。、；乙', '甲，乙'), { onDiagnostic: e => events.push(e) });
+    const result = run();
+    expect(NarrationTimingMapV1.safeParse(result).success).toBe(true);
+    expect(events.map(e => e.kind)).toContain('tie_arbitrated');
+    // 不断言"哪条兄弟读法胜出"（那是纯重构也会翻的白盒断言），只断言：
+    // 标点的来源必须落在参与竞争的静音块之一，且两次运行逐字节一致。
+    expect([[1, 2], [2, 3], [3, 4]]).toContainEqual([result.tokens[1]!.sourceStart, result.tokens[1]!.sourceEnd]);
+    expect(JSON.stringify(run())).toBe(JSON.stringify(result));
+  });
+  it('供应商 word 把标点粘在正文上时，仲裁只移动静音归属、不动正文源位置', () => {
+    // 真实供应商切分形如 `，乙` 或 `甲，`（一个 word 含标点+正文）：实测已发布 470 字工件的 424 个
+    // token 中有 42 个 sourceStart 落在标点上。此类 token 的区间端点会随仲裁在静音区内移动
+    //（头部粘合移动起点、尾部粘合移动终点），因此断言写成"静音区包络"：
+    // token 区间必须夹在相邻正文字符之间，任何静音 token 不得占用正文字符的源位置。
+    const cases: Array<[string, string[], string]> = [
+      ['甲。、乙', ['甲', '，', '乙'], '甲，乙'],   // 全静音 token（无粘合）
+      ['甲。、乙', ['甲', '，乙'], '甲，乙'],        // 尾部粘合
+      ['甲。、乙', ['甲，', '乙'], '甲，乙'],        // 头部粘合（终点可移动）
+      ['甲。、；乙', ['甲', '，乙'], '甲，乙'],      // 三标点竞争 + 尾部粘合
+      ['甲。乙', ['甲', '，乙'], '甲，乙'],          // 对照：无仲裁（唯一路径）
+    ];
+    for (const [source, words, spoken] of cases) {
+      const value = { sourceText: source, durationMs: words.length * 250, audioHash: hash,
+        sentences: [{ providerSentenceIndex: 0, originalText: source, normalizedText: spoken,
+          words: words.map((text, i) => ({ text, begin_index: i, end_index: i + 1, begin_time: i * 250, end_time: (i + 1) * 250 })) }] };
+      const result = normalizeNarrationTiming(value);
+      expect(NarrationTimingMapV1.safeParse(result).success, source).toBe(true);
+      const isSilent = (text: string) => /^[\p{P}\p{Z}\s]*$/u.test(text);
+      // 正文源位置：逐个非静音字符的码元下标（按 UTF-16 累计，非 BMP 亦正确）
+      const bodySource: number[] = [];
+      for (let i = 0; i < source.length; i += 1) if (!isSilent(source[i]!)) bodySource.push(i);
+      let bodyCursor = 0;
+      for (const token of result.tokens) {
+        const label = `${source} ${token.spokenText}`;
+        const spokenBody = Array.from(token.spokenText).filter(ch => !isSilent(ch)).length;
+        if (spokenBody === 0) { // 纯静音 token 只能落在静音区，不得占用任何正文源位置
+          expect(bodySource.includes(token.sourceStart), label).toBe(false);
+          expect(bodySource.includes(token.sourceEnd - 1), label).toBe(false);
+          continue;
+        }
+        const first = bodySource[bodyCursor]!, last = bodySource[bodyCursor + spokenBody - 1]!;
+        const lo = bodyCursor === 0 ? 0 : bodySource[bodyCursor - 1]! + 1;
+        const hi = bodyCursor + spokenBody < bodySource.length ? bodySource[bodyCursor + spokenBody]! : source.length;
+        // 起点可前移到前导标点，但不得越过本 token 首个正文字符
+        expect(token.sourceStart >= lo && token.sourceStart <= first, `${label} start`).toBe(true);
+        // 终点可后移到后继标点，但不得越过本 token 末个正文字符
+        expect(token.sourceEnd >= last + 1 && token.sourceEnd <= hi, `${label} end`).toBe(true);
+        bodyCursor += spokenBody;
+      }
+      // 全部正文字符都被 token 覆盖，无遗漏
+      expect(bodyCursor, source).toBe(bodySource.length);
+    }
+  });
+  it('run 折叠通道的同成本多解同样仲裁（可复现的残余风险守卫）', () => {
+    // source 的两段连续句号 run 与 normalized 的单 run 之间存在两条等成本读法：
+    // 第 4 个 。 可归给第一段 run 的整块范围 [3,4)，也可归给第二段 run 的复合范围 [5,8)。
+    const value = { sourceText: '甲。。。、。。。乙', durationMs: 6 * 250, audioHash: 'a'.repeat(64),
+      sentences: [{ providerSentenceIndex: 0, originalText: '甲。。。、。。。乙', normalizedText: '甲。。。。乙',
+        words: Array.from('甲。。。。乙').map((text, i) => ({ text, begin_index: i, end_index: i + 1,
+          begin_time: i * 250, end_time: (i + 1) * 250 })) }] };
+    const events: NarrationTimingDiagnostic[] = [];
+    const result = normalizeNarrationTiming(value, { onDiagnostic: e => events.push(e) });
+    expect(NarrationTimingMapV1.safeParse(result).success).toBe(true);
+    expect(events.map(e => e.kind)).toContain('tie_arbitrated');
+    // 正文仍留在自身位置，被仲裁的只是静音 run 的归属
+    expect(result.tokens[0]).toMatchObject({ sourceStart: 0, sourceEnd: 1 });
+    expect(result.tokens.at(-1)).toMatchObject({ sourceStart: 8, sourceEnd: 9 });
+    expect(result.tokens[4]!.sourceStart).toBeGreaterThanOrEqual(3);
+    expect(result.tokens[4]!.sourceEnd).toBeLessThanOrEqual(8);
   });
 });
 

@@ -45,6 +45,26 @@ describe('不可变口播bundle',()=>{
     f.input.nativeEvents=[f.input.nativeEvents[0],f.input.nativeEvents[2],...sentences.flatMap((s:any)=>[event({type:'sentence-begin',sentence:{index:s.providerSentenceIndex}}),event({type:'sentence-end',sentence:{index:s.providerSentenceIndex,words:s.words},original_text:s.originalText,normalized_text:s.normalizedText})]),f.input.nativeEvents[4]];
     expect((await f.store.commitInitial(f.input)).record.status).toBe('ready');
   });
+  it('同成本多解（仲裁）输入在重读重放后仍逐字节一致',async()=>{
+    // 仲裁要求"同一输入永远得到同一条路径"，否则 narration-bundle-storage 的 timingFromEvents
+    // 重放复算会与已落盘的图不等而报 narration_bundle_events_mismatch。
+    const f=await fixture();
+    const source='甲。、乙', spoken='甲，乙';
+    const words=Array.from(spoken).map((text,i)=>({text,begin_index:i,end_index:i+1,begin_time:i*250+100,end_time:(i+1)*250+100}));
+    f.input.record.sourceTextSha256=sha(source);
+    f.input.timingMap=normalizeNarrationTiming({sourceText:source,audioHash:sha(f.input.audio),durationMs:1000,
+      sentences:[{providerSentenceIndex:0,originalText:source,normalizedText:spoken,words}]});
+    const event=(name:string,output?:unknown)=>({kind:'json' as const,elapsedMs:0,data:{header:{event:name,task_id:'task'},payload:output===undefined?{}:{output}}});
+    f.input.nativeEvents=[f.input.nativeEvents[0] as never,event('result-generated',{type:'sentence-begin',sentence:{index:0}}) as never,
+      f.input.nativeEvents[2] as never,
+      event('result-generated',{type:'sentence-end',sentence:{index:0,words},original_text:source,normalized_text:spoken}) as never,
+      f.input.nativeEvents[4] as never];
+    const saved=await f.store.commitInitial(f.input);
+    expect(saved.record.status).toBe('ready');
+    const recovered=await new NarrationBundleStorage({projectId:'p1',storageRootDir:f.path}).recoverInitial({record:f.input.record});
+    expect(recovered.status).toBe('complete');
+    expect(recovered.status==='complete'&&recovered.bundle.record.output?.timingMap).toEqual(saved.record.output?.timingMap);
+  });
   it('写一半不complete，原candidate保留，重试可提交',async()=>{
     const f=await fixture();let count=0;const original=staged.writeStagedArtifactFile;
     vi.spyOn(staged,'writeStagedArtifactFile').mockImplementation(async(...args)=>{if(++count===3)throw new Error('disk_failure');return original(...args);});

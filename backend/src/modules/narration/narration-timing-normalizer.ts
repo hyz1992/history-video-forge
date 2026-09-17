@@ -59,16 +59,18 @@ const MAX_STATES = 2000000;
  *  跳过成本 = 被跳过字符数，因此已知变体永远优先，跳过只在无零成本路径时启用。
  *  跳过总量受预算约束（仅防状态爆炸；安全边界由"仅静音"保证）。 */
 export interface NarrationTimingDiagnostic {
-  kind: "silent_skip" | "skip_budget" | "layer_limit" | "state_limit" | "no_alignment";
+  kind: "silent_skip" | "skip_budget" | "layer_limit" | "state_limit" | "no_alignment" | "tie_arbitrated";
   diffRegion?: { src: string; norm: string };
   srcLen?: number; normLen?: number; commonPrefix?: number; commonSuffix?: number;
   sentenceBase?: number; skipped?: string[]; budget?: number; silentTotal?: number;
   blocks?: number; states?: number; layer?: number; count?: number;
+  ties?: number; arbitratedAt?: number[]; cost?: number;
 }
 function mapSentence(original: string, normalized: string, sourceBase: number,
   onDiagnostic?: (event: NarrationTimingDiagnostic) => void): Unit[] {
   const emit = (event: NarrationTimingDiagnostic) => {
-    console.warn(event.kind === "silent_skip" ? "[narration-silent-skip]" : "[narration-align-limit]", JSON.stringify(event));
+    console.warn(event.kind === "silent_skip" ? "[narration-silent-skip]"
+      : event.kind === "tie_arbitrated" ? "[narration-tie-arbitrated]" : "[narration-align-limit]", JSON.stringify(event));
     try { onDiagnostic?.(event); } catch { /* 诊断回调失败不影响对齐主流程 */ }
   };
   const parts = Array.from(segmenter.segment(original));
@@ -98,14 +100,17 @@ function mapSentence(original: string, normalized: string, sourceBase: number,
       i++; continue;
     }
     // 连续相同标点的 run（长度 ≥2）：供应商把重复标点读成单个（……→…、！！→！）是"折叠"，
-    // 若按逐字符跳过处理会产生"保留哪一个"的同成本歧义而被拒；这里用原子折叠候选给出
-    // 确定性 tie-break（整个 run 由单个字符代表）。
+    // 逐字符跳过会留下"保留哪一个"的同成本多解；这里用原子折叠候选给出确定性映射
+    //（整个 run 由单个字符代表），不依赖仲裁。
     if (SILENT_PATTERN.test(part.segment) && part.segment.length > 0) {
       let same = i + 1;
       while (same < parts.length && parts[same]!.segment === part.segment) same++;
       if (same - i >= 2) {
         const runText = part.segment.repeat(same - i), runEnd = part.index + runText.length;
-        const runChoices: Choice[] = [{ spoken: runText, units: parts.slice(i, same).flatMap(p => choice(p.segment, p.index, p.index + 1).units) },
+        // unit 的来源范围必须按 grapheme 的 code unit 长度取（不能假设 1 grapheme = 1 code unit）：
+        // `\r\n` 是长度 2 的单个 grapheme，若按 +1 取范围，复合候选给出的 token 区间会切在
+        // grapheme 内部，被 shared 合同的 grapheme 切点校验拒绝（原文原样返回也整篇失败）。
+        const runChoices: Choice[] = [{ spoken: runText, units: parts.slice(i, same).flatMap(p => choice(p.segment, p.index, p.index + p.segment.length).units) },
           choice(part.segment, part.index, runEnd)];
         blocks.push(runChoices);
         blockMeta.push({ silent: true, length: runText.length, start: part.index, end: runEnd });
@@ -122,12 +127,15 @@ function mapSentence(original: string, normalized: string, sourceBase: number,
     blocks.push(choices);
     blockMeta.push({ silent: silentBlock, length: part.segment.length, start: part.index, end: part.index + part.segment.length });
   }
-  // 不找子串、不做编辑距离。保留所有精确解析；同位置多个来源解析也算歧义。
+  // 不找子串、不做编辑距离。保留所有精确解析；同位置多个来源解析会标记为多解（由确定性仲裁取舍，
+  // 不再整篇失败，见回溯处的说明）。
   // 成本分层 Dijkstra：match 成本 0（白名单候选优先），跳过静音成本 = 该 block 字符数。
-  // 成本上界 = 跳过预算 + 每个静音 block 的替换额外开销；仅在极端标点密度下再夹一个绝对上限防状态爆炸。
+  // 成本上界 = 跳过预算 + 每个 block 至多一次的替换额外开销（覆盖标点替换与正文单字替换）；
+  // 仅在极端标点密度下再夹一个绝对上限防状态爆炸。
   interface Path { blockIndex: number; offset: number; cost: number; previous?: Path; units: Unit[]; ambiguous: boolean; skipped?: string; }
   const silentTotal = blockMeta.reduce((sum, meta) => sum + (meta.silent ? meta.length : 0), 0);
   // 预算 = 跳过预算（静音字符数）+ 替换额外开销（每个 block 至多一次替换的 +1，覆盖标点替换与正文单字替换）。
+  // 第二项按**全体** block 计：正文单字替换同样需要额外开销，只按静音 block 计会让纯正文文本预算为 0。
   const budget = Math.min(silentTotal, MAX_SILENT_SKIP) + Math.min(blockMeta.length, MAX_SILENT_SKIP);
   const key = (blockIndex: number, offset: number) => blockIndex + ':' + offset;
   /** 是否因 MAX_SILENT_SKIP 截断而放弃过跳过路径（仅用于失败归因诊断）。 */
@@ -166,8 +174,8 @@ function mapSentence(original: string, normalized: string, sourceBase: number,
           buckets[next.cost]!.push(next);
         };
         // 正文单字等长替换：供应商对生僻字做同音/形近归一化（实测 怛→达），
-        // 单字符 block 与目标同为正文类时才允许；成本 = 2（严格高于原样匹配），
-        // 唯一最优仍 fail-closed（漏读+替换的组合会同成本而拒绝）。
+        // 单字符 block 与目标同为正文类时才允许；成本 = 2（严格高于原样匹配）。
+        // 该转移与"漏读+替换"的组合可能同成本成多解——由确定性仲裁取舍，不因此失败。
         if (meta.length === 1 && node.offset < normalized.length) {
           const ch = normalized[node.offset]!;
           const raw = original.slice(meta.start, meta.end);
@@ -231,12 +239,23 @@ function mapSentence(original: string, normalized: string, sourceBase: number,
   }
   const chunks: Unit[][] = [];
   const skipped: string[] = [];
+  /** 被同成本二次到达的祖先 block 下标（按回溯顺序，即从后往前）。 */
+  const arbitratedAt: number[] = [];
   for (let node: Path | undefined = final; node; node = node.previous) {
-    // 任一祖先有多条最优路径即歧义（与原实现同语义；回溯覆盖祖先的迟到标记）。
-    if (node.ambiguous) fail();
+    // 同成本多解不再整篇失败，改为确定性仲裁：成本分层的 FIFO 扫描顺序本身就是仲裁规则，
+    // 先被 settle 的路径胜出，同一输入永远得到同一条路径（bundle 逐字节重放复算依赖此确定性）。
+    // 安全性依据：每个 block 的候选 unit 一律携带该 block 自身的原文范围，且跳过只对静音 block
+    // 开放、正文 block 只能消费正文字符，故各最优路径落在正文 block 上的来源区间完全相同，
+    // 多解差异只可能落在静音区（可跨多个静音 block，不跨正文 block）。
+    // 注意粒度：以上不变量是 block/unit 级。供应商 word 会把标点粘在下一个正文字符上
+    //（实测 `，手` 为一个 word），此类 token 的区间起止会随静音归属移动——移动量限于静音区，
+    // 不改变 token 内正文字符对应的源位置。见设计文档。
+    if (node.ambiguous) arbitratedAt.push(node.blockIndex);
     if (node.skipped !== undefined) skipped.push(node.skipped);
     chunks.push(node.units);
   }
+  if (arbitratedAt.length) emit({ kind: "tie_arbitrated", sentenceBase: sourceBase, cost: final.cost,
+    blocks: blocks.length, ties: arbitratedAt.length, arbitratedAt: arbitratedAt.reverse().slice(0, 8) });
   // 有限诊断：记录被跳过的静音片段（按文中顺序），用于观察供应商改写行为。
   if (skipped.length) emit({ kind: "silent_skip", sentenceBase: sourceBase, skipped: skipped.reverse().slice(0, 8) });
   return chunks.reverse().flat();
