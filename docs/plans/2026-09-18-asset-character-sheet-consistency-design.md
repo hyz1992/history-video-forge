@@ -20,6 +20,8 @@
 | `ProjectArtBible.characters` 已是跨 segment 角色实体（character_id/label/role/visual_description/consistency_notes），但为纯文本合同，无任何图像引用 | `shared/src/asset-planning/asset-plan-v1.schema.ts`（ArtBibleCharacter/ProjectArtBible） |
 | 已有"[角色锚点]"机制：按 label 字符串命中 segment 文本，把 `visual_description` 拼进生图 prompt | `backend/src/modules/asset-planning/asset-plan-prompt-enrichment.ts`（L20-41）；另一同构拼装点 `asset-planning-generation.service.ts` L2121 |
 | 生图 adapter 为纯文生图：`DashScopeImageInput` 仅 model/prompt/negativePrompt/size/n，无图像输入字段；wan2.6 路径 content 仅 `[{text}]` | `backend/src/modules/assets/providers/dashscope/dashscope-image-provider.ts` |
+| 生图 provider 已具备完整异步链路：submit 携带 `X-DashScope-Async: enable`（L197）→ `poll`（L220-266，默认 3s 间隔）→ `download`（L278，产物本地物化）；wan2.6 端点 `/api/v1/services/aigc/image-generation/generation`（L93）与图像生成编辑 API 同族 | 同上（自审已逐行核实） |
+| validator 对 null-segment 任务已有结构性容忍：路由覆盖按 `task.source_segment_id && VISUAL_TASK_TYPES.has(...)` 条件收集（L133），bgm/sfx 为既有无 segment 任务先例（L45-46），逐段产物检查显式跳过无 segment 任务（L170） | `backend/src/modules/assets/assets-local-validator.ts`（自审已核实） |
 | 生图模型名可配（env `ALIYUN_DASHSCOPE_TEXT_TO_IMAGE_MODEL`，默认 `wan2.6-t2i`），provider 经注册表接入并受付费闸门约束 | `backend/src/modules/assets/assets-run.service.ts` L372-374、L511-527 |
 | 已有"取 manifest 中 image artifact → base64 → 供应商参考图输入"的通路先例（图生视频消费 segment 锚点图） | `backend/src/modules/assets/providers/autodl/autodl-image-to-video-provider.ts` L64-82（`ref_image_0`） |
 | 引擎按 `TASK_TYPE_PRIORITY` 单趟顺序执行；产物完成即并入演进中的 manifest 副本，同 run 后续任务可见 | `backend/src/modules/assets/assets-execution-engine.ts` L29-37、L88-93、L352-359 |
@@ -69,17 +71,19 @@
 - 编译期（intent compiler 确定性阶段，非 LLM 猜测）：对 `art_bible.characters` 逐个统计"label 命中 segment 文本（scene_description + visual_elements）且有主视觉任务"的 segment 数，≥ 阈值（默认 3，可配置）才生成 sheet 任务。
 - 命中判定复用现有 `[角色锚点]` 的同一匹配逻辑，避免两套字符串匹配漂移。
 - 阈值以下的角色维持现状（纯文本锚点）——1~2 镜的配角不值得一张计费 sheet。
-- sheet 任务的 `prompt_draft` 由本地确定性模板拼装：角色 `visual_description` + 朝代风格（era_style）+ 定妆图布局约束（正面全身、服饰道具清晰、简洁背景）。布局模板作为代码常量与 `VISUAL_CONSTRAINT_BASE` 同级管理，**不新增 LLM prompt 文件**（无需新 LLM 调用，符合"正式 prompt 在 prompts/、本地确定性拼装"的既有分工）。
+- sheet 任务的 `prompt_draft` 由本地确定性模板拼装：角色 `visual_description` + 朝代风格（era_style）+ 定妆图布局约束（正面全身、服饰道具清晰、简洁背景）。布局模板作为代码常量与 `VISUAL_CONSTRAINT_BASE` 同级管理，**不新增 LLM prompt 文件**——该常量全程无 LLM 调用，属确定性字符串模板，与既有 `VISUAL_CONSTRAINT_BASE` 先例同级，不构成 prompt 漫游。
+- sheet 任务 `parameters` 携带**独立** `aspect_ratio`/`size`（默认横版 16:9、2K 档），不从 segment 图模板继承竖版 9:16/1080*1920——定妆图构图需求与分镜图不同，参考图过小会损失一致性效果（供应商要求宽高 ≥240px，上不封顶至 8000px）。
 
 ### 3.3 执行顺序与依赖语义（决策 D4，关键）
 
 - `TASK_TYPE_PRIORITY` 插入 `character_sheet: 1.5`（subtitle_track=1 与 image_still=2 之间），保证单趟循环内 sheet 先于分镜图执行。
 - **依赖语义是"可用性注入"而非"硬阻塞"**：`areDependenciesSatisfied` 不为 image_still 增加 sheet 硬依赖（引擎是单趟循环，continue 即永久跳过；硬依赖会把 sheet 失败放大为整批分镜图瘫痪）。替代：分镜图任务的 provider `prepare` 阶段查演进 manifest 中该角色 sheet artifact——存在则注入参考图，不存在则维持纯文本锚点照常执行。降级天然成立，sheet 失败只浪费一张图的预算，不传染。
 - 注入关系在编译期由 compiler 写入分镜图任务 `parameters.character_sheet_task_ids`（可能多个角色），执行期按该列表在 manifest 中查找已完成 artifact。
+- 追溯边界：可用性注入只影响注入时刻**之后**执行的任务。分镜图已生成（终态）后用户重生成 sheet，旧分镜图不会自动获得参考图注入——终态任务被引擎跳过；需对具体分镜任务显式"重新生成"才会注入。此语义需在资产面板提示，避免"重生成 sheet 即全片变脸"的误解。
 
 ### 3.4 Adapter 扩展（wan2.7-image 首选、wan2.6-image 兼容）
 
-- `DashScopeImageInput` 增加可选 `referenceImages?: { base64: string; mimeType: string }[]`；非空时请求体切换为 messages 形态（`input.messages[].content[]` 混排 text/image），复用现有异步建任务 + tasks 轮询链路。
+- `DashScopeImageInput` 增加可选 `referenceImages?: { base64: string; mimeType: string }[]`；非空时请求体切换为 messages 形态（`input.messages[].content[]` 混排 text/image）。**复用 provider 既有 submit/poll/download 异步链路（自审核实：L197/L220-266/L278），wan2.6 端点与图像生成编辑 API 同族（L93），改动仅限请求体形态与参数表**，不新增轮询/下载路径。
 - 按模型的参数差异表收敛在 adapter 内（不外泄到调用方）：
 
 | 参数 | wan2.6-image | wan2.7-image |
@@ -130,4 +134,19 @@
 
 ## 6. 实施任务拆分预览（非执行清单）
 
-T1 shared schema + compiler（任务类型、阈值编译、parameters 注入关系）→ T2 dashscope image adapter 参考图形态 + 候选目录 → T3 engine 优先级/路由豁免/prepare 注入与降级 → T4 validator + 前端面板展示 → T5 fake runtime 冒烟 → T6 live check（显式授权）。每个任务独立验证、独立中文提交；T1-T3 之间不得跳跃合并。
+T1 shared schema + compiler（任务类型、阈值编译、parameters 注入关系）→ T2 dashscope image adapter 参考图形态 + 候选目录 → T3 engine 优先级/路由豁免/prepare 注入与降级 → T4 validator 枚举邻近清单确认豁免（VISUAL_TASK_TYPES 等）+ 前端面板展示 → T5 fake runtime 冒烟 → T6 live check（显式授权）。每个任务独立验证、独立中文提交；T1-T3 之间不得跳跃合并。
+
+---
+
+## 7. 自审修订记录（2026-09-18）
+
+自审针对"事实断言有出处、方案逻辑无断裂、影响面无遗漏"三类逐项核查，修订如下：
+
+1. 【推断升级为已核实】§3.4 "复用现有异步链路"写作时未逐行确认；自审核实 submit（L197 异步头）/ poll（L220-266）/ download（L278）齐备、端点同族（L93），已补入 §1.2 事实表；
+2. 【新增事实】validator 对 null-segment 任务已有结构性容忍（bgm/sfx 先例；L45-46/L133/L170 条件判断），character_sheet(null segment) 无需新增路由覆盖校验；T4 措辞收敛为"枚举邻近清单确认豁免"；
+3. 【补遗漏】sheet 任务需独立 aspect_ratio/size 参数（横版 2K，不继承分镜图 9:16 竖版），原稿缺失，已补入 §3.2；
+4. 【补遗漏】"重生成 sheet 不追溯刷新已生成分镜图"的可用性注入边界与面板提示要求，原稿缺失，已补入 §3.3；
+5. 【合规声明】布局模板常量"非 LLM prompt、无 LLM 调用"的定位明示，对齐 AGENTS.md prompt 边界规则，已补入 §3.2；
+6. 【核查通过】D1-D5 决策、降级矩阵、成本模型、优先级机制（稳定排序 + 单趟循环）、计费幂等复用经逐项核查无方案级缺陷。
+
+遗留开放项不变：主体一致性真实效果（§5 最高风险）、wan2.7 实际单价（第三方口径）、label 字符串匹配的既有局限（明确不在本设计范围）。
