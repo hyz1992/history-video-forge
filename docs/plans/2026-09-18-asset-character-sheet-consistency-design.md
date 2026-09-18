@@ -65,7 +65,8 @@
 - `AssetTaskType` 枚举新增 `character_sheet`；`AssetTask.source_segment_id` 已允许 null，sheet 任务 `source_segment_id = null`，`source_excerpt` 取角色 `visual_description`。
 - **同步加值第二处枚举**：`asset-manifest-v1.schema.ts` L360 的 `AssetTaskExecution.task_type` 内联枚举与 `AssetTaskType` 相互独立，漏改会使 manifest 解析对 sheet execution 硬失败（而非降级）。注意 `AssetTask` 的 refine 要求非豁免类型必有 `prompt_draft`——sheet 由 §3.2 模板满足，实现时不可省。
 - 备选方案是复用 `image_still` + `parameters` 自由约定。不采用：会让"哪些任务是 sheet"散落在约定里，validator、manifest 消费者与前端无法类型化区分，违背本项目 strict 合同风格。枚举加值是加法演进，不改既有字段结构。
-- artifact 侧：`artifact_type` 仍为 `"image"`（渲染与既有消费者零感知），metadata 以 passthrough 附带 `character_id`、`sheet_role: "character_sheet"`、`provider_model`。
+- artifact 侧：`artifact_type` 仍为 `"image"`，metadata 以 passthrough 附带 `character_id`、`sheet_role: "character_sheet"`、`provider_model`。"渲染与既有消费者零感知"是**有条件结论**（外部审查 N6）：成立当且仅当下一行的路由豁免在实现期被单测锁死——四个图像消费者（cover.service、remotion-input-builder、autodl i2v、engine fallback 决策）全部走 segment route / compose timeline 取图，sheet 不进任何 route 就无人可见。
+- sheet 任务 `manual_upload_policy` 固定 `{ required: false, allowed: true }`（外部审查 N2）：validator 在进入类型白名单判断**之前**就有 `if (task.manual_upload_policy.required) return false` 提前返回（`assets-local-validator.ts:31-33`），required=true 会使 §3.5 的白名单豁免整体失效、"不传染"再次破产；allowed=true 保留用户自约定妆图能力（其类型安全性由 §3.7 第 3 处的 case 补齐保障）。
 - 路由豁免：`applyArtifactRoutes` 对 `character_sheet` 任务直接跳过 segment route 写入——sheet 是参考资产，绝不进入任何 segment 的 primary/fallback 视觉位。
 
 ### 3.2 生成时机与阈值（决策 D2）
@@ -96,13 +97,25 @@
 | `prompt_extend` | 显式 false（确定性 prompt） | 同左 |
 | `thinking_mode` | 无 | 仅参考图注入调用显式 false（有图输入时本不生效，显式化防漂移）；sheet 自身纯文生图调用**不强制 false**——该参数在纯文生图生效，强制关闭会实际降低定妆图质量 |
 
-- **模型位路由是本设计最大的机制空白（外部审查 F3），implementation plan 必须先决策**。调用实际分三类：① character_sheet 自身生成 = 纯文生图；② image_still 无可用 sheet = 纯文生图（现状）；③ image_still 有可用 sheet = 参考模型 + sheet 注入。关键难点：②③ **同为 image_still**，而 `findAdapter` 只见 taskType + enabledProviderTypes（engine L135-139）、适配器实例模型构造期固定（`billing.modelId = options.model`；`canHandle` 硬编码 `taskType === "image_still"`，L154），现有机制无法按 manifest 现场分流。候选机制二选一，由 implementation plan 决策并核实计费按实际模型落账：(a) 单实例构造期注入双模型配置，prepare 按 manifest 现场选择，job/usage 记录携带实际 modelId；(b) findAdapter/registry 选择器扩展 manifest 上下文，按"有无可用 sheet"路由到不同实例。若把单实例 canHandle 简单扩成兼收两类任务且固定参考模型，等于把该 run 全部分镜图翻转到参考图模型，违反 §2 非目标并使 §3.6 成本估算失效。
+- **模型位路由是本设计最大的机制空白（外部审查 F3），implementation plan 必须先决策**。调用实际分三类：① character_sheet 自身生成 = 纯文生图；② image_still 无可用 sheet = 纯文生图（现状）；③ image_still 有可用 sheet = 参考模型 + sheet 注入。关键难点：②③ **同为 image_still**，而 `findAdapter` 只见 taskType + enabledProviderTypes（engine L135-139）、适配器实例模型构造期固定（`billing.modelId = options.model`；`canHandle` 硬编码 `taskType === "image_still"`，L154），现有机制无法按 manifest 现场分流。
+
+**两条既有不变量约束所有候选（外部审查 N1，已核实）**：① 派发闸门按 (capability, providerKey, modelId) **三元组**逐个校验，注释为明确契约——「注册每个真实 DashScope adapter 之前必须通过本 gate……未通过时不得注册 adapter」（`provider-dispatch-gate.ts:8-15`），任何第二模型参与派发前必须各自过闸门；② 运行快照每个 capability 只冻结**一个**模型（`snapshotMediaModel` 返回 `resolvedCapabilities[capability].model_id`，槽位缺失/非 dashscope 即整个 adapter 不注册，`assets-run.service.ts:452-476`）。
+
+三个候选由 implementation plan 决策并核实计费按实际模型落账：
+
+| 候选 | 机制 | 代价 / 触碰面 |
+|---|---|---|
+| (a) 单实例双模型 | 构造期注入双模型配置，prepare 按 manifest 现场选择 | **双模型必须各自过闸门**（否则绕过 S2-2A 闸门不变量）；第二模型不在快照内，快照声明与实际派发不一致——需扩展 job/usage 记录携带实际 modelId |
+| (b) 上下文感知路由 | findAdapter/registry 选择器扩展 manifest 上下文，按"有无可用 sheet"分流多实例 | 等于给 image 能力增加第二槽位 → 触碰 `generation-configuration.schema` 多处 + resolver 完整性校验 + 闸门联合 + 快照，属共享合同变更 |
+| (c) 派生行为（审查建议，零合同变更） | 不新增模型位：开关关闭时与现状逐字一致；开关开启时**要求该 run 快照冻结的 image 模型自身支持参考图**，不满足则 prepare 记 note 降级纯文本锚点 | 完全不碰快照合同与闸门；**适用前提**：冻结模型须支持无参考图调用——wan2.7-image 支持 0~9 图 ✓；wan2.6-image 编辑模式强制 1~4 图 ✗，冻结为 wan2.6-image 时开关实际不可用、只能降级。生效场景下分镜图本就由用户选定的参考模型生成，画面观感变化源于模型选择而非开关 |
+
+若把单实例 canHandle 简单扩成兼收两类任务且固定参考模型，等于把该 run 全部分镜图翻转到参考图模型，违反 §2 非目标并使 §3.6 成本估算失效。
 - **sheet 自身定妆图走 t2i 模型位**（wan2.6-t2i 现状，或 wan2.7-image 无图输入路径）；wan2.6-image 编辑模式强制要求 1~4 张参考图，**不能用于 sheet 自身生成**——参考模型位仅服务第 ③ 类调用。候选目录新增 `wan2.7-image` 与 `wan2.6-image`，readiness 分层校验照常。
 - **计费有静默丢失缺口（外部审查 F2）**：`measuredUnitsForTask`（engine L469）现仅覆盖 tts_audio/image_still/video_clip，default 返回 null，且 L420-421 对 null 提前 return——不新增 case 则 sheet 的账单静默消失（成本面板不可见）。必须新增与 image_still 同构的 `case "character_sheet"`（unitType "image"、count 1），列为 T3 明确交付项；billing 声明与 attempt 级幂等记账结构照旧。
 
 ### 3.5 失败降级矩阵
 
-**前提（T4 明确交付项，外部审查 F1）**：`character_sheet` 加入 validator 可选不完备白名单 `isOptionalIncompleteExecution`（`assets-local-validator.ts:22-48`，现仅 bgm_cue/sfx_cue 与 ad-hoc video_clip）。终态判定集合不含 `failed`（L13-17），缺此白名单时 sheet 失败触发 `assets_execution_incomplete`（L143-145）→ 决策 `blocked`（L412-418）→ compose `compose_blocked`、项目 `assets_blocked`——"一张图失败，整片进不了合成"，"不传染"不成立。本行曾是初稿自审漏检点。
+**前提（T4 明确交付项，外部审查 F1+N2）**：其一，`character_sheet` 加入 validator 可选不完备白名单 `isOptionalIncompleteExecution`（`assets-local-validator.ts:22-48`，现仅 bgm_cue/sfx_cue 与 ad-hoc video_clip）；其二，sheet 任务的 `manual_upload_policy.required` 必须为 **false**（§3.1 已固定）——validator 在进入类型白名单判断之前就有 `if (task.manual_upload_policy.required) return false`（L31-33），required=true 会使白名单豁免整体失效。终态判定集合不含 `failed`（L16-20），两条前提任缺其一时 sheet 失败触发 `assets_execution_incomplete`（L145）→ 决策 `blocked`（L412 起）→ compose `compose_blocked`、项目 `assets_blocked`——"不传染"不成立。本段前提曾是初稿自审漏检点；T4 单测必须覆盖 required=true/false 两分支。
 
 | 场景 | 行为 |
 |---|---|
@@ -118,7 +131,7 @@
 
 ### 3.7 task_type 分支面清单（外部审查 F4，T1-T4 逐处覆盖）
 
-按 task_type 分支/枚举的代码点经外部审查枚举共 6 处，任一遗漏的后果已逐处核实：
+按 task_type 分支/枚举的代码点共 **8 个**（归并为 6 类，外部审查 N4 修正计数），任一遗漏的后果已逐处核实：
 
 1. `asset-manifest-v1.schema.ts:360` 平行内联枚举——漏改 = manifest 解析硬失败（T1）；
 2. `provider-type-map.ts` `TASK_TYPE_TO_PROVIDER_TYPE` 无 character_sheet——`taskTypeToProviderType` 返回 null、`isProviderTypeEnabled` 对未知类型放行（fail-open），sheet 绕过"provider 类型未启用 → 转人工上传"语义（已核实 L1-25；T4）；
@@ -151,7 +164,9 @@
 
 ## 6. 实施任务拆分预览（非执行清单）
 
-T1 shared schema + compiler（**两处**任务类型枚举 + enrichment 联合类型；阈值编译；parameters 注入关系）→ T2 dashscope image adapter（三值端点/形态分支 + 参考图形态）+ §3.4 模型位路由机制决策与实现 → T3 engine 优先级/路由豁免/prepare 注入与降级 + `measuredUnitsForTask` case → T4 validator 可选不完备白名单 + provider-type-map 映射 + `allowedArtifactTypesForTask` case + 成本估算清单 + 前端面板展示 → T5 fake runtime 冒烟 → T6 live check（显式授权，含画幅对照）。每个任务独立验证、独立中文提交；T1-T3 之间不得跳跃合并。
+**T1 前置（外部审查 N3，已复现）**：`npm run typecheck:backend` 基线当前为红——既有报错 `backend/src/modules/narration/narration-timing-normalizer.ts:270` TS18048（与本设计无关的已提交代码）。strict 模式下 `allowedArtifactTypesForTask` 补 case 后的非穷尽 switch 会成为类型错误，是六类分支点中最可靠的编译期信号，只有干净基线该信号才可信；T1 开工前先修掉该报错或显式立项处理。
+
+T1 shared schema + compiler（**两处**任务类型枚举 + enrichment 联合类型；阈值编译；parameters 注入关系；sheet `manual_upload_policy` 固定 required:false）→ T2 dashscope image adapter（三值端点/形态分支 + 参考图形态）+ §3.4 模型位路由机制决策与实现（候选 a/b 各自的闸门/快照/合同代价计入本任务）→ T3 engine 优先级/路由豁免/prepare 注入与降级 + `measuredUnitsForTask` case → T4 validator 可选不完备白名单（单测覆盖 required 两分支）+ provider-type-map 映射 + `allowedArtifactTypesForTask` case + 成本估算清单 + 前端面板展示 → T5 fake runtime 冒烟 → T6 live check（显式授权，含画幅对照）。每个任务独立验证、独立中文提交；T1-T3 之间不得跳跃合并。
 
 ---
 
@@ -173,3 +188,16 @@ T1 shared schema + compiler（**两处**任务类型枚举 + enrichment 联合�
 ## 8. 外部审查修订（2026-09-18，第二轮）
 
 外部审查对初稿+第一轮自审做 12 条引用逐条核对与 3 条调用链追踪：10/12 引用准确、1 条结论错误（validator 容忍性的适用范围只限路由覆盖，不含完成度门禁）、2 条行号漂移；第一轮自审"无方案级缺陷"表述被推翻。本轮对审查关键断言逐条抽查——终态集合（validator L13-17）、可选白名单（L22-48）、measuredUnits（engine L420-421/L469/L545）、canHandle（L154）、isWan26Model（L49-51）、manifest 平行枚举（L360）、allowedArtifactTypesForTask 无 default（L586）、provider-type-map fail-open、autodl/enrichment 行号漂移——**抽查 10 处全部证实**，据此完成 §1.2/§3.1/§3.4/§3.5/§3.7/§4/§5/§6 修订，并对 F3 补充了审查未展开的第三层事实（注入目标本是 image_still，②③同类任务的现场分流是机制设计核心难点，见 §3.4）。文档维持"待评审"；进入 implementation plan 的前置条件为终审确认本修订，且 §3.4 模型位路由机制（候选 a/b）须在 implementation plan 中先行决策。
+
+### 第三轮审查修订（2026-09-18，N1–N6）
+
+第二轮外部审查确认 F1–F9 整改落点全部到位，另提出 N1–N6；本轮逐条核实后全部采信：
+
+- **N1 证实**：闸门三元组契约为注释原文（`provider-dispatch-gate.ts:8-15`「注册每个真实 DashScope adapter 之前必须通过本 gate」），快照每能力单模型（`snapshotMediaModel`，`assets-run.service.ts:452-476`）。§3.4 重写为三候选比较表，并补充审查未写明的候选 (c) 适用前提：冻结模型须支持 0 图调用，wan2.6-image 编辑模式强制 1~4 图不满足，当前仅 wan2.7-image 可用。
+- **N2 证实**：validator L31-33 的 required 提前返回在第一轮 sed 输出中已存在但未被采信——同一处代码，第一轮只看了白名单本身。§3.1 固定 sheet `required:false`，§3.5 前提改为双条件，T4 单测覆盖两分支。
+- **N3 复现**：`npm run typecheck:backend` 恰好一条既有报错（`narration-timing-normalizer.ts:270` TS18048），记为 T1 前置。
+- **N4 采纳**：§3.7 计数改为"8 个代码点，归并 6 类"。
+- **N5 证实**：`TERMINAL_EXECUTION_STATUSES` 实为 L16-20（L11-15 是 VISUAL_TASK_TYPES 注释与定义），已改。
+- **N6 采纳**：§3.1"零感知"改写为以路由豁免单测为前提的条件式结论。
+
+至此本设计进入 implementation plan 的障碍仅剩：终审确认 + §3.4 三候选决策。
