@@ -21,6 +21,28 @@ describe('原生时间归一化', () => {
     expect(result.spokenText).toBe(spoken);
     expect(NarrationTimingMapV1.safeParse(result).success).toBe(true);
   });
+  it('单个2的口语位值读法两（实测 2万 被读成 两万）可追踪', () => {
+    // 2026-09-17 live check t3 实测：供应商把 2万 归一化为 两万（3万 仍读 三万）。
+    // 两 候选仅对单字符数字 2 提供；来源恒为该数字范围，token 时间不受影响。
+    const events: NarrationTimingDiagnostic[] = [];
+    const result = normalizeNarrationTiming(input('甲2万乙', '甲两万乙'), { onDiagnostic: e => events.push(e) });
+    expect(result?.spokenText).toBe('甲两万乙');
+    expect(result.tokens.map(t => [t.sourceStart, t.sourceEnd])).toEqual([[0, 1], [1, 2], [2, 3], [3, 4]]);
+    expect(result.tokens[1]).toMatchObject({ spokenText: '两', startMs: 250, endMs: 500 });
+    expect(NarrationTimingMapV1.safeParse(result).success).toBe(true);
+    // 2/二/两 三候选互异，同一位置至多一个匹配，不产生同成本多解
+    expect(events.map(e => e.kind)).not.toContain('tie_arbitrated');
+    // 既有的二读法不受影响；多位数字不获得两候选（20 仍读 二十，不读 两十；02 前导零同样不获）
+    expect(normalizeNarrationTiming(input('甲2万乙', '甲二万乙'))?.spokenText).toBe('甲二万乙');
+    expect(normalizeNarrationTiming(input('甲20万乙', '甲二十万乙'))?.spokenText).toBe('甲二十万乙');
+    expect(normalizeNarrationTiming(input('甲02乙', '甲零二乙'))?.spokenText).toBe('甲零二乙');
+    // 同句多个 2 各自映射（两/二并存）
+    const both = normalizeNarrationTiming(input('甲2千2百乙', '甲两千二百乙'));
+    expect(both?.tokens.map(t => [t.spokenText, t.sourceStart, t.sourceEnd]))
+      .toEqual([['甲', 0, 1], ['两', 1, 2], ['千', 2, 3], ['二', 3, 4], ['百', 4, 5], ['乙', 5, 6]]);
+    // 来源数字非 2 时 normalized 的 两 无任何候选可消费，仍 fail-closed
+    expect(() => normalizeNarrationTiming(input('甲3万乙', '甲两万乙'))).toThrow('narration_timing_invalid');
+  });
   it('多个数字token共一source且无内部切点', () => {
     const result = normalizeNarrationTiming(input('12', '十二'));
     expect(result?.tokens.map(t => [t.sourceStart,t.sourceEnd])).toEqual([[0,2],[0,2]]);

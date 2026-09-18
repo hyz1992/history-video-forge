@@ -87,7 +87,12 @@ function mapSentence(original: string, normalized: string, sourceBase: number,
       const number = parts.slice(i, last).map(p => p.segment).join('');
       const end = part.index + number.length;
       blocks.push([{ spoken: number, units: parts.slice(i, last).flatMap(p => choice(p.segment, p.index, p.index + 1).units) },
-        ...integerForms(number).map(text => choice(text, part.index, end))]);
+        ...integerForms(number).map(text => choice(text, part.index, end)),
+        // 单个"2"的口语位值读法是"两"而非"二"（2026-09-17 live check 实测：2万 被读成 两万）。
+        // 仅对单字符"2"提供该候选，覆盖其全部位值位置（两千/两百/两亿，真实样本目前仅两万）；
+        // 多位的 20/200 等口语仍以"二十/二百"为主，无证据不扩展。
+        // 各候选匹配不同 normalized 文本，不会互相打平；映射仍诚实（来源恒为该数字范围）。
+        ...number === '2' ? [choice('两', part.index, end)] : []]);
       blockMeta.push({ silent: false, length: number.length, start: part.index, end });
       i = last - 1; continue;
     }
