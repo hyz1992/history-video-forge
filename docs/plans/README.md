@@ -4,7 +4,7 @@
 
 截至 2026-09-17（live check 补充）：
 
-- [口播对齐仲裁 live check](../records/2026-09-17-narration-tie-arbitration-live-check.md)：用户授权的 5 条文案真实付费验证完成——4 通过（逐字节可重放、合同全过、CRLF 分段与生僻字 `澶`→`缠` 均被既有通道吸收），`tie_arbitrated` 真实命中 0（兜底路径而非常态）；**t3 抓到两个首次观测的失败形态**：`公元208年` 被供应商重排为 `公二百零八元年`（字符位移，fail-closed 正确，建议上游文案规避"公元+阿拉伯数字"），`2万` 被读成 `两万`（`integerForms` 缺 `两` 位值变体，低成本可修，待用户决定）。
+- [口播对齐仲裁 live check](../records/2026-09-17-narration-tie-arbitration-live-check.md)：用户授权的 5 条文案真实付费验证完成——4 通过（逐字节可重放、合同全过、CRLF 分段与生僻字 `澶`→`缠` 均被既有通道吸收），`tie_arbitrated` 真实命中 0（兜底路径而非常态）；**t3 抓到两个首次观测的失败形态**：`公元208年` 被供应商重排为 `公二百零八元年`（字符位移，fail-closed 正确，已批准用 script writer prompt 约束规避），`2万` 被读成 `两万`（已修复：单字符数字 2 追加 `两` 候选，提交 `746a47c8`，T2 审查 0 Critical / 0 Important）。
 
 截至 2026-09-17：
 
