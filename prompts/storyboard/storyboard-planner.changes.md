@@ -1,5 +1,10 @@
 # storyboard.storyboard-planner 变更记录
 
+## v1.5.1 - 2026-09-17
+- 版本号补升：v1.5.0 期间的一次正文修订（重生反馈文案改为候选编号口径，"boundary ID 不在边界表内"
+  →"使用了候选表之外的切点或编号"，commit c854b59c）未同步升版本，被 harness:check-prompt-drift
+  判为 drift。本次只补版本元数据，正文不再改动。
+
 ## v1.5.0 - 2026-09-12
 - 候选切点精简：v2 输入由"完整 boundaries（450-464 个长 ID 逐字复制）"改为按时间编号的粗切点候选 `boundary_candidates`（句末 或 停顿 ≥400ms，含首尾，实测 62-73 个），每镜 start/end 直接用候选编号（C1..Cn），编号原样使用、禁止改数字/交换/自造。
 - 背景：长 ID 逐字复制在真实项目上三连败（编号漂移/start-end 互换/漏字段）；候选精简把复制负担降约 6 倍、输入 token 显著下降，选择余量约 4-5 倍。设计见 [分镜候选切点精简设计](../../docs/plans/2026-09-12-storyboard-coarse-candidates-design.md)。

@@ -45,6 +45,14 @@ export const KNOWN_PROMPT_DRIFTS: KnownPromptDriftEntry[] = [
     reason:
       "Historical body drift before the prompt changelog gate; current v1.1.0 records the target_candidate_count and angle_hint contract.",
   },
+  {
+    file: "storyboard-planner.prompt.md",
+    version: "v1.5.0",
+    commitA: "4742212",
+    commitB: "c854b59",
+    reason:
+      "Historical body drift: regeneration_context wording updated to candidate-label wording without a version bump (2026-09-12 remediation); v1.5.1 records the bump.",
+  },
 ];
 
 // ---- CLI ----

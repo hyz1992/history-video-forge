@@ -72,7 +72,7 @@ describe("Task8 规划前已知真实口播", () => {
       const p = registry.getPrompt(name); expect(p.metadata.language).toBe("zh-CN"); expect(p.body).toContain("storyboard_v2"); expect(p.body).toContain("start_boundary_id");
     }
     const planner = registry.getPrompt("storyboard.planner");
-    expect(planner.metadata.version).toBe("v1.5.0");
+    expect(planner.metadata.version).toBe("v1.5.1");
     expect(planner.body).toContain("boundary_candidates");
     expect(planner.body).toContain("候选编号");
     expect(planner.body).toContain("编号必须原样使用");

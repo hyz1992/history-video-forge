@@ -1,6 +1,6 @@
 ---
 id: storyboard.planner
-version: v1.5.0
+version: v1.5.1
 stage: storyboard
 language: zh-CN
 consumes:
