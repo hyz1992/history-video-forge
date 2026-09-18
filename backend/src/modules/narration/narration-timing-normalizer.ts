@@ -86,12 +86,20 @@ function mapSentence(original: string, normalized: string, sourceBase: number,
       while (last < parts.length && /^[0-9]$/.test(parts[last]!.segment)) last++;
       const number = parts.slice(i, last).map(p => p.segment).join('');
       const end = part.index + number.length;
+      // 口语位值读法"两"：2026-09-17/18 live check 实测——单字符 2 万/千位读两（2万→两万、
+      // 2千→两千），多位数字首位 2 在百/千位同样读两（2000→两千万 即 两千、200两→两百两），
+      // 而十位不换（20余万→二十余万）。故对位值形式首位"二"后跟 百/千/万/亿 者补"两"开头
+      // 变体；逐位形式（二零二六）与"二十"不扩展。各候选匹配不同 normalized 文本，不会互相
+      // 打平；映射仍诚实（来源恒为该数字范围）。
+      const forms = integerForms(number);
+      const formChoices = forms.map(text => choice(text, part.index, end));
+      for (const text of forms) {
+        if (text.length > 1 && text[0] === '二' && '百千万亿'.includes(text[1]!)) {
+          formChoices.push(choice('两' + text.slice(1), part.index, end));
+        }
+      }
       blocks.push([{ spoken: number, units: parts.slice(i, last).flatMap(p => choice(p.segment, p.index, p.index + 1).units) },
-        ...integerForms(number).map(text => choice(text, part.index, end)),
-        // 单个"2"的口语位值读法是"两"而非"二"（2026-09-17 live check 实测：2万 被读成 两万）。
-        // 仅对单字符"2"提供该候选，覆盖其全部位值位置（两千/两百/两亿，真实样本目前仅两万）；
-        // 多位的 20/200 等口语仍以"二十/二百"为主，无证据不扩展。
-        // 各候选匹配不同 normalized 文本，不会互相打平；映射仍诚实（来源恒为该数字范围）。
+        ...formChoices,
         ...number === '2' ? [choice('两', part.index, end)] : []]);
       blockMeta.push({ silent: false, length: number.length, start: part.index, end });
       i = last - 1; continue;

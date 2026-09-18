@@ -43,6 +43,35 @@ describe('原生时间归一化', () => {
     // 来源数字非 2 时 normalized 的 两 无任何候选可消费，仍 fail-closed
     expect(() => normalizeNarrationTiming(input('甲3万乙', '甲两万乙'))).toThrow('narration_timing_invalid');
   });
+  it('多位数字首位2的百/千位口语读两可追踪（实测 2000→两千万、200→两百两）', () => {
+    // 2026-09-18 live check t8 实测：2000万 读 两千万、200两 读 两百两；而 20余万 读 二十余万
+    //（十位不换）。位值形式首位"二"后跟 百/千/万/亿 时补"两"开头变体；逐位形式与二十不扩展。
+    const events: NarrationTimingDiagnostic[] = [];
+    const t8 = normalizeNarrationTiming(input('甲2000万乙', '甲两千万乙'), { onDiagnostic: e => events.push(e) });
+    expect(t8?.spokenText).toBe('甲两千万乙');
+    // 逐字符 word 下，两/千 各成一个 token 且共享整个数字块的来源范围（诚实映射）
+    expect(t8.tokens[1]).toMatchObject({ spokenText: '两', sourceStart: 1, sourceEnd: 5 });
+    expect(t8.tokens[2]).toMatchObject({ spokenText: '千', sourceStart: 1, sourceEnd: 5 });
+    expect(t8.tokens[3]).toMatchObject({ spokenText: '万', sourceStart: 5, sourceEnd: 6 });
+    // 变体与既有候选互斥匹配，不产生同成本多解
+    expect(events.map(e => e.kind)).not.toContain('tie_arbitrated');
+    expect(normalizeNarrationTiming(input('甲200两乙', '甲两百两乙'))?.spokenText).toBe('甲两百两乙');
+    // 数字自带万组（区别于单字符 2 的显式候选路径）与万/亿组间形式
+    expect(normalizeNarrationTiming(input('甲20000乙', '甲两万乙'))?.spokenText).toBe('甲两万乙');
+    expect(normalizeNarrationTiming(input('甲200010000乙', '甲两亿零一万乙'))?.spokenText).toBe('甲两亿零一万乙');
+    // 带内零与多位组合同样覆盖；一千不获两变体
+    expect(normalizeNarrationTiming(input('甲2026乙', '甲两千零二十六乙'))?.spokenText).toBe('甲两千零二十六乙');
+    expect(normalizeNarrationTiming(input('甲2100乙', '甲两千一百乙'))?.spokenText).toBe('甲两千一百乙');
+    expect(normalizeNarrationTiming(input('甲1000乙', '甲一千乙'))?.spokenText).toBe('甲一千乙');
+    // 既有的二读法与二十（十位不换）不受影响；前导零 run 不获变体
+    expect(normalizeNarrationTiming(input('甲2000乙', '甲二千乙'))?.spokenText).toBe('甲二千乙');
+    expect(normalizeNarrationTiming(input('甲200万乙', '甲二百万乙'))?.spokenText).toBe('甲二百万乙');
+    expect(normalizeNarrationTiming(input('甲20万乙', '甲二十万乙'))?.spokenText).toBe('甲二十万乙');
+    expect(normalizeNarrationTiming(input('甲02乙', '甲零二乙'))?.spokenText).toBe('甲零二乙');
+    // 逐位形式不获两变体；来源非 2 开头时 两 开头读法仍 fail-closed
+    expect(() => normalizeNarrationTiming(input('甲2026乙', '甲两零二六乙'))).toThrow('narration_timing_invalid');
+    expect(() => normalizeNarrationTiming(input('甲1000乙', '甲两千乙'))).toThrow('narration_timing_invalid');
+  });
   it('多个数字token共一source且无内部切点', () => {
     const result = normalizeNarrationTiming(input('12', '十二'));
     expect(result?.tokens.map(t => [t.sourceStart,t.sourceEnd])).toEqual([[0,2],[0,2]]);
