@@ -1,5 +1,11 @@
 # script.script-writer 变更记录
 
+## v1.0.3 - 2026-09-17
+- 新增口播草稿约束：年份与日期一律写汉字数字，不要写`公元/元`紧邻阿拉伯数字的组合。
+  2026-09-17 live check 实测：`公元208年` 被供应商归一化为 `公二百零八元年`（"元"被挪到
+  数字读法之后），属字符位移类改写，对齐层无法诚实回对，整次口播生成失败（fail-closed）。
+  见 [live check 记录](../../docs/records/2026-09-17-narration-tie-arbitration-live-check.md)。
+
 ## v1.0.2 - 2026-09-11
 - `estimated_duration_sec` 改由系统本地回填（正文去空白字数 ÷ 实测语速 5.3 字/秒，四舍五入），
   prompt 不再要求 LLM 输出该字段，也不再要求"必须落在 duration_band 区间内"。原两条约束

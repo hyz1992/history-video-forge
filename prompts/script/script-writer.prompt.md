@@ -1,6 +1,6 @@
 ---
 id: script.writer
-version: v1.0.2
+version: v1.0.3
 stage: script
 language: zh-CN
 consumes:
@@ -80,6 +80,7 @@ status: active
 - 每条 `must_include_beats` 至少展开成一个叙事单元，不能只用一句话点名后立刻跳到下一条 beat；展开时优先写人物动作、对方反应、场面压力、即时后果；每条 beat 至少写出一个可见动作和一个反应或后果；三条 beat 不能压缩成列表式交代
 - 如输入包含 `regeneration_context`，只用它修正上一稿的结构下限问题，正文不得低于 `min_script_chars_for_band` 与 `min_sentence_count_for_band`，且不得改写 `TopicPackage`；如 `regeneration_context` 指出 `script_body_too_thin`，必须沿用既有 `must_include_beats` 扩写，新增场景动作、对方反应、压力后果，不能只刚刚贴线，要明显高于 `min_script_chars_for_band`；每条 beat 至少补足一个动作、一个反应、一个后果；若 `quote_trace` 为空或材料像事件骨架，每条 beat 围绕原事实补一个动作前一拍、一个即时反应、一个后果句；不得新增人物、事件、结局或改写因果；可以补原场景内不改变事实的动作、反应、停顿、目光、场面压力；不得只重排、改写或缩短上一稿，也不得写成比上一稿稍长一点的压缩摘要
 - 如 `regeneration_context.user_feedback` 非空，用户明确指出了对上一稿的具体不满。保留事实边界不变，将用户反馈作为最优先的调整方向：逐条理解用户指出的具体问题，针对性修改对应段落或结构；不要用泛泛的总结或解释回应用户，必须体现在具体的场面推进、节奏密度或口播语气中；用户反馈与审校发现冲突时，以用户反馈为准
+- `script_text` 中的年份与日期一律写汉字数字（如`建安十三年`、`二零八年`），不要写`公元208年`这类`公元/元`紧邻阿拉伯数字的组合：TTS 供应商会把它重排成无法回对的读法，导致整次口播生成失败；审计字段仍按各自规则逐字复用输入，不受本条影响
 
 ## 禁止事项
 
