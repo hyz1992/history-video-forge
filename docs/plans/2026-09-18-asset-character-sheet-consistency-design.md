@@ -22,7 +22,7 @@
 | manifest 侧存在与 `AssetTaskType` **平行的内联枚举**：`AssetTaskExecution.task_type`（z.enum） | `shared/src/assets/asset-manifest-v1.schema.ts` L360（外部审查发现，T1 必须两处同步加值） |
 | 生图 adapter 为纯文生图：`DashScopeImageInput` 仅 model/prompt/negativePrompt/size/n，无图像输入字段；wan2.6 路径 content 仅 `[{text}]` | `backend/src/modules/assets/providers/dashscope/dashscope-image-provider.ts` |
 | 生图 provider 已具备完整异步链路：submit 携带 `X-DashScope-Async: enable`（L197）→ `poll`（L220-266，默认 3s 间隔）→ `download`（L278，产物本地物化）；wan2.6 端点 `/api/v1/services/aigc/image-generation/generation`（L93）与图像生成编辑 API 同族 | 同上（自审已逐行核实） |
-| validator 对 null-segment 任务已有结构性容忍：路由覆盖按 `task.source_segment_id && VISUAL_TASK_TYPES.has(...)` 条件收集（L133），bgm/sfx 为既有无 segment 任务先例（L45-46），逐段产物检查显式跳过无 segment 任务（L170） | `backend/src/modules/assets/assets-local-validator.ts`（自审已核实） |
+| **资产级** validator 对 null-segment 任务有结构性容忍：路由覆盖按 `task.source_segment_id && VISUAL_TASK_TYPES.has(...)` 条件收集（L133），bgm/sfx 为既有无 segment 任务先例（L45-46），逐段产物检查显式跳过无 segment 任务（L170）。**注意：该容忍不适用于计划级 validator**——`asset-planning-local-validator.ts:34-40` 的 `NULL_SEGMENT_ALLOWED_TASK_TYPES` 只含 tts/subtitle/sfx/bgm 四类，sheet 的 null segment 必报 `asset_task_source_segment_invalid`，且为三条硬失败路径（见 §3.7 第 7 项，外部审查 N12） | 资产级：`backend/src/modules/assets/assets-local-validator.ts`；计划级：`backend/src/modules/asset-planning/asset-planning-local-validator.ts` |
 | 生图模型名可配（env `ALIYUN_DASHSCOPE_TEXT_TO_IMAGE_MODEL`，默认 `wan2.6-t2i`），provider 经注册表接入并受付费闸门约束 | `backend/src/modules/assets/assets-run.service.ts` L372-374、L511-527 |
 | 已有"取 manifest 中 image artifact → base64 → 供应商参考图输入"的通路先例（图生视频消费 segment 锚点图） | `backend/src/modules/assets/providers/autodl/autodl-image-to-video-provider.ts`（取图 L54-55、本地文件转 base64 L59-62、`ref_image_0` 注入 L82；外部审查行号修正） |
 | 引擎按 `TASK_TYPE_PRIORITY` 单趟顺序执行；产物完成即并入演进中的 manifest 副本，同 run 后续任务可见 | `backend/src/modules/assets/assets-execution-engine.ts` L29-37、L88-93、L352-359 |
@@ -132,21 +132,23 @@
 
 ### 3.7 task_type 分支面清单（外部审查 F4，T1-T4 逐处覆盖）
 
-按 task_type 分支/枚举的代码点共 **8 个**（归并为 6 类，外部审查 N4 修正计数），任一遗漏的后果已逐处核实：
+按 task_type 分支/枚举的代码点共 **10 个**（归并为 8 类；第四轮 N4 修正计数、第五轮 N12/N13 增补），任一遗漏的后果已逐处核实：
 
 1. `asset-manifest-v1.schema.ts:360` 平行内联枚举——漏改 = manifest 解析硬失败（T1）；
-2. `provider-type-map.ts` `TASK_TYPE_TO_PROVIDER_TYPE` 无 character_sheet——`taskTypeToProviderType` 返回 null、`isProviderTypeEnabled` 对未知类型放行（fail-open），sheet 绕过"provider 类型未启用 → 转人工上传"语义（已核实 L1-25；T4）；
-3. `assets-run.service.ts:586` `allowedArtifactTypesForTask` switch **无 default 分支**——漏改 = sheet 手动上传路径 `allowedArtifactTypes.includes(...)`（L1590-1591）抛 TypeError/500，而 §5 恰好要求 sheet 可手动重生成/accept（T4）；
-4. `measuredUnitsForTask`——见 §3.4 计费项（T3）；
-5. `asset-plan-prompt-enrichment.ts:4` taskType 联合类型为编译期约束；其视觉约束分支只认 image_still/video_clip，sheet 的朝代风格由 §3.2 自建模板承担，不能依赖既有 enrichment（T1）；
-6. 成本/工作量估算：`asset-plan-intent-compiler.ts:372`、`asset-planning-generation.service.ts:2257` 的 `estimated_provider_calls` 过滤与 `assets.routes.ts:172` 默认 `targetTaskTypes` 会漏算 sheet（金额/张数低估，不崩溃）（T4）。
+2. `asset-planning-local-validator.ts:34-40` 计划级 null-segment 白名单 `NULL_SEGMENT_ALLOWED_TASK_TYPES` 不含 character_sheet——漏改 = sheet 一编译即报 `asset_task_source_segment_invalid`，且是**三条硬失败路径**（编译器 `fail`，`asset-plan-intent-compiler.ts:481-483`；run service 抛 `AssetPlanCompilerInvariantError`，`asset-planning-run.service.ts:1042-1049`；资产阶段 `narration-manifest-importer.ts:18-21` 对存储 plan 无条件校验抛 `narration_manifest_plan_invalid`）——**默认链路（口播前置）一张 sheet 都产不出来**，最高危，与 T1 compiler 改动同一原子提交（外部审查 N12）；
+3. `provider-type-map.ts` `TASK_TYPE_TO_PROVIDER_TYPE` 无 character_sheet——`taskTypeToProviderType` 返回 null、`isProviderTypeEnabled` 对未知类型放行（fail-open），sheet 绕过"provider 类型未启用 → 转人工上传"语义（已核实 L1-25；T4）；
+4. `assets-run.service.ts:586` `allowedArtifactTypesForTask` switch **无 default 分支**——漏改 = sheet 手动上传路径 `allowedArtifactTypes.includes(...)`（L1590-1591）抛 TypeError/500，而 §5 恰好要求 sheet 可手动重生成/accept（T1，与 manual_upload_policy 原子提交，见 §6 N9）；
+5. `measuredUnitsForTask`——见 §3.4 计费项（T3）；
+6. `asset-plan-prompt-enrichment.ts:4` taskType 联合类型为编译期约束；其视觉约束分支只认 image_still/video_clip，sheet 的朝代风格由 §3.2 自建模板承担，不能依赖既有 enrichment（T1）；
+7. `fake-image-provider.ts:19` `canHandle` 只认 image_still——漏改不会报错而是**假绿**：registry 无适配器时 engine 对非 video 类型静默 continue（`assets-execution-engine.ts:140-162`，状态停在 planned），叠加 §3.5 白名单后 validator 容忍 planned → run 可 `ready_for_compose` 而 sheet 零生成，直接击穿 §4-2 冒烟（外部审查 N13；T5）；
+8. 成本/工作量估算：`asset-plan-intent-compiler.ts:372`、`asset-planning-generation.service.ts:2257` 的 `estimated_provider_calls` 过滤与 `assets.routes.ts:172` 默认 `targetTaskTypes` 会漏算 sheet（金额/张数低估，不崩溃）（T4）。
 
 ---
 
 ## 4. 验证计划
 
 1. 单测：compiler 阈值统计与 sheet 任务生成、parameters 注入关系、TASK_TYPE_PRIORITY 排序、applyArtifactRoutes 路由豁免、adapter 请求形态切换与参数表、prepare 阶段降级分支。
-2. fake runtime 冒烟：fake image provider 回显"收到参考图"标记，验证 sheet → 分镜图的 run 内可见性与降级路径（fake 路径不因真实供应商缺席而阻塞——先例：现有 fake/local 基线）。
+2. fake runtime 冒烟（外部审查 N13 强化）：fake image provider 的 `canHandle` 扩展认 `character_sheet`、prepare 回显"收到参考图"标记为 **T5 显式交付项**（现 prepare 仅写 `{task_id}`）；冒烟**必须断言**"`character_sheet` execution 状态为 completed 且产出 image artifact"，不得只断言 run 走完——否则 registry 无适配器的静默 continue + §3.5 白名单放行会制造"run 成功、零 sheet"的假绿。断言不得依赖 fake metadata 的硬编码尺寸（现硬编码 1080×1920，与 §3.2 横版 2K 不一致，T5 顺带对齐）。fake 路径不因真实供应商缺席而阻塞——先例：现有 fake/local 基线。
 3. 显式授权 live check（一次性，单独报批）：真实项目选 1 个高出场角色生成 sheet，再生成 2~3 张引用它的分镜图；人工比对跨图一致性；sheet 画幅作为对照变量（同一角色 16:9 横版与 9:16 竖版各一张，成本增量可忽略），检验参考图画幅与成片画幅不一致对主体裁切/占比的影响；同步完成 wan2.6-image 与 wan2.7-image 的效果/单价对照（一石二鸟，服务 3.6 的默认值评估与纯文生图默认模型决策的输入）。记录 request id、耗时、单价、失败模式。
 4. 不设自动门禁；live check 证据入 `docs/records/`。
 
@@ -167,7 +169,7 @@
 
 **T1 前置（外部审查 N3，已复现）**：`npm run typecheck:backend` 基线当前为红——既有报错 `backend/src/modules/narration/narration-timing-normalizer.ts:270` TS18048（与本设计无关的已提交代码）。strict 模式下 `allowedArtifactTypesForTask` 补 case 后的非穷尽 switch 会成为类型错误，是六类分支点中最可靠的编译期信号，只有干净基线该信号才可信；T1 开工前先修掉该报错或显式立项处理。
 
-T1 shared schema + compiler（**两处**任务类型枚举 + enrichment 联合类型；阈值编译；parameters 注入关系；sheet `manual_upload_policy` 固定 `{required:false, allowed:true, accepted_file_types:["image/png","image/jpeg"]}`——**与 `allowedArtifactTypesForTask` 的 character_sheet case 同一原子提交**，policy 先落地而 case 缺位会造成中间态手动上传 500，外部审查 N9）→ T2 dashscope image adapter（三值端点/形态分支 + 参考图形态）+ §3.4 模型位路由机制决策与实现（**候选 a/b/c**；a/b 各自的闸门/快照/合同代价计入本任务）→ T3 engine 优先级/路由豁免/prepare 注入与降级 + `measuredUnitsForTask` case → T4 validator 可选不完备白名单（单测覆盖 required 两分支）+ provider-type-map 映射 + 成本估算清单 + 前端面板展示 → T5 fake runtime 冒烟 → T6 live check（显式授权，含画幅对照）。每个任务独立验证、独立中文提交；T1-T3 之间不得跳跃合并。
+T1 shared schema + compiler（**两处**任务类型枚举 + enrichment 联合类型；阈值编译；parameters 注入关系；sheet `manual_upload_policy` 固定 `{required:false, allowed:true, accepted_file_types:["image/png","image/jpeg"]}`——**与 `allowedArtifactTypesForTask` 的 character_sheet case、计划级 `NULL_SEGMENT_ALLOWED_TASK_TYPES` 白名单同一原子提交**：policy 先落地而 case 缺位会造成中间态手动上传 500（N9），白名单缺位则 T1 落地即全局红（N12）；另注意 sheet 任务**不能复用 `createTask`**（其入参为 `NormalizedIntent`，sheet 无对应 intent kind，第五轮审查正面确认），需新构造器自行补齐 `AssetTask` 必填字段 `recommended_mode`/`cost_tier`/`initial_status`/`risk_notes`/`order` 等）→ T2 dashscope image adapter（三值端点/形态分支 + 参考图形态）+ §3.4 模型位路由机制决策与实现（**候选 a/b/c**；a/b 各自的闸门/快照/合同代价计入本任务）→ T3 engine 优先级/路由豁免/prepare 注入与降级 + `measuredUnitsForTask` case → T4 validator 可选不完备白名单（单测覆盖 required 两分支）+ provider-type-map 映射 + 成本估算清单 + 前端面板展示 → T5 fake runtime 冒烟（fake `canHandle` 扩展 + 回显标记 + completed/artifact 强断言，见 §4-2）→ T6 live check（显式授权，含画幅对照）。每个任务独立验证、独立中文提交；T1-T3 之间不得跳跃合并。
 
 ---
 
@@ -188,7 +190,7 @@ T1 shared schema + compiler（**两处**任务类型枚举 + enrichment 联合�
 
 ## 8. 外部审查修订（2026-09-18，第二轮）
 
-外部审查对初稿+第一轮自审做 12 条引用逐条核对与 3 条调用链追踪：10/12 引用准确、1 条结论错误（validator 容忍性的适用范围只限路由覆盖，不含完成度门禁）、2 条行号漂移；第一轮自审"无方案级缺陷"表述被推翻。本轮对审查关键断言逐条抽查——终态集合（validator L13-17）、可选白名单（L22-48）、measuredUnits（engine L420-421/L469/L545）、canHandle（L154）、isWan26Model（L49-51）、manifest 平行枚举（L360）、allowedArtifactTypesForTask 无 default（L586）、provider-type-map fail-open、autodl/enrichment 行号漂移——**抽查 10 处全部证实**（注：其中 L13-17 引用当时偏移 3 行，第三轮 N5 修正为 L16-20；"候选 a/b"的范围第三轮 N10 扩展为 a/b/c——历史记录保留原貌，以括注为准），据此完成 §1.2/§3.1/§3.4/§3.5/§3.7/§4/§5/§6 修订，并对 F3 补充了审查未展开的第三层事实（注入目标本是 image_still，②③同类任务的现场分流是机制设计核心难点，见 §3.4）。文档维持"待评审"；进入 implementation plan 的前置条件为终审确认本修订，且 §3.4 模型位路由机制须在 implementation plan 中先行决策。
+外部审查对初稿+第一轮自审做 12 条引用逐条核对与 3 条调用链追踪：10/12 引用准确、1 条结论错误（validator 容忍性的适用范围只限路由覆盖，不含完成度门禁）、2 条行号漂移；第一轮自审"无方案级缺陷"表述被推翻。本轮对审查关键断言逐条抽查——终态集合（validator L13-17）、可选白名单（L22-48）、measuredUnits（engine L420-421/L469/L545）、canHandle（L154）、isWan26Model（L49-51）、manifest 平行枚举（L360）、allowedArtifactTypesForTask 无 default（L586）、provider-type-map fail-open、autodl/enrichment 行号漂移——**抽查 10 处全部证实**（注：其中 L13-17 引用当时偏移 3 行，N5 于第二轮提出、第三轮修正为 L16-20；"候选 a/b"的范围于第三轮扩展为 a/b/c——历史记录保留原貌，以括注为准），据此完成 §1.2/§3.1/§3.4/§3.5/§3.7/§4/§5/§6 修订，并对 F3 补充了审查未展开的第三层事实（注入目标本是 image_still，②③同类任务的现场分流是机制设计核心难点，见 §3.4）。文档维持"待评审"；进入 implementation plan 的前置条件为终审确认本修订，且 §3.4 模型位路由机制须在 implementation plan 中先行决策。
 
 ### 第三轮审查修订（2026-09-18，N1–N6）
 
@@ -214,3 +216,14 @@ T1 shared schema + compiler（**两处**任务类型枚举 + enrichment 联合�
 - **N10 采纳**：§8 第二轮记录加括注（L13-17 当时偏移、候选范围后续扩展），§6 T2 候选范围改为 a/b/c。
 
 四轮审查累计 20 项发现（F1-F9、N1-N11），全部闭环。进入 implementation plan 的障碍仍为：终审确认 + §3.4 三候选决策。
+
+### 第五轮审查修订（2026-09-18，N12–N15）
+
+第四轮外部审查在系统扫描全部任务类型字面量清单后提出 N12–N15，本轮逐条核实后全部采信；其中 N12/N13 为高严重度接入面遗漏，审查自认前三轮同样漏检：
+
+- **N12 证实（最高危）**：计划级 `NULL_SEGMENT_ALLOWED_TASK_TYPES` 只含四类（`asset-planning-local-validator.ts:34-40`），sheet 的 null segment 必报错；三条硬失败路径全部核实（编译器 `fail` L481-483、run service `AssetPlanCompilerInvariantError` L1042-1049、importer 对存储 plan 无条件校验 L18-21）——默认链路（口播前置）落地即全局红。§1.2 第 6 行的泛化表述收窄为"仅资产级 validator 成立"；白名单加入 §3.7 第 2 项并移入 T1 原子提交。正面确认一并采纳：`SegmentAssetIntentKind` 为独立枚举、`AssetPlanV2` 不约束 null segment——sheet 不能复用 `createTask`，T1 写明需新构造器补齐必填字段。
+- **N13 证实**：fake `canHandle` 只认 image_still（`fake-image-provider.ts:19`），叠加 engine 非 video 无适配器静默 continue（L140-162）与 §3.5 白名单，冒烟会假绿。§4-2 改为强断言（sheet execution=completed 且有 image artifact，不依赖 fake 硬编码 metadata 尺寸），fake 交付项写入 T5。
+- **N14 认领（我方连带遗漏）**：§3.7 第 4 项标签 (T4)→(T1)，与第四轮 N9 的原子提交决策对齐。
+- **N15 认领**：§8 括注轮次口径统一为"第 N 轮提出 / 第 M 轮修订"。
+
+五轮累计 24 项发现（F1-F9、N1-N15），全部闭环。审查侧对"无需改动"的正面确认（adapter 负向提示词自动兜底、`AssetPlanV2` 无阻塞）也一并有据留档。进入 implementation plan 的障碍不变：终审确认 + §3.4 三候选决策。
