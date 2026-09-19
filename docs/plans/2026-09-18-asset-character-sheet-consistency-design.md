@@ -22,7 +22,7 @@
 | manifest 侧存在与 `AssetTaskType` **平行的内联枚举**：`AssetTaskExecution.task_type`（z.enum） | `shared/src/assets/asset-manifest-v1.schema.ts` L360（外部审查发现，T1 必须两处同步加值） |
 | 生图 adapter 为纯文生图：`DashScopeImageInput` 仅 model/prompt/negativePrompt/size/n，无图像输入字段；wan2.6 路径 content 仅 `[{text}]` | `backend/src/modules/assets/providers/dashscope/dashscope-image-provider.ts` |
 | 生图 provider 已具备完整异步链路：submit 携带 `X-DashScope-Async: enable`（L197）→ `poll`（L220-266，默认 3s 间隔）→ `download`（L278，产物本地物化）；wan2.6 端点 `/api/v1/services/aigc/image-generation/generation`（L93）与图像生成编辑 API 同族 | 同上（自审已逐行核实） |
-| **资产级** validator 对 null-segment 任务有结构性容忍：路由覆盖按 `task.source_segment_id && VISUAL_TASK_TYPES.has(...)` 条件收集（L133），bgm/sfx 为既有无 segment 任务先例（L45-46），逐段产物检查显式跳过无 segment 任务（L170）。**注意：该容忍不适用于计划级 validator**——`asset-planning-local-validator.ts:34-40` 的 `NULL_SEGMENT_ALLOWED_TASK_TYPES` 只含 tts/subtitle/sfx/bgm 四类，sheet 的 null segment 必报 `asset_task_source_segment_invalid`，且为三条硬失败路径（见 §3.7 第 7 项，外部审查 N12） | 资产级：`backend/src/modules/assets/assets-local-validator.ts`；计划级：`backend/src/modules/asset-planning/asset-planning-local-validator.ts` |
+| **资产级** validator 对 null-segment 任务有结构性容忍：路由覆盖按 `task.source_segment_id && VISUAL_TASK_TYPES.has(...)` 条件收集（L133），bgm/sfx 为既有无 segment 任务先例（L45-46），逐段产物检查显式跳过无 segment 任务（L170）。**注意：该容忍不适用于计划级 validator**——`asset-planning-local-validator.ts:35-40` 的 `NULL_SEGMENT_ALLOWED_TASK_TYPES` 只含 tts/subtitle/sfx/bgm 四类，sheet 的 null segment 必报 `asset_task_source_segment_invalid`，且为三条硬失败路径（见 §3.7 第 2 项，外部审查 N12） | 资产级：`backend/src/modules/assets/assets-local-validator.ts`；计划级：`backend/src/modules/asset-planning/asset-planning-local-validator.ts` |
 | 生图模型名可配（env `ALIYUN_DASHSCOPE_TEXT_TO_IMAGE_MODEL`，默认 `wan2.6-t2i`），provider 经注册表接入并受付费闸门约束 | `backend/src/modules/assets/assets-run.service.ts` L372-374、L511-527 |
 | 已有"取 manifest 中 image artifact → base64 → 供应商参考图输入"的通路先例（图生视频消费 segment 锚点图） | `backend/src/modules/assets/providers/autodl/autodl-image-to-video-provider.ts`（取图 L54-55、本地文件转 base64 L59-62、`ref_image_0` 注入 L82；外部审查行号修正） |
 | 引擎按 `TASK_TYPE_PRIORITY` 单趟顺序执行；产物完成即并入演进中的 manifest 副本，同 run 后续任务可见 | `backend/src/modules/assets/assets-execution-engine.ts` L29-37、L88-93、L352-359 |
@@ -66,7 +66,7 @@
 - **同步加值第二处枚举**：`asset-manifest-v1.schema.ts` L360 的 `AssetTaskExecution.task_type` 内联枚举与 `AssetTaskType` 相互独立，漏改会使 manifest 解析对 sheet execution 硬失败（而非降级）。注意 `AssetTask` 的 refine 要求非豁免类型必有 `prompt_draft`——sheet 由 §3.2 模板满足，实现时不可省。
 - 备选方案是复用 `image_still` + `parameters` 自由约定。不采用：会让"哪些任务是 sheet"散落在约定里，validator、manifest 消费者与前端无法类型化区分，违背本项目 strict 合同风格。枚举加值是加法演进，不改既有字段结构。
 - artifact 侧：`artifact_type` 仍为 `"image"`，metadata 以 passthrough 附带 `character_id`、`sheet_role: "character_sheet"`、`provider_model`。"渲染与既有消费者零感知"是**有条件结论**（外部审查 N6）：成立当且仅当下一行的路由豁免在实现期被单测锁死——四个图像消费者（cover.service、remotion-input-builder、autodl i2v、engine fallback 决策）全部走 segment route / compose timeline 取图，sheet 不进任何 route 就无人可见。
-- sheet 任务 `manual_upload_policy` 固定 `{ required: false, allowed: true, accepted_file_types: ["image/png", "image/jpeg"] }`（外部审查 N2+N7）：① validator 在进入类型白名单判断**之前**就有 `if (task.manual_upload_policy.required) return false` 提前返回（`assets-local-validator.ts:31-33`），required=true 会使 §3.5 的白名单豁免整体失效、"不传染"再次破产；② 手动上传有三道闸门，第二道 MIME 校验（`assets-run.service.ts:1582-1588`）读 `accepted_file_types`，而该字段 schema 默认是**空数组**（`asset-plan-v1.schema.ts:97/101`）——不显式写入就是"入口开放、提交必败"（恒 422 `asset_manual_upload_type_not_allowed`），故按 `asset-plan-intent-compiler.ts:297` 的 image_still 先例显式给类型清单；③ allowed=true 的 artifact 类型安全性由 §3.7 第 3 处的 case 补齐保障（与 policy 同一原子提交落地，见 §6 N9）。
+- sheet 任务 `manual_upload_policy` 固定 `{ required: false, allowed: true, accepted_file_types: ["image/png", "image/jpeg"] }`（外部审查 N2+N7）：① validator 在进入类型白名单判断**之前**就有 `if (task.manual_upload_policy.required) return false` 提前返回（`assets-local-validator.ts:31-33`），required=true 会使 §3.5 的白名单豁免整体失效、"不传染"再次破产；② 手动上传有三道闸门，第二道 MIME 校验（`assets-run.service.ts:1582-1588`）读 `accepted_file_types`，而该字段 schema 默认是**空数组**（`asset-plan-v1.schema.ts:97/101`）——不显式写入就是"入口开放、提交必败"（恒 422 `asset_manual_upload_type_not_allowed`），故按 `asset-plan-intent-compiler.ts:297` 的 image_still 先例显式给类型清单；③ allowed=true 的 artifact 类型安全性由 §3.7 第 4 项的 case 补齐保障（与 policy 同一原子提交落地，见 §6 N9）。
 - 路由豁免：`applyArtifactRoutes` 对 `character_sheet` 任务直接跳过 segment route 写入——sheet 是参考资产，绝不进入任何 segment 的 primary/fallback 视觉位。
 
 ### 3.2 生成时机与阈值（决策 D2）
@@ -132,10 +132,10 @@
 
 ### 3.7 task_type 分支面清单（外部审查 F4，T1-T4 逐处覆盖）
 
-按 task_type 分支/枚举的代码点共 **10 个**（归并为 8 类；第四轮 N4 修正计数、第五轮 N12/N13 增补），任一遗漏的后果已逐处核实：
+按 task_type 分支/枚举的代码点共 **10 个**（归并为 8 类；第三轮 N4 修正计数、第五轮 N12/N13 增补），任一遗漏的后果已逐处核实：
 
 1. `asset-manifest-v1.schema.ts:360` 平行内联枚举——漏改 = manifest 解析硬失败（T1）；
-2. `asset-planning-local-validator.ts:34-40` 计划级 null-segment 白名单 `NULL_SEGMENT_ALLOWED_TASK_TYPES` 不含 character_sheet——漏改 = sheet 一编译即报 `asset_task_source_segment_invalid`，且是**三条硬失败路径**（编译器 `fail`，`asset-plan-intent-compiler.ts:481-483`；run service 抛 `AssetPlanCompilerInvariantError`，`asset-planning-run.service.ts:1042-1049`；资产阶段 `narration-manifest-importer.ts:18-21` 对存储 plan 无条件校验抛 `narration_manifest_plan_invalid`）——**默认链路（口播前置）一张 sheet 都产不出来**，最高危，与 T1 compiler 改动同一原子提交（外部审查 N12）；
+2. `asset-planning-local-validator.ts:35-40` 计划级 null-segment 白名单 `NULL_SEGMENT_ALLOWED_TASK_TYPES` 不含 character_sheet——漏改 = sheet 一编译即报 `asset_task_source_segment_invalid`，且是**三条硬失败路径**（编译器 `fail`，`asset-plan-intent-compiler.ts:481-483`；run service 抛 `AssetPlanCompilerInvariantError`，`asset-planning-run.service.ts:1042-1049`；资产阶段 `narration-manifest-importer.ts:18-21` 对存储 plan 无条件校验抛 `narration_manifest_plan_invalid`）——**默认链路（口播前置）一张 sheet 都产不出来**，最高危，与 T1 compiler 改动同一原子提交（外部审查 N12）；
 3. `provider-type-map.ts` `TASK_TYPE_TO_PROVIDER_TYPE` 无 character_sheet——`taskTypeToProviderType` 返回 null、`isProviderTypeEnabled` 对未知类型放行（fail-open），sheet 绕过"provider 类型未启用 → 转人工上传"语义（已核实 L1-25；T4）；
 4. `assets-run.service.ts:586` `allowedArtifactTypesForTask` switch **无 default 分支**——漏改 = sheet 手动上传路径 `allowedArtifactTypes.includes(...)`（L1590-1591）抛 TypeError/500，而 §5 恰好要求 sheet 可手动重生成/accept（T1，与 manual_upload_policy 原子提交，见 §6 N9）；
 5. `measuredUnitsForTask`——见 §3.4 计费项（T3）；
@@ -221,9 +221,21 @@ T1 shared schema + compiler（**两处**任务类型枚举 + enrichment 联合�
 
 第四轮外部审查在系统扫描全部任务类型字面量清单后提出 N12–N15，本轮逐条核实后全部采信；其中 N12/N13 为高严重度接入面遗漏，审查自认前三轮同样漏检：
 
-- **N12 证实（最高危）**：计划级 `NULL_SEGMENT_ALLOWED_TASK_TYPES` 只含四类（`asset-planning-local-validator.ts:34-40`），sheet 的 null segment 必报错；三条硬失败路径全部核实（编译器 `fail` L481-483、run service `AssetPlanCompilerInvariantError` L1042-1049、importer 对存储 plan 无条件校验 L18-21）——默认链路（口播前置）落地即全局红。§1.2 第 6 行的泛化表述收窄为"仅资产级 validator 成立"；白名单加入 §3.7 第 2 项并移入 T1 原子提交。正面确认一并采纳：`SegmentAssetIntentKind` 为独立枚举、`AssetPlanV2` 不约束 null segment——sheet 不能复用 `createTask`，T1 写明需新构造器补齐必填字段。
+- **N12 证实（最高危）**：计划级 `NULL_SEGMENT_ALLOWED_TASK_TYPES` 只含四类（`asset-planning-local-validator.ts:35-40`），sheet 的 null segment 必报错；三条硬失败路径全部核实（编译器 `fail` L481-483、run service `AssetPlanCompilerInvariantError` L1042-1049、importer 对存储 plan 无条件校验 L18-21）——默认链路（口播前置）落地即全局红。§1.2 第 6 行的泛化表述收窄为"仅资产级 validator 成立"；白名单加入 §3.7 第 2 项并移入 T1 原子提交。正面确认一并采纳：`SegmentAssetIntentKind` 为独立枚举、`AssetPlanV2` 不约束 null segment——sheet 不能复用 `createTask`，T1 写明需新构造器补齐必填字段。
 - **N13 证实**：fake `canHandle` 只认 image_still（`fake-image-provider.ts:19`），叠加 engine 非 video 无适配器静默 continue（L140-162）与 §3.5 白名单，冒烟会假绿。§4-2 改为强断言（sheet execution=completed 且有 image artifact，不依赖 fake 硬编码 metadata 尺寸），fake 交付项写入 T5。
 - **N14 认领（我方连带遗漏）**：§3.7 第 4 项标签 (T4)→(T1)，与第四轮 N9 的原子提交决策对齐。
 - **N15 认领**：§8 括注轮次口径统一为"第 N 轮提出 / 第 M 轮修订"。
 
 五轮累计 24 项发现（F1-F9、N1-N15），全部闭环。审查侧对"无需改动"的正面确认（adapter 负向提示词自动兜底、`AssetPlanV2` 无阻塞）也一并有据留档。进入 implementation plan 的障碍不变：终审确认 + §3.4 三候选决策。
+
+### 第六轮审查修订与循环终止（2026-09-18，N16–N18）
+
+第五轮外部审查确认 N12–N15 落点全部准确（含 `git diff` 逐行核对与交叉引用 grep），另提出 N16–N18，本轮全部采信：
+
+- **N16 认领（我方连带遗漏，六轮中最后一处影响实施正确性的缺陷）**：第五轮重写 §3.7 清单插入新第 2 项后，两处正文指针未同步——§1.2 的"§3.7 第 7 项"改为"**第 2 项**"（旧指针会把实施者引向 fake provider 而漏掉最高危的计划级白名单），§3.1 的"§3.7 第 3 处"改为"**第 4 项**"（旧指针会按 T4 执行 case，重新制造 N9/N14 要消除的中间态手动上传 500）。
+- **N17 采纳**：§3.7 表头"第四轮 N4 修正计数"改为"第三轮 N4 修正计数"，对齐"第 N 轮提出 / 第 M 轮修订"口径。
+- **N18 采纳**：`NULL_SEGMENT_ALLOWED_TASK_TYPES` 行号三处统一为 L35-40（L34 为空行）。
+
+审查侧正面确认一并留档：`NULL_SEGMENT_ALLOWED_TASK_TYPES` 全库仅一处使用，白名单加值为最小无副作用改动；计划级 `VISUAL_TASK_TYPES` 不含 sheet 无需动作（与共享 schema 的 `risk_notes` 语义一致）。
+
+**审查—整改循环至此终止**（双方一致：第六轮起增量仅剩编号与措辞级）。六轮累计 27 项发现（F1-F9、N1-N18）全部闭环；方案骨架（D1-D5、三候选、10 个分支面/8 类）自第三轮起未被任何一轮推翻。后续评审对象移交 **implementation plan 本身**：其第一项为 §3.4 三候选决策（对象：`assets-run.service.ts:511-529` 注册期单模型构造与 `provider-dispatch-gate.ts` 三元组闸门），第一条硬约束为 §6 的 T1 原子提交范围。
