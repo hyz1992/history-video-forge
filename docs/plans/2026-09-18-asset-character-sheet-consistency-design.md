@@ -66,7 +66,7 @@
 - **同步加值第二处枚举**：`asset-manifest-v1.schema.ts` L360 的 `AssetTaskExecution.task_type` 内联枚举与 `AssetTaskType` 相互独立，漏改会使 manifest 解析对 sheet execution 硬失败（而非降级）。注意 `AssetTask` 的 refine 要求非豁免类型必有 `prompt_draft`——sheet 由 §3.2 模板满足，实现时不可省。
 - 备选方案是复用 `image_still` + `parameters` 自由约定。不采用：会让"哪些任务是 sheet"散落在约定里，validator、manifest 消费者与前端无法类型化区分，违背本项目 strict 合同风格。枚举加值是加法演进，不改既有字段结构。
 - artifact 侧：`artifact_type` 仍为 `"image"`，metadata 以 passthrough 附带 `character_id`、`sheet_role: "character_sheet"`、`provider_model`。"渲染与既有消费者零感知"是**有条件结论**（外部审查 N6）：成立当且仅当下一行的路由豁免在实现期被单测锁死——四个图像消费者（cover.service、remotion-input-builder、autodl i2v、engine fallback 决策）全部走 segment route / compose timeline 取图，sheet 不进任何 route 就无人可见。
-- sheet 任务 `manual_upload_policy` 固定 `{ required: false, allowed: true }`（外部审查 N2）：validator 在进入类型白名单判断**之前**就有 `if (task.manual_upload_policy.required) return false` 提前返回（`assets-local-validator.ts:31-33`），required=true 会使 §3.5 的白名单豁免整体失效、"不传染"再次破产；allowed=true 保留用户自约定妆图能力（其类型安全性由 §3.7 第 3 处的 case 补齐保障）。
+- sheet 任务 `manual_upload_policy` 固定 `{ required: false, allowed: true, accepted_file_types: ["image/png", "image/jpeg"] }`（外部审查 N2+N7）：① validator 在进入类型白名单判断**之前**就有 `if (task.manual_upload_policy.required) return false` 提前返回（`assets-local-validator.ts:31-33`），required=true 会使 §3.5 的白名单豁免整体失效、"不传染"再次破产；② 手动上传有三道闸门，第二道 MIME 校验（`assets-run.service.ts:1582-1588`）读 `accepted_file_types`，而该字段 schema 默认是**空数组**（`asset-plan-v1.schema.ts:97/101`）——不显式写入就是"入口开放、提交必败"（恒 422 `asset_manual_upload_type_not_allowed`），故按 `asset-plan-intent-compiler.ts:297` 的 image_still 先例显式给类型清单；③ allowed=true 的 artifact 类型安全性由 §3.7 第 3 处的 case 补齐保障（与 policy 同一原子提交落地，见 §6 N9）。
 - 路由豁免：`applyArtifactRoutes` 对 `character_sheet` 任务直接跳过 segment route 写入——sheet 是参考资产，绝不进入任何 segment 的 primary/fallback 视觉位。
 
 ### 3.2 生成时机与阈值（决策 D2）
@@ -110,7 +110,7 @@
 | (c) 派生行为（审查建议，零合同变更） | 不新增模型位：开关关闭时与现状逐字一致；开关开启时**要求该 run 快照冻结的 image 模型自身支持参考图**，不满足则 prepare 记 note 降级纯文本锚点 | 完全不碰快照合同与闸门；**适用前提**：冻结模型须支持无参考图调用——wan2.7-image 支持 0~9 图 ✓；wan2.6-image 编辑模式强制 1~4 图 ✗，冻结为 wan2.6-image 时开关实际不可用、只能降级。生效场景下分镜图本就由用户选定的参考模型生成，画面观感变化源于模型选择而非开关 |
 
 若把单实例 canHandle 简单扩成兼收两类任务且固定参考模型，等于把该 run 全部分镜图翻转到参考图模型，违反 §2 非目标并使 §3.6 成本估算失效。
-- **sheet 自身定妆图走 t2i 模型位**（wan2.6-t2i 现状，或 wan2.7-image 无图输入路径）；wan2.6-image 编辑模式强制要求 1~4 张参考图，**不能用于 sheet 自身生成**——参考模型位仅服务第 ③ 类调用。候选目录新增 `wan2.7-image` 与 `wan2.6-image`，readiness 分层校验照常。
+- **模型归属随候选而定（外部审查 N11，修正口径）**：候选 (a)/(b) 下存在两个槽位——①② 走 t2i 位（wan2.6-t2i 现状），③ 走参考位（wan2.6-image / wan2.7-image），wan2.6-image 编辑模式强制 1~4 图、不能服务 ①②；候选 (c) 下只有**一个**冻结模型，① 与 ③ 同模型，该模型必须同时支持 0 图调用与参考图调用（当前即 wan2.7-image）。候选目录新增 `wan2.7-image` 与 `wan2.6-image`，readiness 分层校验照常。T2 决策时不得按"存在独立 t2i 位"的预设实现 (c)。
 - **计费有静默丢失缺口（外部审查 F2）**：`measuredUnitsForTask`（engine L469）现仅覆盖 tts_audio/image_still/video_clip，default 返回 null，且 L420-421 对 null 提前 return——不新增 case 则 sheet 的账单静默消失（成本面板不可见）。必须新增与 image_still 同构的 `case "character_sheet"`（unitType "image"、count 1），列为 T3 明确交付项；billing 声明与 attempt 级幂等记账结构照旧。
 
 ### 3.5 失败降级矩阵
@@ -123,6 +123,7 @@
 | sheet 产物被用户 reject | 同上，后续分镜图回退文本锚点 |
 | 分镜图注入参考图后生成失败 | 按既有任务失败语义处理，不额外重试参考图 |
 | 参考图文件缺失/超限（>10MB 等） | prepare 阶段降级为纯文本锚点并记 note，不失败 |
+| 冻结模型不支持参考图输入（候选 (c)，如冻结为 wan2.6-t2i） | 该 run 整体静默降级为文本锚点，但**必须可见**：资产面板开关状态与运行事件须明示"当前模型不支持参考图，本次未注入"——防止用户打开开关却以为功能失效（外部审查 N8） |
 
 ### 3.6 开关与成本控制（决策 D5）
 
@@ -166,7 +167,7 @@
 
 **T1 前置（外部审查 N3，已复现）**：`npm run typecheck:backend` 基线当前为红——既有报错 `backend/src/modules/narration/narration-timing-normalizer.ts:270` TS18048（与本设计无关的已提交代码）。strict 模式下 `allowedArtifactTypesForTask` 补 case 后的非穷尽 switch 会成为类型错误，是六类分支点中最可靠的编译期信号，只有干净基线该信号才可信；T1 开工前先修掉该报错或显式立项处理。
 
-T1 shared schema + compiler（**两处**任务类型枚举 + enrichment 联合类型；阈值编译；parameters 注入关系；sheet `manual_upload_policy` 固定 required:false）→ T2 dashscope image adapter（三值端点/形态分支 + 参考图形态）+ §3.4 模型位路由机制决策与实现（候选 a/b 各自的闸门/快照/合同代价计入本任务）→ T3 engine 优先级/路由豁免/prepare 注入与降级 + `measuredUnitsForTask` case → T4 validator 可选不完备白名单（单测覆盖 required 两分支）+ provider-type-map 映射 + `allowedArtifactTypesForTask` case + 成本估算清单 + 前端面板展示 → T5 fake runtime 冒烟 → T6 live check（显式授权，含画幅对照）。每个任务独立验证、独立中文提交；T1-T3 之间不得跳跃合并。
+T1 shared schema + compiler（**两处**任务类型枚举 + enrichment 联合类型；阈值编译；parameters 注入关系；sheet `manual_upload_policy` 固定 `{required:false, allowed:true, accepted_file_types:["image/png","image/jpeg"]}`——**与 `allowedArtifactTypesForTask` 的 character_sheet case 同一原子提交**，policy 先落地而 case 缺位会造成中间态手动上传 500，外部审查 N9）→ T2 dashscope image adapter（三值端点/形态分支 + 参考图形态）+ §3.4 模型位路由机制决策与实现（**候选 a/b/c**；a/b 各自的闸门/快照/合同代价计入本任务）→ T3 engine 优先级/路由豁免/prepare 注入与降级 + `measuredUnitsForTask` case → T4 validator 可选不完备白名单（单测覆盖 required 两分支）+ provider-type-map 映射 + 成本估算清单 + 前端面板展示 → T5 fake runtime 冒烟 → T6 live check（显式授权，含画幅对照）。每个任务独立验证、独立中文提交；T1-T3 之间不得跳跃合并。
 
 ---
 
@@ -187,7 +188,7 @@ T1 shared schema + compiler（**两处**任务类型枚举 + enrichment 联合�
 
 ## 8. 外部审查修订（2026-09-18，第二轮）
 
-外部审查对初稿+第一轮自审做 12 条引用逐条核对与 3 条调用链追踪：10/12 引用准确、1 条结论错误（validator 容忍性的适用范围只限路由覆盖，不含完成度门禁）、2 条行号漂移；第一轮自审"无方案级缺陷"表述被推翻。本轮对审查关键断言逐条抽查——终态集合（validator L13-17）、可选白名单（L22-48）、measuredUnits（engine L420-421/L469/L545）、canHandle（L154）、isWan26Model（L49-51）、manifest 平行枚举（L360）、allowedArtifactTypesForTask 无 default（L586）、provider-type-map fail-open、autodl/enrichment 行号漂移——**抽查 10 处全部证实**，据此完成 §1.2/§3.1/§3.4/§3.5/§3.7/§4/§5/§6 修订，并对 F3 补充了审查未展开的第三层事实（注入目标本是 image_still，②③同类任务的现场分流是机制设计核心难点，见 §3.4）。文档维持"待评审"；进入 implementation plan 的前置条件为终审确认本修订，且 §3.4 模型位路由机制（候选 a/b）须在 implementation plan 中先行决策。
+外部审查对初稿+第一轮自审做 12 条引用逐条核对与 3 条调用链追踪：10/12 引用准确、1 条结论错误（validator 容忍性的适用范围只限路由覆盖，不含完成度门禁）、2 条行号漂移；第一轮自审"无方案级缺陷"表述被推翻。本轮对审查关键断言逐条抽查——终态集合（validator L13-17）、可选白名单（L22-48）、measuredUnits（engine L420-421/L469/L545）、canHandle（L154）、isWan26Model（L49-51）、manifest 平行枚举（L360）、allowedArtifactTypesForTask 无 default（L586）、provider-type-map fail-open、autodl/enrichment 行号漂移——**抽查 10 处全部证实**（注：其中 L13-17 引用当时偏移 3 行，第三轮 N5 修正为 L16-20；"候选 a/b"的范围第三轮 N10 扩展为 a/b/c——历史记录保留原貌，以括注为准），据此完成 §1.2/§3.1/§3.4/§3.5/§3.7/§4/§5/§6 修订，并对 F3 补充了审查未展开的第三层事实（注入目标本是 image_still，②③同类任务的现场分流是机制设计核心难点，见 §3.4）。文档维持"待评审"；进入 implementation plan 的前置条件为终审确认本修订，且 §3.4 模型位路由机制须在 implementation plan 中先行决策。
 
 ### 第三轮审查修订（2026-09-18，N1–N6）
 
@@ -201,3 +202,15 @@ T1 shared schema + compiler（**两处**任务类型枚举 + enrichment 联合�
 - **N6 采纳**：§3.1"零感知"改写为以路由豁免单测为前提的条件式结论。
 
 至此本设计进入 implementation plan 的障碍仅剩：终审确认 + §3.4 三候选决策。
+
+### 第四轮审查修订（2026-09-18，N7–N11）
+
+第三轮外部审查确认 N1–N6 落点全部准确（含逐行复核），另提出 N7–N11，本轮核实后全部采信：
+
+- **N7 证实**：手动上传有三道闸门（`assets-run.service.ts:1574` allowed/required → `L1582-1588` MIME → `L1590-1596` artifact 类型），`ManualUploadPolicy.accepted_file_types` schema 默认**空数组**（`asset-plan-v1.schema.ts:97/101`）——初稿只写 `allowed:true` 会出现"入口开放、提交必败"（恒 422 `asset_manual_upload_type_not_allowed`）。§3.1 合同补 `accepted_file_types: ["image/png","image/jpeg"]`，按 `asset-plan-intent-compiler.ts:297` 的 image_still 先例。
+- **N11 采纳（我方引入的口径冲突）**：§3.4"t2i 模型位/参考模型位"句式是 N1 重写前的遗留表述，与候选 (c) 单模型前提冲突——(c) 下 ① 与 ③ 同为冻结模型；改为随候选而定的口径，并警示 T2 不得按"存在独立 t2i 位"的预设实现 (c)。
+- **N8 采纳**：§3.5 降级矩阵新增"冻结模型不支持参考图输入"行，要求资产面板/运行事件可见提示，消除候选 (c)"开关打开但静默降级"的 UX 陷阱。
+- **N9 采纳**：`allowedArtifactTypesForTask` case 从 T4 移入 T1，与 manual_upload_policy 同一原子提交，消除 T1→T4 之间的中间态手动上传 500。
+- **N10 采纳**：§8 第二轮记录加括注（L13-17 当时偏移、候选范围后续扩展），§6 T2 候选范围改为 a/b/c。
+
+四轮审查累计 20 项发现（F1-F9、N1-N11），全部闭环。进入 implementation plan 的障碍仍为：终审确认 + §3.4 三候选决策。
