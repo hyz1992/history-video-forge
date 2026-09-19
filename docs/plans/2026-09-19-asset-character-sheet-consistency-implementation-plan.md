@@ -20,7 +20,7 @@
 
 代价（已写入设计 §3.4/§3.6，随开关文案明示）：仅对冻结模型为 wan2.7-image 的项目实际生效（wan2.6-image 不支持 0 图调用、wan2.6-t2i 不支持参考图）。
 
-**外部事实状态（实施计划审查 P2）**：wan2.7-image 的异步通道在官方 API 参考中有明确记载——本会话内对 [万相-图像生成与编辑2.7 API 参考](https://help.aliyun.com/zh/model-studio/wan-image-generation-and-editing-api-reference) 的抓取含端点节：异步建任务 `POST /api/v1/services/aigc/image-generation/generation` + 请求头 `X-DashScope-Async: enable`、查询 `GET /api/v1/tasks/{task_id}`，与现有 provider 代码同族；文档代码示例为 SDK 同步形态，与 REST 异步通道并存（文档级确认已具备）。**运行级确认**并入 T6 第一步：真实付费前先以最小请求验证异步建任务+轮询可用；不符则触发 §0.1 回退条款（改选 (a)/(b)，参考模型位换 wan2.6-image），已列入 §2 风险。
+**外部事实状态（实施计划审查 P2，第二轮 PP1/PP5 修订）**：wan2.7-image 的异步通道在官方 API 参考中有明确记载——本会话内对 [万相-图像生成与编辑2.7 API 参考](https://help.aliyun.com/zh/model-studio/wan-image-generation-and-editing-api-reference) 的抓取含端点节：异步建任务 `POST /api/v1/services/aigc/image-generation/generation` + 请求头 `X-DashScope-Async: enable`、查询 `GET /api/v1/tasks/{task_id}`，与现有 provider 代码同族；文档代码示例为 SDK 同步形态，与 REST 异步通道并存（文档级确认已具备，第二轮审查独立抓取官方页面再次证实）。**运行级确认为 T2 的验收前置**（PP1：排在 T6 太晚，失败时回退的返工面会放大到 T2-T5；最小付费请求约 0.2 元），且一次请求同时验证 **主机 + 端点路径 + 异步头 + 轮询**（PP5：官方页面端点写作工作区级主机 `https://{WorkspaceId}.cn-beijing.maas.aliyuncs.com`，本仓库 adapter 默认 `https://dashscope.aliyuncs.com`——标准主机已跑通 wan2.6 image-generation 与 wan2.7 系 i2v 异步端点，但 wan2.7-image 文生图未针对核实）。确认失败即触发回退条款（改选 (a)/(b)，参考模型位换 wan2.6-image），已列入 §2 风险。
 
 若终审改选 (a)/(b)：T2 范围重估，双模型过闸门 / 快照与 schema 扩展的代价计入 T2，其余任务不受影响。
 
@@ -76,6 +76,8 @@
 
 验证：单测——三值分支的 endpoint/请求体/参数断言（含 wan2.7 不落 text2image 端点）、注入/降级两分支、参考图 base64 编码、`n` 强制覆盖。
 
+**验收前置（PP1+PP5，费用单独报批）**：一次最小真实付费请求（约 0.2 元）同时验证 wan2.7-image 的**主机可达性**（标准主机 `dashscope.aliyuncs.com` vs 官方页面工作区级主机）、端点路径、`X-DashScope-Async: enable` 异步建任务与 `GET /tasks` 轮询。未通过该验证不得声称 T2 完成；失败即触发 §0.1 回退条款。
+
 提交：`dashscope生图支持参考图形态与wan2.7三分支（T2）`。
 
 ### T3 执行引擎接线
@@ -85,7 +87,7 @@
 1. 排序语义验证：`character_sheet: 1.5` 键已在 T1 补齐（P1），本任务验证 sheet 先于分镜图执行；
 2. `applyArtifactRoutes` 对 character_sheet 任务跳过 segment route 写入——**双保险之一**（实施计划审查 P6：sheet `source_segment_id = null` 本就命中不了 route find；真正门禁是"segment_routes 无 sheet artifact 痕迹"单测断言，若未来给 sheet 填了 segment，断言会先红）；
 3. `measuredUnitsForTask` 加 `case "character_sheet"`（与 image_still 同构：unitType image、count 1）——缺失则账单静默丢失（F2）；
-4. **无注入价值时不生成（实施计划审查 P4）**：冻结模型不具备参考图能力（候选 (c) 下非 wan2.7-image）时，character_sheet 任务直接置 `skipped_with_fallback`（该状态在 validator 终态白名单内，不阻塞完成度）——不派发、不计费、note 与面板事件可见；能力判定与 image adapter 的模型同源（run 快照 image 槽）。此项替代"生成后仅降级提示"，消除"模型不支持参考图仍照常计费生成永不被注入的 sheet"的纯浪费，直接服务设计目标 3。
+4. **无注入价值时不生成（实施计划审查 P4，判定规则 PP2）**：确知冻结模型不具备参考图能力（候选 (c) 下非 wan2.7-image）时，character_sheet 任务直接置 `skipped_with_fallback`（该状态在 validator 终态白名单内，不阻塞完成度）——不派发、不计费、note 与面板事件可见；此项替代"生成后仅降级提示"，消除"模型不支持参考图仍照常计费生成永不被注入的 sheet"的纯浪费，直接服务设计目标 3。**判定规则（PP2，缺一不可）**：(a) 判定源二选一——按付费闸门既有模式读快照（`db.generationRuns.get(assetRunId)` + `runConfigurationSnapshots` 取 `resolvedCapabilities["image.generate"].model_id`，`runAdapterPipeline:209-211` 即此模式），或从已解析 image adapter 读 `billing.modelId`（注意本地/fake adapter 无 `billing`）；(b) **信息缺失时必须 fail-open（按具备能力处理）**——fake/local 路径可能无 billing、无快照，若缺信息即置 skipped，T5 断言 ② 永远跑不到，假绿防线自身假绿；**只有确知不支持时才置 skipped**。前端 `skipped_with_fallback` 标签带"降级"语义，本场景靠 note 澄清"模型不具备该能力，未生成"（审查确认全库 8 处消费方无语义冲突，不新增状态枚举）。
 
 验证：单测——排序（sheet 先于分镜图）、路由豁免（segment_routes 无 sheet artifact 痕迹）、记账 case 命中；视频依赖检查不受影响的回归。
 
@@ -110,7 +112,7 @@
 
 改动文件与要点：
 
-- `backend/src/modules/assets/providers/fake-image-provider.ts`：`canHandle` 加 character_sheet；prepare 回显"收到参考图"标记；metadata 尺寸对齐横版（现硬编码 1080×1920）或断言不依赖它；
+- `backend/src/modules/assets/providers/fake-image-provider.ts`：`canHandle` 加 character_sheet；prepare 回显"收到参考图"标记；metadata 尺寸对齐横版（现硬编码 1080×1920）或断言不依赖它；`createFakeImageProvider` 加**可选能力入参**（模型名/参考能力声明，现无参）——支撑断言 ⑥ 注入"不支持参考图"形态（PP3）；
 - harness 冒烟入口（复用既有骨架惯例，命名如 `harness:assets-character-sheet-smoke`）：**强断言**——① `character_sheet` execution 状态 completed 且产出 image artifact；② 被注入的分镜图任务 prepare 收到参考图标记；③ 降级路径：sheet 置 failed 后分镜图仍 completed（文本锚点）；④ 开关关闭时 run 行为与现状逐字一致；⑤ **局部重跑场景**（P3 防线）：首跑完成后仅对单个分镜任务重新生成，仍注入参考图——此时工作 manifest"有 sheet artifact、无 sheet execution"，execution 级查找会在此静默失效；⑥ 模型不支持参考图时 sheet 为 `skipped_with_fallback` 且零计费（P4）。
 
 验证：`npx vitest run --configLoader runner --no-file-parallelism`（涉写库场景）；冒烟 0 failed。
@@ -119,10 +121,10 @@
 
 ### T6 live check（显式授权，单独报批）
 
-- 第一步（P2 运行级确认）：以最小请求验证 wan2.7-image 异步建任务（`X-DashScope-Async: enable`）+ `GET /tasks` 轮询真实可用；不符即触发 §0.1 回退条款，不进入后续付费步骤；
 - 范围：真实项目选 1 个高出场角色 → sheet 1 张（16:9 与 9:16 各一张画幅对照）→ 引用它的分镜图 2~3 张；同步 wan2.6-image vs wan2.7-image 效果/单价对照；
 - 记录：request id、耗时、实际单价、失败模式、一致性人工比对结论 → `docs/records/`；
 - 骨架与命名：复用既有 `harness:assets-dashscope-live-check` 骨架（`harness/scripts/runtime/assets-dashscope-live-check.ts`），命名 `harness:assets-character-sheet-live-check`（P7）；
+- 前置：wan2.7-image 异步运行级确认已作为 T2 验收前置完成（PP1），本任务在其之上做完整的画幅/单价/一致性对照；
 - 门禁：效果与成本达标后才评估开关默认值翻转为开；不达标则开关保持关闭，文本锚点为常态，T2 的参考图能力留作未来复用。
 
 ---
@@ -130,7 +132,7 @@
 ## §2 风险与回滚
 
 - 主回滚面：开关关闭 = 现状逐字一致；legacy 编译模式不产 sheet；
-- 决策回退条款（P2）：T6 第一步运行级确认 wan2.7-image 异步通道不可用时，§0.1 回退候选 (a)/(b)，参考模型位换 wan2.6-image（其异步链路与现有代码同族已核实），T2 重估；
+- 决策回退条款（P2/PP1）：T2 验收前置的运行级确认（主机/端点/异步头/轮询）失败时，§0.1 回退候选 (a)/(b)，参考模型位换 wan2.6-image（其异步链路与现有代码同族已核实），T2 重估；
 - 一致性效果不达标（§设计 §5 最高风险）：止步于文本锚点增强，T2 adapter 扩展可复用；
 - 中间态防护：T1 原子提交（缺白名单=全局红、缺 case=上传 500、缺 PRIORITY 键=编译红）；T0 保证编译期信号可信；
 - 顺带核实项（第五/六轮审查标低置信）：`assets-run.service.ts:1783`、`assets.routes.ts:339` 在 T4 实施时顺手复核；`global_prompt_prefix` 执行断链**已经实施计划审查核实为真**（生图路径无消费方），留独立任务修复，不混入本计划提交。
@@ -139,6 +141,14 @@
 
 1. 开关开启 + 冻结 wan2.7-image：高出场角色产出 1 张 sheet，其命中分镜图注入参考图，跨图一致性人工认可（T6）；
 2. 开关关闭：全链路行为与现状逐字节等价（T5 断言 ④）；
-3. sheet 失败/拒绝/模型不支持：分镜图照常、项目不 `assets_blocked`、费用可见（T3/T4/T5）；
+3. sheet 失败/拒绝：分镜图照常、项目不 `assets_blocked`，已发生费用在成本清单可见（T3/T4/T5）；模型不支持参考图：sheet 为 `skipped_with_fallback`、**零计费**，面板/note 可见"模型不具备该能力，未生成"（T3/T5）；
 4. 账本：sheet 计费入 `image.generate` attempt 级幂等记账，成本清单可见（T3）；
 5. 全程 `npm run typecheck:backend` 0 error（T0 后持续）。
+
+---
+
+## §4 审查记录
+
+- **第一轮（P1–P7）**：T1 原子范围漏 `TASK_TYPE_PRIORITY` 键（P1，唯一会被 T1 打破的编译期消费者）、注入查找须锚定 artifact metadata 而非 execution 状态（P3，局部重跑下 execution 被过滤）、wan2.7 异步运行级确认缺失（P2）、无注入价值仍计费（P4）、T0 定性（P5）、豁免定位（P6）、骨架复用（P7）——全部修复。
+- **第二轮（PP1–PP5）**：运行级确认上提为 T2 验收前置并合并主机确认（PP1/PP5）、能力判定双规则（判定源 + 信息缺失 fail-open，PP2——防止假绿防线自身假绿）、fake 能力入参（PP3）、验收项 3 拆分零计费语义（PP4）——全部修复。审查侧正面确认：P4 的 skip 机制经三条路径核实成立（引擎终态集合/置位点先于付费闸门/validator 终态）；`skipped_with_fallback` 全库 8 处消费方与语义复用兼容；P2 文档级确认经审查独立抓取官方页面证实（原文含"HTTP请求只支持异步，必须设置为enable"）。
+- **实施期留档要求**（审查建议）：T1 提交后留存 `npm run typecheck:backend` 输出，作为原子提交范围完整的实证；实施中若遭遇本计划未枚举的编译期消费者报错，将报错原文回传审查方定位。
