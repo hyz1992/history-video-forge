@@ -33,7 +33,7 @@
 ### 1.3 供应商能力（外部事实，2026-09-18 调研）
 
 - **wan2.6-image**（图像生成与编辑）：编辑模式（`enable_interleave=false`）支持 1~4 张参考图输入做主体一致性生成；参考图走 `input.messages[].content[].image`（公网 URL 或 base64）；异步建任务 + `GET /tasks/{task_id}` 轮询；`n` 默认 4（坑）；`prompt_extend` 默认 true（坑）。
-- **wan2.7-image / wan2.7-image-pro**：同一 messages 请求骨架；无 `enable_interleave`；参考图 0~9 张；组图模式 `enable_sequential` 且 `n` 默认 12（坑，本设计不使用组图模式）；`thinking_mode` 默认 true 且仅纯文生图生效；官方明确"文字渲染、主体一致性、复杂指令遵循更强"。
+- **wan2.7-image / wan2.7-image-pro**：同一 messages 请求骨架；无 `enable_interleave`；参考图 0~9 张；组图模式 `enable_sequential` 且 `n` 默认 12（坑，本设计不使用组图模式）；`thinking_mode` 默认 true 且仅纯文生图生效；官方明确"文字渲染、主体一致性、复杂指令遵循更强"。异步通道有官方端点节记载（异步建任务 `POST /api/v1/services/aigc/image-generation/generation` + `X-DashScope-Async: enable`、查询 `GET /api/v1/tasks/{task_id}`，与现有代码同族；文档代码示例为 SDK 同步形态，两通道并存——实施计划审查 P2 触发补录，运行级确认归实施计划 T6 第一步）。
 - 价格：wan2.7-image 约 0.21 元/张 vs wan2.6-image 约 0.20 元/张（第三方口径，以控制台为准），按成功张数计费、失败不收费。
 - 参考图约束：JPEG/PNG/BMP/WEBP、宽高 [240, 8000]、≤10MB；任务/图像 URL 有效期 24h——本项目产物一律本地物化，注入时本地文件转 base64，不受 URL 过期影响。
 - 结论：**参考图能力在现有供应商内已满足，无需引入新供应商**；参考图路径按 wan2.7-image 为首选目标设计、wan2.6-image 兼容（骨架同构，差异收敛为按模型的参数表）。
@@ -239,3 +239,7 @@ T1 shared schema + compiler（**两处**任务类型枚举 + enrichment 联合�
 审查侧正面确认一并留档：`NULL_SEGMENT_ALLOWED_TASK_TYPES` 全库仅一处使用，白名单加值为最小无副作用改动；计划级 `VISUAL_TASK_TYPES` 不含 sheet 无需动作（与共享 schema 的 `risk_notes` 语义一致）。
 
 **审查—整改循环至此终止**（双方一致：第六轮起增量仅剩编号与措辞级）。六轮累计 27 项发现（F1-F9、N1-N18）全部闭环；方案骨架（D1-D5、三候选、10 个分支面/8 类）自第三轮起未被任何一轮推翻。后续评审对象移交 **implementation plan 本身**：其第一项为 §3.4 三候选决策（对象：`assets-run.service.ts:511-529` 注册期单模型构造与 `provider-dispatch-gate.ts` 三元组闸门），第一条硬约束为 §6 的 T1 原子提交范围。
+
+### 补录（2026-09-19，来自实施计划首轮审查）
+
+实施计划审查（P2）触发两处事实补录：① §1.3 wan2.7-image 补异步通道官方端点节证据（文档级；运行级确认归实施计划 T6 第一步，不符则候选回退 (a)/(b)）；② `global_prompt_prefix` 执行断链由"疑似"升级为"已核实为真"（生图路径无消费方，审查逐文件确认），留独立任务修复。另：实施计划对本计划 §3.4/§3.5/§6 相关机制做了三处落地口径细化（注入查找锚定 artifact metadata 而非 execution 状态、模型不支持参考图时 sheet 置 `skipped_with_fallback` 不生成不计费、`TASK_TYPE_PRIORITY` 键补齐移入 T1 原子范围），以实施计划为准。

@@ -20,15 +20,17 @@
 
 代价（已写入设计 §3.4/§3.6，随开关文案明示）：仅对冻结模型为 wan2.7-image 的项目实际生效（wan2.6-image 不支持 0 图调用、wan2.6-t2i 不支持参考图）。
 
+**外部事实状态（实施计划审查 P2）**：wan2.7-image 的异步通道在官方 API 参考中有明确记载——本会话内对 [万相-图像生成与编辑2.7 API 参考](https://help.aliyun.com/zh/model-studio/wan-image-generation-and-editing-api-reference) 的抓取含端点节：异步建任务 `POST /api/v1/services/aigc/image-generation/generation` + 请求头 `X-DashScope-Async: enable`、查询 `GET /api/v1/tasks/{task_id}`，与现有 provider 代码同族；文档代码示例为 SDK 同步形态，与 REST 异步通道并存（文档级确认已具备）。**运行级确认**并入 T6 第一步：真实付费前先以最小请求验证异步建任务+轮询可用；不符则触发 §0.1 回退条款（改选 (a)/(b)，参考模型位换 wan2.6-image），已列入 §2 风险。
+
 若终审改选 (a)/(b)：T2 范围重估，双模型过闸门 / 快照与 schema 扩展的代价计入 T2，其余任务不受影响。
 
 ### 0.2 T0 前置：类型检查基线转绿（外部审查 N3）
 
-`npm run typecheck:backend` 当前红（`backend/src/modules/narration/narration-timing-normalizer.ts:270` TS18048 `'final' is possibly 'undefined'`，与本设计无关的既有报错）。修复方式：阅读上下文后以最小改动收敛（非空断言或等价守卫，不得为过检查而放宽类型）；若排查后发现非平凡，升级为独立小任务，不阻塞在本计划内硬修。**T1 的枚举完整性信号（strict 模式下非穷尽 switch 报错）依赖干净基线**。验收：`npm run typecheck:backend` 0 error。
+`npm run typecheck:backend` 当前红（`backend/src/modules/narration/narration-timing-normalizer.ts:270` TS18048 `'final' is possibly 'undefined'`，与本设计无关的既有报错）。修复方式（实施计划审查 P5 已定性：纯类型收窄问题，逻辑正确——`arbitratedAt` 仅在以 `final` 起始的循环内 push，`length > 0 ⟹ final` 必非 undefined，TS 无法关联两事实）：以 `if (final && arbitratedAt.length)` 守卫收敛，**不用 `final!`**（保留类型保护），并把该不变量写入注释。**T1 的枚举完整性信号（strict 模式下非穷尽 switch 报错）依赖干净基线**。验收：`npm run typecheck:backend` 0 error。
 
 ### 0.3 硬约束清单（贯穿所有任务）
 
-1. **T1 原子提交范围**（缺一即全局红/500）：两处任务类型枚举（`AssetTaskType` + manifest 内联枚举）+ enrichment 联合类型 + 计划级 `NULL_SEGMENT_ALLOWED_TASK_TYPES` 白名单 + sheet `manual_upload_policy`（含 `accepted_file_types`）+ `allowedArtifactTypesForTask` case + compiler 阈值/构造器，**一个提交**；
+1. **T1 原子提交范围**（缺一即全局红/500/编译红）：两处任务类型枚举（`AssetTaskType` + manifest 内联枚举）+ enrichment 联合类型 + 计划级 `NULL_SEGMENT_ALLOWED_TASK_TYPES` 白名单 + sheet `manual_upload_policy`（含 `accepted_file_types`）+ `allowedArtifactTypesForTask` case + **`TASK_TYPE_PRIORITY` 键补齐**（`assets-execution-engine.ts:29` 为 `Record<AssetTaskExecution["task_type"], number>`，枚举加值后缺 key 即编译红——仅补 `character_sheet: 1.5` 键值，T1 阶段无 sheet 任务实例、零行为变化，排序语义验证归 T3；实施计划审查 P1：经全库编译期消费者扫描，此为唯一会被 T1 打破的遗漏点）+ compiler 阈值/构造器，**一个提交**；
 2. sheet 任务不能复用 `createTask`（入参为 `NormalizedIntent`，sheet 无对应 intent kind），须新构造器补齐 `AssetTask` 必填字段；
 3. 开关默认**关闭**；`ASSET_PLANNING_GENERATION_MODE=legacy` 路径不产 sheet 任务（仅 intent_compiler 路径支持），作为天然回滚面；
 4. T6 live check 必须单独报批，预估成本先行公示；
@@ -56,6 +58,7 @@
 | `backend/src/modules/asset-planning/asset-plan-intent-compiler.ts` | ① 出场阈值统计（复用 `[角色锚点]` 同源 label 匹配，默认 ≥3，env 可配）；② sheet 任务新构造器（null segment、`source_excerpt` 取 `visual_description`、`manual_upload_policy={required:false, allowed:true, accepted_file_types:["image/png","image/jpeg"]}`、prompt_draft 本地模板拼装、parameters 独立 16:9/2K）；③ 分镜图任务 `parameters.character_sheet_task_ids` 注入；④ 开关关闭时整段逻辑跳过（与现状逐字一致） |
 | `backend/src/modules/asset-planning/asset-plan-prompt-enrichment.ts` | L4 taskType 联合类型加值（编译期；sheet 的 era_style 走自建模板，不依赖既有 enrichment） |
 | `backend/src/modules/assets/assets-run.service.ts` | L586 `allowedArtifactTypesForTask` 加 `case "character_sheet": return ["image"]` |
+| `backend/src/modules/assets/assets-execution-engine.ts` | `TASK_TYPE_PRIORITY`（L29）补 `character_sheet: 1.5` 键——仅满足 Record 完整性防编译红，无行为变化；排序验证在 T3（P1） |
 
 验证：单测覆盖——阈值边界（2/3/4 次）、开关关/开、sheet 任务字段完整性（含 policy 与 prompt_draft 非空）、计划级 validator 对 sheet 的 pass、manifest schema 解析含 sheet execution、`allowedArtifactTypesForTask` 返回值。strict 下非穷尽 switch 由编译器兜底（依赖 T0）。
 
@@ -68,7 +71,7 @@
 | 文件 | 要点 |
 |---|---|
 | `backend/src/modules/assets/providers/dashscope/dashscope-image-provider.ts` | ① `isWan26Model` 二值分支扩三值：wan2.6-t2i（现状 text2image 形态）/ wan2.6-image（messages + `enable_interleave=false` + 强制 1~4 图）/ wan2.7-image（messages、0~9 图、无 interleave 参数）；② `DashScopeImageInput` 加 `referenceImages?: {base64, mimeType}[]`；③ 参考图注入调用的参数表：`n=1`、`prompt_extend=false`、wan2.7 参考注入时 `thinking_mode=false`（纯文生图调用不强制，见设计 §3.4 N8/F8 修正）；④ 复用既有 submit/poll/download 链路（L197/L220-266/L278），不新增轮询路径 |
-| prepare 逻辑（同文件或 run.service 注入层，实施时按现有 ctx 流动定） | 分镜图任务按 `parameters.character_sheet_task_ids` 在演进 manifest 中查 completed 的 sheet artifact → `readFile` → base64 注入；冻结模型不支持参考图（候选 (c) 下非 wan2.7-image）或文件缺失/超限 → 记 note 降级纯文本锚点，不失败；降级在运行事件与面板可见（设计 §3.5 N8 行） |
+| prepare 注入逻辑（同文件或 run.service 注入层，实施时按现有 ctx 流动定） | **按 artifact metadata 查找，不按 execution 状态**（实施计划审查 P3）：在演进 manifest 的 `artifacts` 中匹配 `metadata.sheet_role === "character_sheet"` 且 `character_id` 命中该分镜角色 → `readFile` → base64 注入；`parameters.character_sheet_task_ids` 只用来确定"该分镜要找哪些角色"。依据：局部重跑时旧 artifact 全部注入工作 manifest（`assets-run.service.ts:987-998`）但非目标旧 execution 被过滤丢弃（L954-980）——按 execution 查在"显式重生成单个分镜"场景（设计 §3.3 指定路径）必然静默落空。文件缺失/超限 → 记 note 降级纯文本锚点，不失败；降级在运行事件与面板可见（设计 §3.5 N8 行） |
 | image 槽候选目录（S2-2C，实施时以目录注册代码为准） | 新增 `wan2.7-image` 候选 + readiness 分层校验；`wan2.6-image` 是否入目录随终审定 |
 
 验证：单测——三值分支的 endpoint/请求体/参数断言（含 wan2.7 不落 text2image 端点）、注入/降级两分支、参考图 base64 编码、`n` 强制覆盖。
@@ -79,9 +82,10 @@
 
 改动文件与要点（`backend/src/modules/assets/assets-execution-engine.ts`）：
 
-1. `TASK_TYPE_PRIORITY` 加 `character_sheet: 1.5`（subtitle_track=1 与 image_still=2 之间；Record 类型由编译器强制）；
-2. `applyArtifactRoutes` 对 character_sheet 任务跳过 segment route 写入（sheet 绝不进 primary/fallback 视觉位——四个图像消费者全走路由，此豁免是"零感知"的唯一保障，单测锁死）；
-3. `measuredUnitsForTask` 加 `case "character_sheet"`（与 image_still 同构：unitType image、count 1）——缺失则账单静默丢失（F2）。
+1. 排序语义验证：`character_sheet: 1.5` 键已在 T1 补齐（P1），本任务验证 sheet 先于分镜图执行；
+2. `applyArtifactRoutes` 对 character_sheet 任务跳过 segment route 写入——**双保险之一**（实施计划审查 P6：sheet `source_segment_id = null` 本就命中不了 route find；真正门禁是"segment_routes 无 sheet artifact 痕迹"单测断言，若未来给 sheet 填了 segment，断言会先红）；
+3. `measuredUnitsForTask` 加 `case "character_sheet"`（与 image_still 同构：unitType image、count 1）——缺失则账单静默丢失（F2）；
+4. **无注入价值时不生成（实施计划审查 P4）**：冻结模型不具备参考图能力（候选 (c) 下非 wan2.7-image）时，character_sheet 任务直接置 `skipped_with_fallback`（该状态在 validator 终态白名单内，不阻塞完成度）——不派发、不计费、note 与面板事件可见；能力判定与 image adapter 的模型同源（run 快照 image 槽）。此项替代"生成后仅降级提示"，消除"模型不支持参考图仍照常计费生成永不被注入的 sheet"的纯浪费，直接服务设计目标 3。
 
 验证：单测——排序（sheet 先于分镜图）、路由豁免（segment_routes 无 sheet artifact 痕迹）、记账 case 命中；视频依赖检查不受影响的回归。
 
@@ -107,7 +111,7 @@
 改动文件与要点：
 
 - `backend/src/modules/assets/providers/fake-image-provider.ts`：`canHandle` 加 character_sheet；prepare 回显"收到参考图"标记；metadata 尺寸对齐横版（现硬编码 1080×1920）或断言不依赖它；
-- harness 冒烟入口（命名随既有 `harness:*` 惯例）：**强断言**——① `character_sheet` execution 状态 completed 且产出 image artifact；② 被注入的分镜图任务 prepare 收到参考图标记；③ 降级路径：sheet 置 failed 后分镜图仍 completed（文本锚点）；④ 开关关闭时 run 行为与现状逐字一致。
+- harness 冒烟入口（复用既有骨架惯例，命名如 `harness:assets-character-sheet-smoke`）：**强断言**——① `character_sheet` execution 状态 completed 且产出 image artifact；② 被注入的分镜图任务 prepare 收到参考图标记；③ 降级路径：sheet 置 failed 后分镜图仍 completed（文本锚点）；④ 开关关闭时 run 行为与现状逐字一致；⑤ **局部重跑场景**（P3 防线）：首跑完成后仅对单个分镜任务重新生成，仍注入参考图——此时工作 manifest"有 sheet artifact、无 sheet execution"，execution 级查找会在此静默失效；⑥ 模型不支持参考图时 sheet 为 `skipped_with_fallback` 且零计费（P4）。
 
 验证：`npx vitest run --configLoader runner --no-file-parallelism`（涉写库场景）；冒烟 0 failed。
 
@@ -115,8 +119,10 @@
 
 ### T6 live check（显式授权，单独报批）
 
+- 第一步（P2 运行级确认）：以最小请求验证 wan2.7-image 异步建任务（`X-DashScope-Async: enable`）+ `GET /tasks` 轮询真实可用；不符即触发 §0.1 回退条款，不进入后续付费步骤；
 - 范围：真实项目选 1 个高出场角色 → sheet 1 张（16:9 与 9:16 各一张画幅对照）→ 引用它的分镜图 2~3 张；同步 wan2.6-image vs wan2.7-image 效果/单价对照；
 - 记录：request id、耗时、实际单价、失败模式、一致性人工比对结论 → `docs/records/`；
+- 骨架与命名：复用既有 `harness:assets-dashscope-live-check` 骨架（`harness/scripts/runtime/assets-dashscope-live-check.ts`），命名 `harness:assets-character-sheet-live-check`（P7）；
 - 门禁：效果与成本达标后才评估开关默认值翻转为开；不达标则开关保持关闭，文本锚点为常态，T2 的参考图能力留作未来复用。
 
 ---
@@ -124,9 +130,10 @@
 ## §2 风险与回滚
 
 - 主回滚面：开关关闭 = 现状逐字一致；legacy 编译模式不产 sheet；
+- 决策回退条款（P2）：T6 第一步运行级确认 wan2.7-image 异步通道不可用时，§0.1 回退候选 (a)/(b)，参考模型位换 wan2.6-image（其异步链路与现有代码同族已核实），T2 重估；
 - 一致性效果不达标（§设计 §5 最高风险）：止步于文本锚点增强，T2 adapter 扩展可复用；
-- 中间态防护：T1 原子提交（缺白名单=全局红、缺 case=上传 500）；T0 保证编译期信号可信；
-- 顺带核实项（第五/六轮审查标低置信）：`assets-run.service.ts:1783`、`assets.routes.ts:339` 在 T4 实施时顺手复核；`global_prompt_prefix` 疑似执行断链独立核实（不在本计划内，勿混入提交）。
+- 中间态防护：T1 原子提交（缺白名单=全局红、缺 case=上传 500、缺 PRIORITY 键=编译红）；T0 保证编译期信号可信；
+- 顺带核实项（第五/六轮审查标低置信）：`assets-run.service.ts:1783`、`assets.routes.ts:339` 在 T4 实施时顺手复核；`global_prompt_prefix` 执行断链**已经实施计划审查核实为真**（生图路径无消费方），留独立任务修复，不混入本计划提交。
 
 ## §3 验收清单（对照设计 §2 目标）
 
