@@ -20,7 +20,7 @@
 
 代价（已写入设计 §3.4/§3.6，随开关文案明示）：仅对冻结模型为 wan2.7-image 的项目实际生效（wan2.6-image 不支持 0 图调用、wan2.6-t2i 不支持参考图）。
 
-**外部事实状态（实施计划审查 P2，第二轮 PP1/PP5 修订）**：wan2.7-image 的异步通道在官方 API 参考中有明确记载——本会话内对 [万相-图像生成与编辑2.7 API 参考](https://help.aliyun.com/zh/model-studio/wan-image-generation-and-editing-api-reference) 的抓取含端点节：异步建任务 `POST /api/v1/services/aigc/image-generation/generation` + 请求头 `X-DashScope-Async: enable`、查询 `GET /api/v1/tasks/{task_id}`，与现有 provider 代码同族；文档代码示例为 SDK 同步形态，与 REST 异步通道并存（文档级确认已具备，第二轮审查独立抓取官方页面再次证实）。**运行级确认为 T2 的验收前置**（PP1：排在 T6 太晚，失败时回退的返工面会放大到 T2-T5；最小付费请求约 0.2 元），且一次请求同时验证 **主机 + 端点路径 + 异步头 + 轮询**（PP5：官方页面端点写作工作区级主机 `https://{WorkspaceId}.cn-beijing.maas.aliyuncs.com`，本仓库 adapter 默认 `https://dashscope.aliyuncs.com`——标准主机已跑通 wan2.6 image-generation 与 wan2.7 系 i2v 异步端点，但 wan2.7-image 文生图未针对核实）。确认失败即触发回退条款（改选 (a)/(b)，参考模型位换 wan2.6-image），已列入 §2 风险。
+**外部事实状态（实施计划审查 P2，第二轮 PP1/PP5 修订，第三轮 PP8 去重）**：wan2.7-image 的异步通道在官方 API 参考中有明确记载——2026-09-19 抓取 [万相-图像生成与编辑2.7 API 参考](https://help.aliyun.com/zh/model-studio/wan-image-generation-and-editing-api-reference)（本仓库审查独立复核）含端点节：异步建任务 `POST /api/v1/services/aigc/image-generation/generation` + 请求头 `X-DashScope-Async: enable`、查询 `GET /api/v1/tasks/{task_id}`，与现有 provider 代码同族；文档代码示例为 SDK 同步形态，与 REST 异步通道并存（文档级确认已具备）。**运行级确认为 T2 的验收前置**（PP1：排在 T6 太晚，失败时回退的返工面会放大到 T2-T5），验证项——主机可达性（工作区级主机 vs 本仓库默认 `dashscope.aliyuncs.com`）、端点路径、异步头、轮询——以 T2 的"验收前置"条为唯一真相源（PP8 去重，此处不重复展开）。确认失败即触发回退条款（改选 (a)/(b)，参考模型位换 wan2.6-image），已列入 §2 风险。
 
 若终审改选 (a)/(b)：T2 范围重估，双模型过闸门 / 快照与 schema 扩展的代价计入 T2，其余任务不受影响。
 
@@ -87,7 +87,7 @@
 1. 排序语义验证：`character_sheet: 1.5` 键已在 T1 补齐（P1），本任务验证 sheet 先于分镜图执行；
 2. `applyArtifactRoutes` 对 character_sheet 任务跳过 segment route 写入——**双保险之一**（实施计划审查 P6：sheet `source_segment_id = null` 本就命中不了 route find；真正门禁是"segment_routes 无 sheet artifact 痕迹"单测断言，若未来给 sheet 填了 segment，断言会先红）；
 3. `measuredUnitsForTask` 加 `case "character_sheet"`（与 image_still 同构：unitType image、count 1）——缺失则账单静默丢失（F2）；
-4. **无注入价值时不生成（实施计划审查 P4，判定规则 PP2）**：确知冻结模型不具备参考图能力（候选 (c) 下非 wan2.7-image）时，character_sheet 任务直接置 `skipped_with_fallback`（该状态在 validator 终态白名单内，不阻塞完成度）——不派发、不计费、note 与面板事件可见；此项替代"生成后仅降级提示"，消除"模型不支持参考图仍照常计费生成永不被注入的 sheet"的纯浪费，直接服务设计目标 3。**判定规则（PP2，缺一不可）**：(a) 判定源二选一——按付费闸门既有模式读快照（`db.generationRuns.get(assetRunId)` + `runConfigurationSnapshots` 取 `resolvedCapabilities["image.generate"].model_id`，`runAdapterPipeline:209-211` 即此模式），或从已解析 image adapter 读 `billing.modelId`（注意本地/fake adapter 无 `billing`）；(b) **信息缺失时必须 fail-open（按具备能力处理）**——fake/local 路径可能无 billing、无快照，若缺信息即置 skipped，T5 断言 ② 永远跑不到，假绿防线自身假绿；**只有确知不支持时才置 skipped**。前端 `skipped_with_fallback` 标签带"降级"语义，本场景靠 note 澄清"模型不具备该能力，未生成"（审查确认全库 8 处消费方无语义冲突，不新增状态枚举）。
+4. **无注入价值时不生成（实施计划审查 P4，判定规则 PP2）**：确知冻结模型不具备参考图能力（候选 (c) 下非 wan2.7-image）时，character_sheet 任务直接置 `skipped_with_fallback`（该状态在 validator 终态白名单内，不阻塞完成度）——不派发、不计费、note 与面板事件可见；此项替代"生成后仅降级提示"，消除"模型不支持参考图仍照常计费生成永不被注入的 sheet"的纯浪费，直接服务设计目标 3。**判定规则（PP2，缺一不可）**：(a) 判定源二选一——按付费闸门既有模式读快照（`db.generationRuns.get(assetRunId)` + `runConfigurationSnapshots` 取 `resolvedCapabilities["image.generate"].model_id`，`runAdapterPipeline:209-211` 即此模式），或从已解析 image adapter 读 `billing.modelId`（注意本地/fake adapter 无 `billing`）；(b) **信息缺失时必须 fail-open（按具备能力处理）**——fake/local 路径可能无 billing、无快照，若缺信息即置 skipped，T5 断言 ② 永远跑不到，假绿防线自身假绿；**只有确知不支持时才置 skipped**。前端 `skipped_with_fallback` 标签带"降级"语义，本场景靠 note 澄清"模型不具备该能力，未生成"——**note 的面板承载面在 T4 补齐（PP6：现 failureNote 仅 failed 可见、skipped 分支为视频专用硬编码文案，均已亲读证实）**，不新增状态枚举。
 
 验证：单测——排序（sheet 先于分镜图）、路由豁免（segment_routes 无 sheet artifact 痕迹）、记账 case 命中；视频依赖检查不受影响的回归。
 
@@ -102,7 +102,7 @@
 | `backend/src/modules/assets/assets-local-validator.ts` | `isOptionalIncompleteExecution`（L22-48）加 character_sheet——F1 前提；单测覆盖 `manual_upload_policy.required` true/false 两分支 |
 | `backend/src/modules/assets/provider-type-map.ts` | `TASK_TYPE_TO_PROVIDER_TYPE` 加 `character_sheet: "image"`——否则 fail-open 绕过供应商启用语义 |
 | `backend/src/modules/asset-planning/asset-plan-intent-compiler.ts` + `asset-planning-generation.service.ts` + `backend/src/modules/assets/assets.routes.ts` | L372 / L2257 `estimated_provider_calls` 过滤与 L172 默认 `targetTaskTypes` 纳入 sheet（成本估算不漏算） |
-| `frontend/src/components/asset/AssetPanel.vue`、`SegmentAssetCard.vue` | character_sheet 任务类型标签/展示/重生成入口；费用清单按既有 capability 归组（无需新面板） |
+| `frontend/src/components/asset/AssetPanel.vue`、`SegmentAssetCard.vue` | character_sheet 任务类型标签/展示/重生成入口；费用清单按既有 capability 归组（无需新面板）。**面板承载面（PP6，已亲读证实）**：① `failureNote` 展示门从 `status === "failed"` 放宽为"非 completed/accepted 且有 notes"（L531-534），否则 skipped 的 note 永不显示；② `skipped_with_fallback` 分支的硬编码文案"任务已跳过（段视频未授权或已自动降级），未生成视频"（L1270-1272）改为按任务类型/execution.notes 渲染真实原因——sheet 为图片任务，P4 skip 后该文案是主动误导 |
 
 验证：单测（两分支白名单、映射表、估算含 sheet）+ 前端构建；浏览器人工核对面板展示（非本计划门禁，随既有前端验收节奏）。
 
@@ -141,7 +141,7 @@
 
 1. 开关开启 + 冻结 wan2.7-image：高出场角色产出 1 张 sheet，其命中分镜图注入参考图，跨图一致性人工认可（T6）；
 2. 开关关闭：全链路行为与现状逐字节等价（T5 断言 ④）；
-3. sheet 失败/拒绝：分镜图照常、项目不 `assets_blocked`，已发生费用在成本清单可见（T3/T4/T5）；模型不支持参考图：sheet 为 `skipped_with_fallback`、**零计费**，面板/note 可见"模型不具备该能力，未生成"（T3/T5）；
+3. sheet 失败/拒绝：分镜图照常、项目不 `assets_blocked`，已发生费用在成本清单可见（T3/T5，承载面 T4）；模型不支持参考图：sheet 为 `skipped_with_fallback`、**零计费**，面板/note 可见"模型不具备该能力，未生成"（note 写入 T3、面板承载面 T4、断言 T5，PP6）；
 4. 账本：sheet 计费入 `image.generate` attempt 级幂等记账，成本清单可见（T3）；
 5. 全程 `npm run typecheck:backend` 0 error（T0 后持续）。
 
@@ -150,5 +150,6 @@
 ## §4 审查记录
 
 - **第一轮（P1–P7）**：T1 原子范围漏 `TASK_TYPE_PRIORITY` 键（P1，唯一会被 T1 打破的编译期消费者）、注入查找须锚定 artifact metadata 而非 execution 状态（P3，局部重跑下 execution 被过滤）、wan2.7 异步运行级确认缺失（P2）、无注入价值仍计费（P4）、T0 定性（P5）、豁免定位（P6）、骨架复用（P7）——全部修复。
-- **第二轮（PP1–PP5）**：运行级确认上提为 T2 验收前置并合并主机确认（PP1/PP5）、能力判定双规则（判定源 + 信息缺失 fail-open，PP2——防止假绿防线自身假绿）、fake 能力入参（PP3）、验收项 3 拆分零计费语义（PP4）——全部修复。审查侧正面确认：P4 的 skip 机制经三条路径核实成立（引擎终态集合/置位点先于付费闸门/validator 终态）；`skipped_with_fallback` 全库 8 处消费方与语义复用兼容；P2 文档级确认经审查独立抓取官方页面证实（原文含"HTTP请求只支持异步，必须设置为enable"）。
-- **实施期留档要求**（审查建议）：T1 提交后留存 `npm run typecheck:backend` 输出，作为原子提交范围完整的实证；实施中若遭遇本计划未枚举的编译期消费者报错，将报错原文回传审查方定位。
+- **第二轮（PP1–PP5）**：运行级确认上提为 T2 验收前置并合并主机确认（PP1/PP5）、能力判定双规则（判定源 + 信息缺失 fail-open，PP2——防止假绿防线自身假绿）、fake 能力入参（PP3）、验收项 3 拆分零计费语义（PP4）——全部修复。审查侧正面确认：P4 的 skip 机制经三条路径核实成立（引擎终态集合/置位点先于付费闸门/validator 终态）；P2 文档级确认经审查独立抓取官方页面证实（原文含"HTTP请求只支持异步，必须设置为enable"）。
+- **第三轮（PP6–PP8）**：面板承载面缺失且 skip 会命中视频专用误导文案（PP6：`AssetPanel.vue` L531-534 notes 仅 failed 可见、L1270-1272 硬编码视频文案——已亲读证实，正是"承诺可见但承载面不存在"），两项修复并入 T4、§3 归属补 T4；`skipped_with_fallback` 扫描计数修正为"9 个代码点（6 消费方 + 3 定义）+ 2 处注释"，其中 `AssetPanel.vue:1270-1272` 为冲突点，**第二轮记录"8 处无语义冲突"据此修正**（PP7）；验收前置去重为 T2 单一真相源、会话性表述日期化（PP8）——全部修复。
+- **实施期留档要求**（审查建议）：T1 提交后留存 `npm run typecheck:backend` 输出，作为原子提交范围完整的实证；实施中若遭遇本计划未枚举的编译期消费者报错，将报错原文回传审查方定位。审查结论（第三轮后）：**计划可开工，T0 起步**。
