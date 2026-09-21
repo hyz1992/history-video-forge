@@ -86,6 +86,22 @@ export function resolveDashscopeImageModelFamily(
 /** 参考图上限（设计 §1.3：wan2.6-image 1~4、wan2.7-image 0~9）。 */
 export const DASHSCOPE_IMAGE_REFERENCE_LIMIT = { wan26_image: 4, wan27_image: 9 } as const;
 
+/**
+ * 冻结模型是否**确知**无法承担 character_sheet（候选 (c)，设计 §3.4）：
+ * sheet 需要同一模型同时支持 ① 0 图调用（sheet 自身是纯文生图）与 ② 参考图调用。
+ * - wan2.6-t2i：不支持参考图注入 → 确知不可用；
+ * - wan2.6-image：编辑模式强制 1~4 图，不满足 ① → 确知不可用；
+ * - wan2.7-image：0~9 图，两条件都满足 → 可用；
+ * - 未识别模型族（wanx 等）：能力**未知**，返回 false——由调用方 fail-open
+ *   （实施计划 T3 PP2：信息缺失必须按具备能力处理，否则假绿防线自身假绿）。
+ */
+export function dashscopeImageModelKnownIncapableOfCharacterSheet(
+  model: string,
+): boolean {
+  const family = resolveDashscopeImageModelFamily(model);
+  return family === "wan26_t2i" || family === "wan26_image";
+}
+
 /** 供应商约束：参考图 JPEG/PNG/BMP/WEBP、宽高 [240, 8000]、≤10MB（设计 §1.3）。 */
 export const DASHSCOPE_IMAGE_REFERENCE_MAX_BYTES = 10 * 1024 * 1024;
 

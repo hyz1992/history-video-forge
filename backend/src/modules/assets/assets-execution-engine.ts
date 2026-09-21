@@ -18,6 +18,7 @@ import { recordProviderJobUsage } from "../generation-cost/usage-cost-recorder.j
 import { DEFAULT_VIDEO_ESTIMATE_SECONDS } from "../generation-cost/generation-cost.service.js";
 import { readDashscopeConfig } from "./assets-run.service.js";
 import { clampDashscopeImageToVideoDuration } from "./providers/dashscope/dashscope-image-to-video-provider.js";
+import { dashscopeImageModelKnownIncapableOfCharacterSheet } from "./providers/dashscope/dashscope-image-provider.js";
 import type {
   AssetProviderAdapter,
   AssetProviderContext,
@@ -136,6 +137,17 @@ export async function executeAssetManifest(
         continue;
       }
     }
+    // 角色 sheet 的"无注入价值不生成"（实施计划 T3 / P4 / PP2）：
+    // 确知冻结模型不具备参考图能力时直接置 skipped_with_fallback（终态），
+    // **不派发、不计费**——避免"照常计费生成一张永远不被注入的 sheet"的纯浪费。
+    // 置位点必须在付费闸门（runAdapterPipeline 的 attempts/usage）之前。
+    const sheetSkipReason = characterSheetSkipReason(input.db, assetRunId, planTask);
+    if (sheetSkipReason) {
+      execution.status = "skipped_with_fallback";
+      execution.completed_at = new Date().toISOString();
+      execution.notes = [...execution.notes, sheetSkipReason];
+      continue;
+    }
     const adapter = registry.findAdapter({
       taskType: execution.task_type,
       enabledProviderTypes:
@@ -182,6 +194,54 @@ export async function executeAssetManifest(
   }
 
   return { manifest: manifestCopy };
+}
+
+/**
+ * 该 run 快照冻结的 image 模型身份（付费闸门同源读法：run → snapshot）。
+ * 任一环缺失（无 run / 无快照 / 无 image.generate 槽位 / 非 dashscope）返回 null =
+ * **信息未知**——调用方必须 fail-open，不得据此跳过。
+ */
+function frozenImageModelForRun(
+  db: DbClient,
+  assetRunId: string,
+): { providerKey: string; modelId: string } | null {
+  const run = db.generationRuns.get(assetRunId);
+  const snapshot = run
+    ? db.runConfigurationSnapshots.get(run.runConfigurationSnapshotId)
+    : undefined;
+  if (!snapshot) return null;
+  const resolved = snapshot.resolvedConfigurationJson as {
+    resolved_capabilities?: Record<
+      string,
+      { provider_key?: string; model_id?: string } | undefined
+    >;
+  };
+  const slot = resolved?.resolved_capabilities?.["image.generate"];
+  if (!slot || typeof slot.provider_key !== "string" || typeof slot.model_id !== "string") {
+    return null;
+  }
+  return { providerKey: slot.provider_key, modelId: slot.model_id };
+}
+
+/**
+ * 角色 sheet 的"无注入价值不生成"判定（实施计划 T3 / P4 / PP2）。
+ * 返回非 null 表示确知冻结模型不具备参考图能力 → 该 sheet 任务置
+ * `skipped_with_fallback`（终态、零派发、零计费），返回值即写入 execution.notes 的文案。
+ *
+ * fail-open：无 run/快照、无 image.generate 槽位、非 dashscope provider 或未识别模型族
+ * 都按"具备能力"处理——只有**确知**不可用时才跳过（否则 T5 的注入断言永远跑不到，
+ * 假绿防线自身假绿）。
+ */
+function characterSheetSkipReason(
+  db: DbClient,
+  assetRunId: string,
+  planTask: AssetPlan["tasks"][number],
+): string | null {
+  if (planTask.task_type !== "character_sheet") return null;
+  const frozen = frozenImageModelForRun(db, assetRunId);
+  if (!frozen || frozen.providerKey !== "dashscope") return null;
+  if (!dashscopeImageModelKnownIncapableOfCharacterSheet(frozen.modelId)) return null;
+  return `[sheet] 冻结模型 ${frozen.modelId} 不具备参考图能力，未生成该角色 sheet（零计费）`;
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
@@ -495,6 +555,21 @@ function measuredUnitsForTask(
         detail: actualSize ? { resolution: actualSize } : undefined,
       };
     }
+    case "character_sheet": {
+      // 与 image_still 同构（unitType image、count 1）。缺此 case 时 default 返回 null、
+      // recordPaidUsage 提前返回 → **sheet 的账单静默消失**（设计 §3.4 外部审查 F2）。
+      const dashscope = readDashscopeConfig(undefined);
+      const paramSize =
+        typeof planTask.parameters["size"] === "string"
+          ? (planTask.parameters["size"] as string)
+          : undefined;
+      const actualSize = paramSize ?? dashscope.imageSize;
+      return {
+        unitType: "image",
+        count: 1,
+        detail: actualSize ? { resolution: actualSize } : undefined,
+      };
+    }
     case "video_clip": {
       // 2026-08-29：计价秒数与执行完全同源——job 留痕（prepare 写入的
       // rawRequestJson）是执行真相源：
@@ -745,6 +820,11 @@ function applyArtifactRoutes(
   artifacts: AssetArtifact[],
   planTask: AssetPlan["tasks"][number],
 ): void {
+  // 角色 sheet 是参考资产，绝不进入任何 segment 的 primary/fallback 视觉位（设计 §3.1）。
+  // 双保险：sheet 的 source_segment_id 恒为 null，本就命中不了 route 查找；这里显式短路，
+  // 使"未来给 sheet 填了 segment"时不会静默污染分镜视觉位（单测断言 segment_routes
+  // 无 sheet artifact 痕迹）。
+  if (planTask.task_type === "character_sheet") return;
   for (const artifact of artifacts) {
     switch (artifact.artifact_type) {
       case "image": {
