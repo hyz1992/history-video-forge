@@ -2262,7 +2262,7 @@ function buildCostSummary(
     by_type: byType,
     by_cost_tier: byCostTier,
     estimated_provider_calls: tasks.filter((task) =>
-      ["tts_audio", "image_still", "video_clip"].includes(task.task_type),
+      ["tts_audio", "image_still", "video_clip", "character_sheet"].includes(task.task_type),
     ).length,
     notes: budgetNotes,
   };

@@ -169,7 +169,7 @@ async function generateAssetsController(
     targetTaskTypes = enabledProviderTypes;
   } else {
     // No specific types — assume all types could be included
-    targetTaskTypes = ["image_still", "video_clip", "tts_audio"];
+    targetTaskTypes = ["image_still", "video_clip", "tts_audio", "character_sheet"];
   }
 
   const executionMode =

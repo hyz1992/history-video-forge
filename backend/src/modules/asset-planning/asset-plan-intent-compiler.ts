@@ -480,7 +480,7 @@ function summarizeCost(tasks: AssetTask[], notes: string[]): AssetPlan["cost_sum
     byType[task.task_type] = (byType[task.task_type] ?? 0) + 1;
     byCostTier[task.cost_tier] = (byCostTier[task.cost_tier] ?? 0) + 1;
   });
-  return { total_tasks: tasks.length, by_type: byType, by_cost_tier: byCostTier, estimated_provider_calls: tasks.filter((task) => ["tts_audio", "image_still", "video_clip"].includes(task.task_type)).length, notes };
+  return { total_tasks: tasks.length, by_type: byType, by_cost_tier: byCostTier, estimated_provider_calls: tasks.filter((task) => ["tts_audio", "image_still", "video_clip", "character_sheet"].includes(task.task_type)).length, notes };
 }
 
 export function compileAssetPlanFromIntents(input: AssetPlanCompilerInput): { plan: AssetPlan; actions: AssetPlanCompilerAction[] } {

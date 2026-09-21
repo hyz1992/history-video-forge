@@ -1,5 +1,9 @@
 const TASK_TYPE_TO_PROVIDER_TYPE: Record<string, string | null> = {
   image_still: "image",
+  // 角色 sheet 是图片任务：缺此映射时 taskTypeToProviderType 返回 null，
+  // isProviderTypeEnabled 对未知类型放行（fail-open），sheet 会绕过
+  // "provider 类型未启用 → 转人工上传"语义（设计 §3.7 第 3 项）。
+  character_sheet: "image",
   video_clip: "video",
   tts_audio: "tts",
   subtitle_track: "tts",

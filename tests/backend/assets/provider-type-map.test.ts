@@ -39,3 +39,13 @@ describe("isProviderTypeEnabled", () => {
     expect(isProviderTypeEnabled("image_still", undefined)).toBe(true);
   });
 });
+
+// ─── T4：character_sheet 的供应商类型映射（设计 §3.7 第 3 项） ────────────────
+
+describe("character_sheet 供应商类型映射", () => {
+  it("映射到 image（缺映射会经 fail-open 绕过 provider 启用语义）", () => {
+    expect(taskTypeToProviderType("character_sheet")).toBe("image");
+    expect(isProviderTypeEnabled("character_sheet", ["image"])).toBe(true);
+    expect(isProviderTypeEnabled("character_sheet", ["tts", "sfx"])).toBe(false);
+  });
+});

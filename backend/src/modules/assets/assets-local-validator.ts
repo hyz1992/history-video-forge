@@ -43,7 +43,11 @@ function isOptionalIncompleteExecution(
 
   return (
     task.task_type === "bgm_cue" ||
-    task.task_type === "sfx_cue"
+    task.task_type === "sfx_cue" ||
+    // 角色 sheet 是可选参考资产（设计 §3.5 F1）：生成失败/被拒/未生成都不阻塞 manifest
+    // 完成度，否则 sheet 一失败即触发 assets_execution_incomplete → 项目 assets_blocked
+    // （"不传染"不成立）。前提是 manual_upload_policy.required=false（编译器固定，见 T1）。
+    task.task_type === "character_sheet"
   );
 }
 

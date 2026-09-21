@@ -1196,3 +1196,70 @@ describe("validateAssetsManifest", () => {
     });
   });
 });
+
+// ─── T4：character_sheet 的可选不完备白名单（设计 §3.5 F1） ──────────────────
+
+describe("character_sheet 可选不完备白名单", () => {
+  function sheetTask(required: boolean): AssetPlan["tasks"][number] {
+    return {
+      task_id: "sheet_001",
+      order: 3,
+      task_type: "character_sheet",
+      source_segment_id: null,
+      source_excerpt: "束发深衣",
+      production_intent: "定妆参考图",
+      recommended_mode: "manual_allowed",
+      provider_hint: null,
+      prompt_draft: "角色定妆参考图「人物甲」：束发深衣",
+      parameters: { character_id: "char_1", sheet_role: "character_sheet" },
+      manual_upload_policy: {
+        allowed: true,
+        required,
+        accepted_file_types: ["image/png", "image/jpeg"],
+        acceptance_notes: [],
+      },
+      risk_notes: [],
+      cost_tier: "low",
+      initial_status: "planned",
+    };
+  }
+
+  async function validateSheet(input: { required: boolean; status: AssetTaskExecution["status"] }) {
+    const plan = makeBaseAssetPlan();
+    plan.tasks.push(sheetTask(input.required));
+    const manifest = makeBaseManifest({
+      executions: [
+        ...makeBaseManifest().executions,
+        makeBaseExecution({
+          execution_id: "exec_sheet_001",
+          task_id: "sheet_001",
+          task_type: "character_sheet",
+          status: input.status,
+          output_artifact_ids: [],
+        }),
+      ],
+    });
+    return validateAssetsManifest({
+      assetPlanRecordId: ASSET_PLAN_ID,
+      storyboardRecordId: STORYBOARD_RECORD_ID,
+      scriptRecordId: SCRIPT_RECORD_ID,
+      topicPackageId: TOPIC_PACKAGE_ID,
+      assetPlan: plan,
+      manifest,
+    });
+  }
+
+  it("required=false：sheet 未生成/跳过/失败都不阻塞完成度（不传染）", async () => {
+    for (const status of ["planned", "skipped_with_fallback", "failed"] as const) {
+      const result = await validateSheet({ required: false, status });
+      expect(result.errors, status).not.toContain("assets_execution_incomplete");
+      expect(result.decision, status).not.toBe("blocked");
+    }
+  });
+
+  it("required=true：白名单豁免失效，sheet 失败即阻塞（证明 required=false 是前提）", async () => {
+    const result = await validateSheet({ required: true, status: "failed" });
+    expect(result.errors).toContain("assets_execution_incomplete");
+    expect(result.decision).toBe("blocked");
+  });
+});

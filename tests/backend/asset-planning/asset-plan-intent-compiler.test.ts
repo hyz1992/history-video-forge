@@ -562,6 +562,21 @@ describe("character_sheet 任务（T1：阈值、开关、注入关系）", () =
     expect(plan.dependencies.filter((item) => item.depends_on_task_id === "sheet_001")).toEqual([]);
   });
 
+  it("成本估算把 sheet 计入 estimated_provider_calls（成本不漏算）", () => {
+    const off = compileAssetPlanFromIntents(
+      sheetInput(["人物甲在庭院", "人物甲拔剑", "人物甲退走"]),
+    ).plan;
+    const on = compileAssetPlanFromIntents(
+      sheetInput(["人物甲在庭院", "人物甲拔剑", "人物甲退走"], {
+        characterSheet: { enabled: true, minSegmentHits: 3 },
+      }),
+    ).plan;
+    expect(on.cost_summary.estimated_provider_calls).toBe(
+      off.cost_summary.estimated_provider_calls + 1,
+    );
+    expect(on.cost_summary.by_type.character_sheet).toBe(1);
+  });
+
   it("多角色同时达阈值时各生成一张 sheet，共命中段按角色顺序注入两个 id", () => {
     const input = sheetInput(
       ["人物甲在庭院", "人物甲与人物乙对峙", "人物甲拔剑", "人物乙退走", "人物乙回望"],

@@ -472,6 +472,8 @@ const taskTypeBreakdown = computed(() => {
 });
 
 const TASK_TYPE_LABELS: Record<string, string> = {
+  // 角色 sheet（2026-09-18 设计 §3.1）：跨分镜的参考资产，不是分镜视觉位。
+  character_sheet: "角色定妆图",
   image_still: "分镜图",
   video_clip: "分镜视频",
   tts_audio: "口播音频",
@@ -486,6 +488,7 @@ const blockedItems = computed(() => {
   const execByTaskId = executionsByTaskId.value;
   const items: Array<{
     taskId: string;
+    taskType: string;
     type: string;
     segmentId: string;
     reason: string;
@@ -529,12 +532,17 @@ const blockedItems = computed(() => {
             : "待处理";
 
     const notes = (exec as { notes?: string[] } | undefined)?.notes;
-    const failureNote = exec?.status === "failed" && notes && notes.length > 0
+    // 承载面（实施计划 §1 T4 PP6）：此前只认 failed，导致 skipped_with_fallback 的
+    // note（例如"冻结模型不具备参考图能力，未生成该角色 sheet"）永不显示。
+    // 放宽为"非 completed/accepted 且有 notes"，覆盖 skipped/failed/planned 的降级原因。
+    const failureNote = exec && exec.status !== "completed" && exec.status !== "accepted"
+      && notes && notes.length > 0
       ? notes.join("; ")
       : "";
 
     items.push({
       taskId: task.task_id,
+      taskType: task.task_type,
       type: typeLabel,
       segmentId: segRef,
       reason,
@@ -606,7 +614,7 @@ const visibleBlockedItems = computed(() =>
 
 /** Full breakdown including types with 0 tasks (so nothing is hidden). */
 const ALL_TASK_TYPES = [
-  "口播音频", "字幕", "分镜图", "分镜视频", "运镜", "音效", "配乐",
+  "口播音频", "字幕", "分镜图", "分镜视频", "运镜", "音效", "配乐", "角色定妆图",
 ];
 
 const allTypeBreakdown = computed(() => {
@@ -1268,8 +1276,10 @@ async function handleGenerateTask(taskId: string) {
         } else if (exec?.status === "failed") {
           ElMessage.error("生成失败：" + (exec.notes?.join("; ") || "未知错误"));
         } else if (exec?.status === "skipped_with_fallback") {
-          // 终态：段路线未授权/已降级，视频不会生成（不能继续当"正在生成"提示）
-          ElMessage.warning("任务已跳过（段视频未授权或已自动降级），未生成视频");
+          // 终态：按 execution.notes 渲染真实原因。此前硬编码"未生成视频"，
+          // 对 sheet（图片任务）是主动误导（实施计划 §1 T4 PP6）。
+          const detail = exec.notes?.filter(n => n.trim().length > 0).join("; ");
+          ElMessage.warning(detail ? `任务已跳过：${detail}` : "任务已跳过（已自动降级），未生成该资产");
         } else {
           // 任务刚提交，执行是异步的（视频任务耗时较长），此刻查不到终态是正常时序：
           // 启动轮询让卡片状态自动跟进，不展示"未知"误导用户。
@@ -1625,7 +1635,7 @@ function handleConfirm() {
                   class="asset-blocked-chip-note"
                 >{{ item.failureNote }}</span>
                 <span
-                  v-if="item.status === 'failed'"
+                  v-if="item.status === 'failed' || (item.taskType === 'character_sheet' && item.status !== 'completed' && item.status !== 'accepted')"
                   class="asset-blocked-chip-retry"
                   :class="{ 'is-loading': assetsStore.state.generatingTaskIds.has(item.taskId) }"
                   title="重新生成此任务"
