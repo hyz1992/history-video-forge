@@ -267,7 +267,11 @@ function mapSentence(original: string, normalized: string, sourceBase: number,
     if (node.skipped !== undefined) skipped.push(node.skipped);
     chunks.push(node.units);
   }
-  if (arbitratedAt.length) emit({ kind: "tie_arbitrated", sentenceBase: sourceBase, cost: final.cost,
+  // 不变量：arbitratedAt 的 push 只发生在以 final 起始的回溯循环内，故 length > 0 ⟹ final 必非 undefined
+  //（final 为空时上方已 fail 抛出）。TS 无法关联这两个事实，且 fail 声明为 `const fail = (): never => …`
+  // 未给变量显式类型标注，never 返回分析不生效、if (!final) 之后的收窄不会发生——故此处显式带上
+  // final 守卫（不用 `final!`），保留类型保护；运行时该条件恒真。
+  if (final && arbitratedAt.length) emit({ kind: "tie_arbitrated", sentenceBase: sourceBase, cost: final.cost,
     blocks: blocks.length, ties: arbitratedAt.length, arbitratedAt: arbitratedAt.reverse().slice(0, 8) });
   // 有限诊断：记录被跳过的静音片段（按文中顺序），用于观察供应商改写行为。
   if (skipped.length) emit({ kind: "silent_skip", sentenceBase: sourceBase, skipped: skipped.reverse().slice(0, 8) });
