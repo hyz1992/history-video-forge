@@ -6,20 +6,19 @@
  * Checked docs: https://help.aliyun.com/zh/model-studio/ (2026-05-16).
  */
 
-import { readFile } from "node:fs/promises";
-
 import type { AssetArtifact, AssetPlan } from "../../../../../../shared/src/index.js";
 import type { AssetProviderAdapter, AssetProviderContext } from "../../assets-provider-adapter.js";
+import {
+  resolveCharacterSheetReferenceImages,
+  type SheetReferenceImage,
+} from "../../character-sheet-reference.js";
 import {
   resolveAssetsRunStorage,
   writeAssetFile,
 } from "../../assets-file-storage.js";
 
 /** 参考图（角色 sheet 注入）：按供应商要求走 base64 内联，不依赖公网 URL 有效期。 */
-export interface DashScopeImageReference {
-  base64: string;
-  mimeType: string;
-}
+export type DashScopeImageReference = SheetReferenceImage;
 
 export interface DashScopeImageInput {
   model: string;
@@ -101,9 +100,6 @@ export function dashscopeImageModelKnownIncapableOfCharacterSheet(
   const family = resolveDashscopeImageModelFamily(model);
   return family === "wan26_t2i" || family === "wan26_image";
 }
-
-/** 供应商约束：参考图 JPEG/PNG/BMP/WEBP、宽高 [240, 8000]、≤10MB（设计 §1.3）。 */
-export const DASHSCOPE_IMAGE_REFERENCE_MAX_BYTES = 10 * 1024 * 1024;
 
 export function buildDashscopeImagePayload(
   input: DashScopeImageInput,
@@ -225,99 +221,6 @@ async function sleep(ms: number): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function referenceMimeType(fileUri: string): string {
-  const lower = fileUri.toLowerCase();
-  if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
-  if (lower.endsWith(".webp")) return "image/webp";
-  if (lower.endsWith(".bmp")) return "image/bmp";
-  return "image/png";
-}
-
-/** 该分镜任务要注入的角色 sheet：由编译期写入的 sheet task id 反查 character_id。 */
-function characterIdsForInjection(planTask: AssetPlan["tasks"][number], assetPlan: AssetPlan): string[] {
-  const sheetTaskIds = planTask.parameters.character_sheet_task_ids;
-  if (!Array.isArray(sheetTaskIds)) return [];
-  const characterIds: string[] = [];
-  for (const taskId of sheetTaskIds) {
-    if (typeof taskId !== "string") continue;
-    const sheetTask = assetPlan.tasks.find((candidate) => candidate.task_id === taskId);
-    const characterId = sheetTask?.parameters.character_id;
-    if (typeof characterId === "string" && !characterIds.includes(characterId)) {
-      characterIds.push(characterId);
-    }
-  }
-  return characterIds;
-}
-
-/**
- * 参考图解析（设计 §3.3，实施计划 §1 T2 / P3）：
- * 按 **artifact metadata**（`sheet_role === "character_sheet"` + `character_id`）查找，
- * **不按 execution 状态**——局部重跑时旧 artifact 全部注入工作 manifest，而非目标的旧
- * execution 会被过滤丢弃，按 execution 查在"显式重生成单个分镜"场景必然静默落空。
- * `parameters.character_sheet_task_ids` 只用来确定该分镜要找哪些角色。
- *
- * 任一步失败（模型不支持参考图 / 产物缺失 / 文件不可读 / 超 10MB / 超模型参考图上限）
- * 都只降级为纯文本锚点并记 note，**不失败**（设计 §3.5）。
- */
-async function resolveCharacterSheetReferences(
-  ctx: AssetProviderContext,
-  model: string,
-): Promise<{ references: DashScopeImageReference[]; notes: string[] }> {
-  const notes: string[] = [];
-  const characterIds = characterIdsForInjection(ctx.planTask, ctx.assetPlan);
-  if (characterIds.length === 0) return { references: [], notes };
-
-  const family = resolveDashscopeImageModelFamily(model);
-  const limit =
-    family === "wan26_image"
-      ? DASHSCOPE_IMAGE_REFERENCE_LIMIT.wan26_image
-      : family === "wan27_image"
-        ? DASHSCOPE_IMAGE_REFERENCE_LIMIT.wan27_image
-        : 0;
-  if (limit === 0) {
-    return {
-      references: [],
-      notes: [`注入跳过：冻结模型 ${model} 不支持参考图输入，按纯文本锚点生成`],
-    };
-  }
-
-  const references: DashScopeImageReference[] = [];
-  for (const characterId of characterIds) {
-    if (references.length >= limit) {
-      notes.push(`注入跳过：参考图数量超过模型上限 ${limit}（角色 ${characterId} 未注入）`);
-      continue;
-    }
-    const artifact = ctx.manifest.artifacts.find((candidate) => {
-      const metadata = candidate.metadata as Record<string, unknown> | undefined;
-      return (
-        candidate.artifact_type === "image" &&
-        metadata?.sheet_role === "character_sheet" &&
-        metadata?.character_id === characterId
-      );
-    });
-    if (!artifact) {
-      notes.push(`注入跳过：未找到角色 ${characterId} 的 sheet 产物，按纯文本锚点生成`);
-      continue;
-    }
-    try {
-      const buffer = await readFile(artifact.file_uri);
-      if (buffer.byteLength > DASHSCOPE_IMAGE_REFERENCE_MAX_BYTES) {
-        notes.push(
-          `注入跳过：角色 ${characterId} 的 sheet 产物超过 ${DASHSCOPE_IMAGE_REFERENCE_MAX_BYTES} 字节上限，按纯文本锚点生成`,
-        );
-        continue;
-      }
-      references.push({
-        base64: buffer.toString("base64"),
-        mimeType: referenceMimeType(artifact.file_uri),
-      });
-    } catch {
-      notes.push(`注入跳过：角色 ${characterId} 的 sheet 产物文件不可读，按纯文本锚点生成`);
-    }
-  }
-  return { references, notes };
-}
-
 /** sheet 产物的可追溯元数据：执行期按 metadata 查找 sheet 的锚点（设计 §3.1）。 */
 function characterSheetArtifactMetadata(
   planTask: AssetPlan["tasks"][number],
@@ -355,7 +258,19 @@ export function createDashscopeImageProvider(
         typeof ctx.planTask.parameters.negative_prompt === "string"
           ? ctx.planTask.parameters.negative_prompt
           : ctx.assetPlan.art_bible.global_negative_prompts.join(", ");
-      const injection = await resolveCharacterSheetReferences(ctx, options.model);
+      const family = resolveDashscopeImageModelFamily(options.model);
+      const injection = await resolveCharacterSheetReferenceImages({
+        manifest: ctx.manifest,
+        assetPlan: ctx.assetPlan,
+        planTask: ctx.planTask,
+        model: options.model,
+        referenceLimit:
+          family === "wan26_image"
+            ? DASHSCOPE_IMAGE_REFERENCE_LIMIT.wan26_image
+            : family === "wan27_image"
+              ? DASHSCOPE_IMAGE_REFERENCE_LIMIT.wan27_image
+              : 0,
+      });
       // 降级 note 写入 execution.notes：manifest 持久化 + 运行诊断可见（设计 §3.5 N8）。
       for (const note of injection.notes) {
         ctx.execution.notes = [...ctx.execution.notes, `[sheet] ${note}`];
@@ -365,7 +280,7 @@ export function createDashscopeImageProvider(
         prompt,
         negativePrompt,
         size,
-        referenceImages: injection.references,
+        referenceImages: injection.images,
       });
 
       return {
@@ -375,7 +290,7 @@ export function createDashscopeImageProvider(
           payload,
           prompt,
           size: payload.parameters.size,
-          reference_image_count: injection.references.length,
+          reference_image_count: injection.images.length,
         },
       };
     },
