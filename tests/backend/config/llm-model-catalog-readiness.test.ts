@@ -17,6 +17,7 @@ import { createDbClient } from "../../../backend/src/db/client.js";
 import type { ProviderModelCatalogRecord } from "../../../backend/src/db/client.js";
 import {
   buildPricingCatalogSeed,
+  DASHSCOPE_MEDIA_CANDIDATES_V1,
   type LlmTierSeedInput,
 } from "../../../backend/src/modules/generation-cost/pricing-catalog.seed.js";
 import {
@@ -38,7 +39,9 @@ const MEDIA_READY = {
   registeredModels: [
     { capability: "image.generate" as const, providerKey: "dashscope", modelId: "wan2.6-t2i" },
     { capability: "video.image_to_video" as const, providerKey: "dashscope", modelId: "wan2.7-i2v-2026-04-25" },
-    { capability: "video.image_to_video" as const, providerKey: "dashscope", modelId: "wan2.6-i2v-flash" },
+    // 内置媒体候选从 seed 常量派生（与生产 bootstrap 同源）；手写镜像会重现
+    // "目录行被判 media_model_not_registered" 的漂移。
+    ...DASHSCOPE_MEDIA_CANDIDATES_V1,
     { capability: "tts.synthesize" as const, providerKey: "dashscope", modelId: "qwen3-tts-instruct-flash" },
   ],
   credentialConfigured: true,
@@ -188,7 +191,9 @@ describe("媒体 additionalModels（S2-2C §7.2）", () => {
         ],
       },
     });
-    const candidate = seed.find((e) => e.capability === "image.generate" && !e.isDefault)!;
+    const candidate = seed.find(
+      (e) => e.capability === "image.generate" && e.modelId === "wanx-candidate",
+    )!;
     expect(candidate.modelId).toBe("wanx-candidate");
     expect(candidate.status).toBe("active");
 

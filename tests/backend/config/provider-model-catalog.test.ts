@@ -5,6 +5,7 @@ import type { ProviderModelCatalogRecord } from "../../../backend/src/db/client.
 import { env } from "../../../backend/src/config/env.js";
 import {
   buildPricingCatalogSeed,
+  DASHSCOPE_MEDIA_CANDIDATES_V1,
   MEDIA_PRICING_VERSION,
   SEED_EFFECTIVE_AT,
 } from "../../../backend/src/modules/generation-cost/pricing-catalog.seed.js";
@@ -33,7 +34,9 @@ import { listPublicGenerationCapabilities } from "../../../backend/src/modules/g
 const DASHSCOPE_REGISTERED_MODELS = [
   { capability: "image.generate" as const, providerKey: "dashscope", modelId: "wan2.6-t2i" },
   { capability: "video.image_to_video" as const, providerKey: "dashscope", modelId: "wan2.7-i2v-2026-04-25" },
-  { capability: "video.image_to_video" as const, providerKey: "dashscope", modelId: "wan2.6-i2v-flash" },
+  // 内置媒体候选从 seed 常量派生（生产 bootstrap 同样直接并入该常量）；
+  // 手写镜像会重现"目录行被判 media_model_not_registered → 前端候选不可见"的漂移。
+  ...DASHSCOPE_MEDIA_CANDIDATES_V1,
   { capability: "tts.synthesize" as const, providerKey: "dashscope", modelId: "qwen3-tts-instruct-flash" },
 ];
 
@@ -586,8 +589,8 @@ describe("generation cost bootstrap", () => {
     expectLegacyReadyWithWsRejected(result.readiness);
     expect(result.disabledProviderModelIds).toEqual([]);
     const entries = listProviderModelCatalog(db);
-    // 媒体 3（image/video 默认 + video 候选 wan2.6-i2v-flash/tts）+ LLM 2。
-    expect(entries.length).toBe(7);
+    // 媒体 6（image/video/tts 默认 + 候选 wan2.7-image、wan2.6-i2v-flash + 口播专用非默认 WS tts）+ LLM 2。
+    expect(entries.length).toBe(8);
     for (const entry of entries) {
       expect(entry.status, entry.id).toBe("active");
     }
@@ -608,7 +611,7 @@ describe("generation cost bootstrap", () => {
     expect(
       listPublicGenerationCapabilities(db).find((e) => e.id === videoEntry.id),
     ).toBeUndefined();
-    expect(listPublicGenerationCapabilities(db).length).toBe(5);
+    expect(listPublicGenerationCapabilities(db).length).toBe(6);
     expect(result.readiness.items[QUALIFIED_WS_ID]).toMatchObject({ quotable: false, realDispatchAllowed: false });
   });
 
@@ -651,7 +654,7 @@ describe("generation cost bootstrap", () => {
     await bootstrapGenerationCostCatalog(db, REAL_TIER_INPUT);
     const second = await bootstrapGenerationCostCatalog(db, REAL_TIER_INPUT);
     expect(second.disabledProviderModelIds).toEqual([]);
-    expect(listProviderModelCatalog(db).length).toBe(7);
+    expect(listProviderModelCatalog(db).length).toBe(8);
   });
 
   it("restores active catalog rows when the environment recovers (test then production restart)", async () => {
@@ -759,8 +762,8 @@ describe("resolve generation cost bootstrap input", () => {
 
     const intl = resolveGenerationCostBootstrapInput(makeDeps("https://dashscope-intl.aliyuncs.com"));
     expect(intl.media.deploymentScope).toBe("singapore");
-    // env 默认 3 个媒体模型 + 内置媒体候选（DASHSCOPE_MEDIA_CANDIDATES_V1：wan2.6-i2v-flash）。
-    expect(intl.media.registeredModels.length).toBe(4);
+    // env 默认 3 个媒体模型 + 内置媒体候选（DASHSCOPE_MEDIA_CANDIDATES_V1：wan2.6-i2v-flash、wan2.7-image）。
+    expect(intl.media.registeredModels.length).toBe(5);
     expect(intl.media.registeredModels).toContainEqual({
       capability: "video.image_to_video",
       providerKey: "dashscope",

@@ -68,6 +68,19 @@ export const DASHSCOPE_MEDIA_CANDIDATES_V1: MediaAdditionalModel[] = [
     qualityTier: "standard",
     speedTier: "fast",
   },
+  {
+    // 角色 sheet 一致性的参考图模型位（2026-09-18 设计 §3.4/§3.6，候选 (c)）：
+    // 该模型同时支持 0 图调用与参考图调用（2026-09-21 运行级确认：异步建任务 +
+    // GET /tasks 轮询 + base64 参考图注入，请求参数见 T2 提交信息）。
+    // 单价未核实 → 候选行入库即 unpriced（unbounded，诚实原则），
+    // live check 核实后登记到已核实定价表。
+    capability: "image.generate",
+    providerKey: "dashscope",
+    modelId: "wan2.7-image",
+    displayName: "万相图像生成与编辑 2.7（wan2.7-image，支持参考图）",
+    qualityTier: "high",
+    speedTier: "standard",
+  },
 ];
 
 /**

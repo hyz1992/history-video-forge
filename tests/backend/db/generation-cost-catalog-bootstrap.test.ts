@@ -12,6 +12,7 @@ import { hydrateFirstAggregates } from "../../../backend/src/db/repositories/pri
 import {
   bootstrapGenerationCostCatalog,
 } from "../../../backend/src/modules/generation-cost/generation-cost-bootstrap.js";
+import { DASHSCOPE_MEDIA_CANDIDATES_V1 } from "../../../backend/src/modules/generation-cost/pricing-catalog.seed.js";
 import { listProviderModelCatalog } from "../../../backend/src/modules/generation-cost/provider-model-catalog.repository.js";
 import { applyAllDatabaseMigrations } from "./migration-test-utils.js";
 
@@ -68,7 +69,8 @@ const CONFIGURED_MEDIA_INPUT = {
   registeredModels: [
     { capability: "image.generate" as const, providerKey: "dashscope", modelId: "wan2.6-t2i" },
     { capability: "video.image_to_video" as const, providerKey: "dashscope", modelId: "wan2.7-i2v-2026-04-25" },
-    { capability: "video.image_to_video" as const, providerKey: "dashscope", modelId: "wan2.6-i2v-flash" },
+    // 内置媒体候选从 seed 常量派生（生产 bootstrap 直接并入该常量），不再手写镜像。
+    ...DASHSCOPE_MEDIA_CANDIDATES_V1,
     { capability: "tts.synthesize" as const, providerKey: "dashscope", modelId: "qwen3-tts-instruct-flash" },
   ],
   credentialConfigured: true,
@@ -135,7 +137,7 @@ describe("generation cost catalog bootstrap (prisma)", () => {
     expect(mediaRow?.isDefault).toBe(true);
 
     const totalRows = await client.providerModelCatalog.count();
-    expect(totalRows).toBe(12); // 5 占位 + 6旧seed + 1口播专用非默认WS
+    expect(totalRows).toBe(13); // 5 占位 + 7旧seed + 1口播专用非默认WS
   });
 
   it("persists readiness-materialized disables for test environments", async () => {
