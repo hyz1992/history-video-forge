@@ -583,11 +583,20 @@ function warnDispatchGateBlocked(
   );
 }
 
-function allowedArtifactTypesForTask(taskType: AssetPlan["tasks"][number]["task_type"]) {
+/**
+ * 手动上传路径的 artifact 类型白名单。
+ * 「只加导出，不改逻辑」：导出供「角色 sheet 的 artifact 类型面」单测直接断言返回值
+ *（缺 case 的表现是上传路径拿到 undefined 后抛 TypeError/500，不是类型错误）。
+ */
+export function allowedArtifactTypesForTask(taskType: AssetPlan["tasks"][number]["task_type"]) {
   switch (taskType) {
     case "tts_audio":
       return ["tts_chunk_audio", "tts_merged_audio"];
     case "image_still":
+      return ["image"];
+    // 角色 sheet 的产物类型与手动上传类型都与分镜图一致（设计 §3.1：artifact_type 仍为 image）。
+    // 缺此 case 时手动上传路径会取到 undefined 并抛 TypeError/500（设计 §3.7 第 4 项）。
+    case "character_sheet":
       return ["image"];
     case "video_clip":
       return ["video"];

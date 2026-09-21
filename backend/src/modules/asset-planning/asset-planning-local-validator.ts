@@ -37,6 +37,9 @@ const NULL_SEGMENT_ALLOWED_TASK_TYPES = new Set([
   "subtitle_track",
   "sfx_cue",
   "bgm_cue",
+  // 角色 sheet 是跨 segment 的参考资产，source_segment_id 固定为 null
+  //（2026-09-18 设计 §3.1/§3.7 第 2 项）：缺此值编译器落地即全局红。
+  "character_sheet",
 ]);
 
 const VISUAL_TASK_TYPES = new Set([

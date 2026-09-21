@@ -1023,6 +1023,9 @@ export async function runAssetPlanningGeneration(
         input.billingContext?.resolved as { effective?: { video?: { api_quality?: string } } }
       )?.effective?.video?.api_quality,
     ),
+    // 角色 sheet 一致性（设计 §3.6）：env 读取点在此，编译器只收机械输入。
+    // legacy 模式不调用 intent 编译器，故 legacy 路径天然不产 sheet 任务（回滚面）。
+    characterSheet: getValidatedRuntimeEnv().assetPlanningCharacterSheet,
   });
   await beforeDispatch();
   let localValidation = validateAssetPlan(

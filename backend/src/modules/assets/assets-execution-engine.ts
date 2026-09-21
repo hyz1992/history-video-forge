@@ -29,6 +29,10 @@ import type { AssetProviderRegistry } from "./assets-provider-registry.js";
 const TASK_TYPE_PRIORITY: Record<AssetTaskExecution["task_type"], number> = {
   tts_audio: 0,
   subtitle_track: 1,
+  // 角色 sheet 先于分镜图执行：单趟循环内分镜图的 prepare 才能看到 sheet artifact
+  //（2026-09-18 设计 §3.3）。本处只满足 Record 完整性——T1 阶段无 sheet 任务实例，
+  // 排序语义的验证在 T3。
+  character_sheet: 1.5,
   image_still: 2,
   video_clip: 3,
   sfx_cue: 4,

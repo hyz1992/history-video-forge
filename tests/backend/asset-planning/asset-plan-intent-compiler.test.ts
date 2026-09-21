@@ -5,6 +5,7 @@ import {
   AssetPlanCompilerInvariantError,
   compileAssetPlanFromIntents,
   type AssetPlanCompilerInput,
+  type CharacterSheetCompileConfig,
   type CompiledIntentChunkInput,
   type GlobalPlanningCompilerDraft,
   type LocalAudioSkeleton,
@@ -410,5 +411,173 @@ describe("compileAssetPlanFromIntents", () => {
     });
     expect(JSON.stringify(thrown)).not.toContain(storyboardSecret);
     expect(JSON.stringify(thrown)).not.toContain(draftSecret);
+  });
+});
+
+describe("character_sheet 任务（T1：阈值、开关、注入关系）", () => {
+  /**
+   * 只改写 scene_description / visual_elements：阈值统计只看前者（与 [角色锚点] 同源），
+   * script_excerpt 与 chunk 结构保持不变，因此 tts_plan / 覆盖率校验不受影响。
+   */
+  function withSegmentTexts(storyboard: StoryboardPlan, texts: string[]): StoryboardPlan {
+    return {
+      ...storyboard,
+      segments: storyboard.segments.map((segment, index) => ({
+        ...segment,
+        scene_description: `第${index + 1}段场景：${texts[index] ?? "无人物"}。`,
+        visual_elements: [],
+      })),
+    };
+  }
+
+  function sheetInput(
+    texts: string[],
+    extras: {
+      characters?: AssetPlan["art_bible"]["characters"];
+      characterSheet?: CharacterSheetCompileConfig;
+    } = {},
+  ): AssetPlanCompilerInput {
+    const base = makeInput(texts.length);
+    return {
+      ...base,
+      storyboard: withSegmentTexts(base.storyboard, texts),
+      globalDraft: {
+        ...base.globalDraft,
+        art_bible: {
+          ...base.globalDraft.art_bible,
+          characters: extras.characters ?? base.globalDraft.art_bible.characters,
+        },
+      },
+      characterSheet: extras.characterSheet,
+    };
+  }
+
+  const 甲 = { character_id: "char_1", label: "人物甲", role: "主角", visual_description: "束发深衣", consistency_notes: [] };
+  const 乙 = { character_id: "char_2", label: "人物乙", role: "配角", visual_description: "短褐麻衣", consistency_notes: [] };
+
+  it("开关关闭（缺省 / enabled:false）时不产 sheet 任务，输出与现状逐字一致", () => {
+    const off = sheetInput(["人物甲在庭院", "人物甲拔剑", "人物甲退走"]);
+    const baseline = compileAssetPlanFromIntents(off);
+    const explicitOff = compileAssetPlanFromIntents({
+      ...off,
+      characterSheet: { enabled: false, minSegmentHits: 1 },
+    });
+    expect(explicitOff).toEqual(baseline);
+    expect(baseline.plan.tasks.some((task) => task.task_type === "character_sheet")).toBe(false);
+    expect(
+      baseline.plan.tasks.every((task) => task.parameters.character_sheet_task_ids === undefined),
+    ).toBe(true);
+    // 阈值高于任何角色的命中数时同样不产 sheet（阈值边界的另一侧）。
+    const unreachable = compileAssetPlanFromIntents({
+      ...off,
+      characterSheet: { enabled: true, minSegmentHits: 99 },
+    });
+    expect(unreachable).toEqual(baseline);
+  });
+
+  it("开关开启且命中数达阈值时生成一张 sheet，字段完整且计划级校验放行", () => {
+    const input = sheetInput(["人物甲在庭院", "人物甲拔剑", "人物甲退走"], {
+      characterSheet: { enabled: true, minSegmentHits: 3 },
+    });
+    const { plan } = compileAssetPlanFromIntents(input);
+    const sheet = plan.tasks.find((task) => task.task_type === "character_sheet");
+    expect(sheet).toMatchObject({
+      task_id: "sheet_001",
+      order: 2,
+      task_type: "character_sheet",
+      source_segment_id: null,
+      source_excerpt: "束发深衣",
+      recommended_mode: "manual_allowed",
+      provider_hint: null,
+      cost_tier: "low",
+      initial_status: "planned",
+      // required 必须为 false：validator 在类型白名单判断之前就按 required 提前返回（设计 §3.1）。
+      manual_upload_policy: {
+        allowed: true,
+        required: false,
+        accepted_file_types: ["image/png", "image/jpeg"],
+      },
+    });
+    // prompt_draft 由确定性模板拼装：角色 + 朝代风格 + 定妆布局（不依赖既有 enrichment）。
+    expect(sheet!.prompt_draft).toContain("人物甲");
+    expect(sheet!.prompt_draft).toContain("束发深衣");
+    expect(sheet!.prompt_draft).toContain("战国");
+    expect(sheet!.prompt_draft).toContain("定妆参考图");
+    expect(sheet!.risk_notes.length).toBeGreaterThan(0);
+    expect(sheet!.parameters).toMatchObject({
+      character_id: "char_1",
+      sheet_role: "character_sheet",
+      segment_hit_count: 3,
+      matched_segment_ids: ["seg_001", "seg_002", "seg_003"],
+      // 独立画幅：不继承分镜图的 9:16 / 1080*1920（设计 §3.2）。
+      aspect_ratio: "16:9",
+      size: "2048*1152",
+      negative_prompt: "现代物品",
+    });
+    expect(() => AssetPlan.parse(plan)).not.toThrow();
+    const validation = validateAssetPlan({
+      plan,
+      storyboard: input.storyboard,
+      scriptText: input.draft.script_text,
+      storyboardRecordId: input.sourceIds.storyboardRecordId,
+      scriptRecordId: input.sourceIds.scriptRecordId,
+      topicPackageId: input.sourceIds.topicPackageId,
+      segmentVisualRoutes: input.segmentVisualRoutes,
+    });
+    expect(validation.errors).not.toContain("asset_task_source_segment_invalid");
+    expect(validation.decision).toBe("pass");
+  });
+
+  it("阈值边界：命中 2 不生成、命中 3/4 生成", () => {
+    for (const [hits, expected] of [[2, 0], [3, 1], [4, 1]] as const) {
+      const texts = Array.from({ length: 4 }, (_, index) =>
+        index < hits ? "人物甲在庭院" : "无人物",
+      );
+      const { plan } = compileAssetPlanFromIntents(
+        sheetInput(texts, { characterSheet: { enabled: true, minSegmentHits: 3 } }),
+      );
+      expect(plan.tasks.filter((task) => task.task_type === "character_sheet")).toHaveLength(expected);
+    }
+  });
+
+  it("命中段的分镜图任务带 character_sheet_task_ids，未命中段不写该键，且不产生硬依赖", () => {
+    const input = sheetInput(
+      ["人物甲在庭院", "人物甲拔剑", "人物甲与人物乙对峙", "人物乙退走"],
+      { characters: [甲, 乙], characterSheet: { enabled: true, minSegmentHits: 3 } },
+    );
+    const { plan } = compileAssetPlanFromIntents(input);
+    // 人物甲命中 3 段（达阈值），人物乙只命中 2 段（不产 sheet）。
+    expect(
+      plan.tasks.filter((task) => task.task_type === "character_sheet").map((task) => task.task_id),
+    ).toEqual(["sheet_001"]);
+    const imageOf = (segmentId: string) =>
+      plan.tasks.find(
+        (task) => task.task_type === "image_still" && task.source_segment_id === segmentId,
+      )!;
+    expect(imageOf("seg_001").parameters.character_sheet_task_ids).toEqual(["sheet_001"]);
+    expect(imageOf("seg_002").parameters.character_sheet_task_ids).toEqual(["sheet_001"]);
+    expect(imageOf("seg_003").parameters.character_sheet_task_ids).toEqual(["sheet_001"]);
+    expect(imageOf("seg_004").parameters).not.toHaveProperty("character_sheet_task_ids");
+    // 可用性注入不是硬依赖（设计 §3.3）：引擎是单趟循环，硬依赖会把 sheet 失败放大成整批失败。
+    expect(plan.dependencies.filter((item) => item.depends_on_task_id === "sheet_001")).toEqual([]);
+  });
+
+  it("多角色同时达阈值时各生成一张 sheet，共命中段按角色顺序注入两个 id", () => {
+    const input = sheetInput(
+      ["人物甲在庭院", "人物甲与人物乙对峙", "人物甲拔剑", "人物乙退走", "人物乙回望"],
+      { characters: [甲, 乙], characterSheet: { enabled: true, minSegmentHits: 3 } },
+    );
+    const { plan } = compileAssetPlanFromIntents(input);
+    const sheets = plan.tasks.filter((task) => task.task_type === "character_sheet");
+    expect(sheets.map((task) => task.task_id)).toEqual(["sheet_001", "sheet_002"]);
+    expect(sheets.map((task) => task.parameters.character_id)).toEqual(["char_1", "char_2"]);
+    // sheet 任务 order 连续且落在音频骨架之后。
+    expect(sheets.map((task) => task.order)).toEqual([2, 3]);
+    const imageOf = (segmentId: string) =>
+      plan.tasks.find(
+        (task) => task.task_type === "image_still" && task.source_segment_id === segmentId,
+      )!;
+    expect(imageOf("seg_002").parameters.character_sheet_task_ids).toEqual(["sheet_001", "sheet_002"]);
+    expect(imageOf("seg_005").parameters.character_sheet_task_ids).toEqual(["sheet_002"]);
   });
 });

@@ -42,6 +42,7 @@ import { enrichAssetVisualPrompt } from "./asset-plan-prompt-enrichment.js";
 import { mergeArtStylePresetIntoArtBible } from "./art-style-preset-merge.js";
 import {
   compileAssetPlanFromIntents,
+  type CharacterSheetCompileConfig,
   type CompiledIntentChunkInput,
   type LocalAudioSkeleton,
 } from "./asset-plan-intent-compiler.js";
@@ -293,6 +294,12 @@ export interface GenerateAssetPlanInput {
   generationMode?: AssetPlanningGenerationMode;
   narrationTiming?: StoryboardTimingContext;
   beforeDispatch?: () => Promise<void>;
+  /**
+   * 角色 sheet 一致性开关与阈值（2026-09-18 设计 §3.6）：env 读取在调用方，
+   * 生成服务只机械透传给编译器；缺省 = 关闭。仅 intent_compiler 路径消费
+   *（legacy 路径不产 sheet 任务，是天然回滚面）。
+   */
+  characterSheet?: CharacterSheetCompileConfig;
   sourceStoryboardRecordId: string;
   sourceScriptRecordId: string;
   sourceTopicPackageId: string;
@@ -566,6 +573,7 @@ export async function generateAssetPlan(
         chunks: chunkBatch.results,
         segmentVisualRoutes: input.segmentVisualRoutes,
         videoResolution: input.videoResolution,
+        characterSheet: input.characterSheet,
       });
     } catch (error) {
       for (const event of chunkBatch.events) {

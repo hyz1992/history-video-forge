@@ -19,6 +19,15 @@ export interface AppEnv {
   promptAssetsDir: string;
   assetPlanningGenerationMode: AssetPlanningGenerationMode;
   /**
+   * 角色 sheet 一致性（2026-09-18 设计 §3.6，实施计划 §1 T1）：开关与出场阈值的
+   * 唯一 env 读取点。编译器只消费调用方机械传入的值（AssetPlanCompilerInput.characterSheet），
+   * 从而"开关关/开"的单测不必操纵环境变量。
+   */
+  assetPlanningCharacterSheet: {
+    enabled: boolean;
+    minSegmentHits: number;
+  };
+  /**
    * S2-2A 任务 7：生成成本治理相关 env 状态。
    * mediaCredentialConfigured 是"unconfigured 环境"判定的单一 env 来源：
    * 媒体凭据未配置时，付费媒体目录项不得报价/真实派发（readiness 交叉校验）。
@@ -115,6 +124,21 @@ function buildEnv(dotEnvValues: Record<string, string>): AppEnv {
     assetPlanningGenerationMode: readAssetPlanningGenerationMode(
       readEnvValue("ASSET_PLANNING_GENERATION_MODE", dotEnvValues),
     ),
+    assetPlanningCharacterSheet: {
+      enabled: readBooleanEnv(
+        readNonEmptyEnvValue("ASSET_CHARACTER_SHEET_ENABLED", dotEnvValues),
+        "ASSET_CHARACTER_SHEET_ENABLED",
+        false,
+      ),
+      minSegmentHits: readPositiveIntegerEnv(
+        readNonEmptyEnvValue(
+          "ASSET_CHARACTER_SHEET_MIN_SEGMENT_HITS",
+          dotEnvValues,
+        ),
+        "ASSET_CHARACTER_SHEET_MIN_SEGMENT_HITS",
+        3,
+      ),
+    },
     generation: {
       mediaCredentialConfigured:
         readNonEmptyEnvValue("ALIYUN_DASHSCOPE_API_KEY", dotEnvValues) !== undefined,
@@ -200,6 +224,36 @@ function readNonEmptyEnvValue(
     return undefined;
   }
   return value;
+}
+
+/**
+ * 布尔开关解析：只接受 `true`/`false`，未设置用默认值，其他值启动即失败。
+ * 与 `ASSET_PLANNING_GENERATION_MODE` 同口径（未知值启动失败），
+ * 避免拼错的开关被静默当成"关闭"或"打开"。
+ */
+function readBooleanEnv(
+  value: string | undefined,
+  key: string,
+  defaultValue: boolean,
+): boolean {
+  if (value === undefined) return defaultValue;
+  if (value === "true") return true;
+  if (value === "false") return false;
+  throw new Error(`${key} must be true or false`);
+}
+
+/** 正整数解析：未设置用默认值，非正整数启动即失败（静默回退会改变计费行为）。 */
+function readPositiveIntegerEnv(
+  value: string | undefined,
+  key: string,
+  defaultValue: number,
+): number {
+  if (value === undefined) return defaultValue;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    throw new Error(`${key} must be a positive integer`);
+  }
+  return parsed;
 }
 
 function readEnvValue(

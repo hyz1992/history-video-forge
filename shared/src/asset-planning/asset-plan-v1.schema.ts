@@ -10,6 +10,9 @@ export const AssetTaskType = z.enum([
   "sfx_cue",
   "bgm_cue",
   "render_motion_cue",
+  // 角色 sheet（2026-09-18 设计 §3.1）：null segment 的参考资产任务，
+  // 不进任何 segment route，只作为分镜图任务的参考图来源。
+  "character_sheet",
 ]);
 
 export const AssetTaskRecommendedMode = z.enum([

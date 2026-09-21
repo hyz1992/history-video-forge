@@ -11,7 +11,12 @@ import { verifyStoryboardNarrationContext } from "../storyboard/storyboard-narra
 import { validateStoryboardTiming, type StoryboardTimingContext } from "../storyboard/storyboard-timing-projector.js";
 import { isDeepStrictEqual } from "node:util";
 import type { SegmentAssetIntentBatchDraft } from "./segment-asset-intent.js";
-import { enrichAssetVisualPrompt } from "./asset-plan-prompt-enrichment.js";
+import {
+  buildCharacterSheetPrompt,
+  characterHitsSegmentText,
+  enrichAssetVisualPrompt,
+  segmentAnchorText,
+} from "./asset-plan-prompt-enrichment.js";
 import { validateAssetPlan } from "./asset-planning-local-validator.js";
 
 export interface GlobalPlanningCompilerDraft {
@@ -34,6 +39,17 @@ export interface CompiledIntentChunkInput {
   draft: SegmentAssetIntentBatchDraft;
 }
 
+/** 角色 sheet 的编译输入（2026-09-18 设计 §3.2/§3.6）。 */
+export interface CharacterSheetCompileConfig {
+  /**
+   * 开关：关闭时编译器不产出任何 sheet 任务，输出与现状逐字一致（主回滚面）。
+   * 由调用方从环境读取后机械传入，编译器本身不读 env。
+   */
+  enabled: boolean;
+  /** 出场阈值：label 命中且有分镜图的 segment 数 ≥ 该值才生成 sheet（默认 3）。 */
+  minSegmentHits: number;
+}
+
 export interface AssetPlanCompilerInput {
   sourceIds: {
     storyboardRecordId: string;
@@ -46,6 +62,12 @@ export interface AssetPlanCompilerInput {
   audioSkeleton?: LocalAudioSkeleton;
   narrationTiming?: StoryboardTimingContext;
   chunks: CompiledIntentChunkInput[];
+  /**
+   * 角色 sheet 一致性开关与阈值，来源为 env，由调用方传入（**编译器不读 env**：
+   * 否则"开关关/开"的单测必须操纵环境变量，也破坏本文件的纯输入风格）。
+   * 缺省/`enabled: false` = 不产 sheet 任务。
+   */
+  characterSheet?: CharacterSheetCompileConfig;
   /**
    * S2-2A 任务 5：resolver 输出的每段最终视觉路线（编排输入，纯机械消费）。
    * compiler 不读取 api_video_suitability 做语义推导，只按路线核对意图组合。
@@ -358,10 +380,99 @@ function createTask(item: NormalizedIntent, anchorId: string | undefined, global
   };
 }
 
+type ArtBibleCharacter = AssetPlan["art_bible"]["characters"][number];
+
+interface CharacterSheetEntry {
+  character: ArtBibleCharacter;
+  segmentIds: string[];
+}
+
+/**
+ * 出场阈值统计（设计 §3.2，确定性阶段、非 LLM 猜测）：label 命中 segment 文本
+ *（scene_description + visual_elements，与 [角色锚点] 同源匹配）且该 segment 有分镜图任务的
+ * segment 数 ≥ minSegmentHits 才生成 sheet——1~2 镜的配角不值得一张计费定妆图。
+ */
+function planCharacterSheets(
+  input: AssetPlanCompilerInput,
+  orderedSegments: StoryboardPlan["segments"],
+  imageSegmentIds: ReadonlySet<string>,
+): CharacterSheetEntry[] {
+  const config = input.characterSheet;
+  // 开关关闭：整段逻辑跳过，不产生任何 sheet 任务与注入键（输出与现状逐字一致）。
+  if (!config?.enabled) return [];
+  return input.globalDraft.art_bible.characters.flatMap((character) => {
+    const segmentIds = orderedSegments
+      .filter(
+        (segment) =>
+          imageSegmentIds.has(segment.segment_id) &&
+          characterHitsSegmentText(character, segmentAnchorText(segment)),
+      )
+      .map((segment) => segment.segment_id);
+    return segmentIds.length >= config.minSegmentHits
+      ? [{ character, segmentIds }]
+      : [];
+  });
+}
+
+/**
+ * sheet 任务构造器：sheet 没有对应的 intent kind，**不能复用 createTask**
+ *（createTask 入参是 NormalizedIntent），因此在这里补齐 AssetTask 的必填字段。
+ */
+function createCharacterSheetTask(
+  entry: CharacterSheetEntry,
+  index: number,
+  order: number,
+  globalDraft: GlobalPlanningCompilerDraft,
+): AssetTask {
+  const { character, segmentIds } = entry;
+  return {
+    task_id: `sheet_${String(index + 1).padStart(3, "0")}`,
+    order,
+    task_type: "character_sheet",
+    // sheet 是跨 segment 的参考资产：null segment，不进任何 segment route（设计 §3.1）。
+    source_segment_id: null,
+    source_excerpt: character.visual_description,
+    production_intent:
+      `为角色「${character.label}」生成一张定妆参考图，供命中该角色的分镜图任务作参考图注入，提升跨分镜外貌一致性`,
+    recommended_mode: "manual_allowed",
+    provider_hint: null,
+    prompt_draft: buildCharacterSheetPrompt({
+      label: character.label,
+      visualDescription: character.visual_description,
+      eraStyle: globalDraft.art_bible.era_style,
+    }),
+    parameters: {
+      // character_id / sheet_role 是执行期按 artifact metadata 查找 sheet 的锚点
+      //（实施计划 §1 T2：按 artifact metadata 查找，不按 execution 状态）。
+      character_id: character.character_id,
+      character_label: character.label,
+      sheet_role: "character_sheet",
+      segment_hit_count: segmentIds.length,
+      matched_segment_ids: [...segmentIds],
+      // 定妆图构图需求与分镜图不同：独立画幅（横版 2K），不继承分镜图的 9:16 / 1080*1920。
+      aspect_ratio: "16:9",
+      size: "2048*1152",
+      negative_prompt: globalDraft.art_bible.global_negative_prompts.join(", "),
+    },
+    manual_upload_policy: {
+      allowed: true,
+      // required 必须为 false：validator 在进入类型白名单判断**之前**就按 required 提前返回
+      //（设计 §3.1/§3.5），required=true 会让 sheet 失败的"不传染"整条失效。
+      required: false,
+      accepted_file_types: ["image/png", "image/jpeg"],
+      acceptance_notes: ["上传文件需为同一角色的清晰全身/半身参考图"],
+    },
+    risk_notes: [
+      "参考图一致性效果未经 live check 验证；冻结模型不具备参考图能力时不生成该任务（skipped_with_fallback，零计费）",
+    ],
+    cost_tier: "low",
+    initial_status: "planned",
+  };
+}
+
 function dependencyId(task: string, upstream: string, type: AssetPlan["dependencies"][number]["dependency_type"]) {
   return `dep_${task}_after_${upstream}_${type}`;
 }
-
 function summarizeCost(tasks: AssetTask[], notes: string[]): AssetPlan["cost_summary"] {
   const byType: Record<string, number> = {};
   const byCostTier: Record<string, number> = { free: 0, low: 0, medium: 0, high: 0 };
@@ -393,7 +504,39 @@ export function compileAssetPlanFromIntents(input: AssetPlanCompilerInput): { pl
 
   const audioSkeleton = input.audioSkeleton ?? { tasks: [], dependencies: [] };
   const tasks = [...structuredClone(audioSkeleton.tasks)];
-  normalized.forEach((item) => tasks.push(createTask(item, anchors.get(item.segment.segment_id), input.globalDraft, tasks.length, input.videoResolution ?? "720P")));
+  // 角色 sheet（设计 §3.2/§3.3）：开关关闭时 planCharacterSheets 返回空数组，
+  // 下面的构造与注入全部不发生——输出与现状逐字一致。
+  const sheets = planCharacterSheets(
+    input,
+    orderedSegments,
+    new Set(
+      normalized
+        .filter((item) => item.intent.asset_kind === "image_still")
+        .map((item) => item.segment.segment_id),
+    ),
+  );
+  const sheetTaskIdsBySegment = new Map<string, string[]>();
+  sheets.forEach((entry, index) => {
+    const sheetTask = createCharacterSheetTask(entry, index, tasks.length, input.globalDraft);
+    entry.segmentIds.forEach((segmentId) =>
+      sheetTaskIdsBySegment.set(segmentId, [
+        ...(sheetTaskIdsBySegment.get(segmentId) ?? []),
+        sheetTask.task_id,
+      ]),
+    );
+    tasks.push(sheetTask);
+  });
+  normalized.forEach((item) => {
+    const task = createTask(item, anchors.get(item.segment.segment_id), input.globalDraft, tasks.length, input.videoResolution ?? "720P");
+    // 可用性注入（设计 §3.3）：只声明"该分镜要找哪些角色的 sheet"，
+    // 不加 requires_output 硬依赖——引擎是单趟循环，硬依赖会把 sheet 失败放大成整批分镜图瘫痪。
+    // 无 sheet 时**不写该键**，保证开关关闭的输出与现状完全相同。
+    const sheetTaskIds = item.intent.asset_kind === "image_still"
+      ? sheetTaskIdsBySegment.get(item.segment.segment_id)
+      : undefined;
+    if (sheetTaskIds?.length) task.parameters.character_sheet_task_ids = [...sheetTaskIds];
+    tasks.push(task);
+  });
   const ids = new Set(tasks.map((task) => task.task_id));
   if (ids.size !== tasks.length) fail([{ code: "task_id_collision" }]);
 

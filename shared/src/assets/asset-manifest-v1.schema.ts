@@ -365,6 +365,9 @@ export const AssetTaskExecution = z
       "sfx_cue",
       "bgm_cue",
       "render_motion_cue",
+      // 与 AssetTaskType（asset-plan-v1）平行维护：漏改会使含 sheet execution
+      // 的 manifest 解析硬失败（2026-09-18 设计 §3.1）。
+      "character_sheet",
     ]),
     status: ExecutionStatus,
     origin: ArtifactOrigin,
