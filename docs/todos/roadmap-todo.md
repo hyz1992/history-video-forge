@@ -61,6 +61,7 @@
 - [x] 完成 `S2-1` 多模型、多供应商切换：引入 `smart` / `flash` 两档 tier 作为模型路由唯一维度，每个 operation 声明所需 tier，gateway 按 tier 解析到具体 `provider:model`。阶段一主链路改造（operation-tier-registry / provider-registry / tier-resolver / tier-aware-provider / tier-aware-provider-factory / env 接入新变量 / providers.json 示例 / 8 个调用方接入 / 启动诊断日志）与阶段二 live 验收（DeepSeek smart + 智谱 flash 端到端冒烟、selector thinking 决策）均完成。设计见 [S2-1 设计](../plans/archive/2026-07-17-s2-1-multi-provider-model-routing-design.md)，selector 决策记录见 [2026-07-18 S2-1 Selector Thinking 决策记录](../records/2026-07-18-s2-1-selector-thinking-decision.md)。S2-1 进入冻结状态，作为 S2-2 输入。
 - [x] 收口当前未归档计划，避免历史 implementation plan 误导新任务（2026-08-11 完成；`docs/plans/` 根目录仅保留状态 README，历史计划已移入 `archive/` 且不可续跑）
 - [x] 完成 `口播前置与真实时间轴` 实施计划任务 1–11（模型资格/策略门禁、原生字幕合同、WS 适配器、字幕 bundle、生命周期、失效链、分镜投影、planner、资产/manifest/字幕修订、时间轴与渲染投影、文案面板/升级/三入口创建）并逐任务审查收敛；任务 12 子任务 Task12-A fake runtime 冒烟与 Task12-B 真实浏览器验收已收敛（2026-09-10；三入口 422→选择面板→selection 重试、事件库层叠命中、口播生成/确认主链、深链门禁、legacy 并存、设置项禁用、零未处理拒绝），Task12-C 完成 [A1–A10 验收标注矩阵](../records/2026-09-10-narration-task12c-acceptance-matrix.md)（A1–A7/A9/A10 已验证，A8 成品级未验证）。2026-09-10 按用户决策移除发布开关 `NARRATION_FIRST_ENABLED` 与演示开关 `DEMO_MODE`：新建项目一律走口播前置链路，存量 legacy 项目保留可读并经显式升级入口切换；A8 成品级整片验收仍为未验证项（待预算授权）
+- [x] 完成 `角色 sheet 一致性`（资产阶段参考图一致性，2026-09-21）：`character_sheet` 新任务类型原子接入（两处枚举、计划级 null-segment 白名单、手动上传 artifact 类型面）；出场阈值编译（label 命中与 `[角色锚点]` 同源，默认 ≥3，env 可配）；dashscope 生图三值分支 + 按 artifact metadata 的参考图注入（文件缺失/超限只记 note 降级，不失败）；引擎排序/路由豁免/`image.generate` 记账/无注入价值不生成（确知模型不支持 → `skipped_with_fallback` 零派发零计费，信息缺失 fail-open）；资产级可选不完备白名单与前端承载面（"角色定妆图"标签、降级 note 展示门放宽、skip 文案按 notes 渲染）；fake 冒烟六条强断言（`npm run harness:assets-character-sheet-smoke`）。T2 付费运行级确认（3 张探针）与 T6 live check（7 张，含 16:9/9:16 画幅对照与 wan2.6-image 模型对照）完成，跨分镜一致性人工确认成立。开关 `ASSET_CHARACTER_SHEET_ENABLED` 默认关闭，legacy 模式不产 sheet；设计/实施计划见 [设计](../plans/2026-09-18-asset-character-sheet-consistency-design.md) 与 [实施计划](../plans/2026-09-19-asset-character-sheet-consistency-implementation-plan.md)，逐图回执与门禁裁决见 [live check 记录](../records/2026-09-21-asset-character-sheet-live-check.md)。
 
 ## 进行中
 - [ ] 细化 `family_confidence` 计算规则
@@ -78,6 +79,7 @@
 - [x] `S2-3` Prompt 治理：版本、hash、fixtures、变更说明、运行快照与 `prompts/` 正式 prompt 规则对齐（2026-07-18 完成）
 - [x] `S2-4` 选题筛选条件扩充：结构化筛选合同、连续历史区间、生成提示词、fingerprint/持久化/诊断与新建项目弹窗已落地（2026-08-08 完成；真实 LLM live check 未纳入默认验收）
 - [x] `S2-5` 事件库与自定义选题：系统推荐、事件库、自定义三入口进入同一 Topic Package 链路（2026-07-20 G7 验收通过）
+- [ ] 独立决策：默认生图模型是否从 `wan2.6-t2i` 切换为 `wan2.7-image`（角色 sheet 一致性的生效前置——候选 (c) 下开关实际生效要求运行快照冻结的 image 模型支持参考图，当前默认模型下开关开启只会走"确知不支持 → `skipped_with_fallback`"）。决策输入：[live check 记录](../records/2026-09-21-asset-character-sheet-live-check.md) §3.4 模型对照（wan2.7-image 写实且无现代器物；wan2.6-image 偏半插画且引入现代物品，且其编辑形态强制 1~4 图、不能承担 sheet 自身的 0 图调用）与 §6 门禁裁决；前置条件：控制台核实 wan2.7-image 2K 档实际单价并登记定价目录（当前 unpriced/unbounded）
 - [ ] `S2-6` 历史内容策略配置化：在不降低历史故事质量的前提下抽象策略
 - [ ] `S2-7` 神话故事等非历史模式扩展：放在历史故事质量和策略稳定之后
 - [ ] 修正 topic runtime 旧测试对 fingerprint 旧语义的断言
@@ -111,6 +113,7 @@
 - [ ] S2-2A 任务 11 留档（2026-08-20 终审 Minor，详见 [任务 11 审查记录](../records/2026-08-20-s2-2a-task11-review-record.md)）：成本页按运行/成功失败分组未实现（设计 §11.4，待补实施）；404 重试启发式待修（建议与 409 同归"重新报价"）；批量生成成功提示时序已修复（2026-08-21 外部审查 B1，确认提交后触发）；StrictFallbackDialog 交互层测试待补（浏览器验收未覆盖，roadmap 登记承接）；generationCostStore 未 main.ts provide（跨页不共享）+ CLIENT_PREVIEW_ONLY 死导出
 - [ ] S2-2A 任务 11 已知缺口：storyboard/asset-plan/publish 三入口 quote 正链路 + billing 落账已由 API 级 e2e（`tests/backend/s2-2a-e2e-acceptance.test.ts`，mock provider 付费部署路径）覆盖，非浏览器级；报价确认 UI 由 jsdom 组件测试覆盖；浏览器脚本（stub 部署）覆盖设置/冻结/失效预览。真实付费 LLM live 核对仍属显式授权范围
 - [ ] DashScope 图生视频真实小样本验证默认不执行；如要验证需明确批准成本并记录 request id、耗时、费用和失败模式
+- [ ] 角色 sheet 遗留观察项（2026-09-21 留档，详见 [live check 记录](../records/2026-09-21-asset-character-sheet-live-check.md) §5）：dashscope image adapter 未持久化供应商 `request_id`（回执对账只能用 task id）；手动上传的 sheet 替代图不带 `character_id` metadata、不会被注入参考图（静默退回文本锚点；"被 reject 后回退文本锚点"的设计要求已满足）；"参考图文件缺失/超限"的降级 note 落在 completed execution 上、资产面板不展示（manifest/运行诊断可见，展示门口径未裁定）
 - Asset Planning global normalization / structural repair 异常恢复目前只有 non-live 证据；后续 7 个有效 live 轮次均未触发该分支。该证据缺口不自动升级为付费 live 任务，仅在真实故障复现或另行明确授权时验证，详见 [最近一次 Asset Planning live 记录](../records/2026-08-10-asset-planning-intent-compiler-live-check.md)。
 
 ## 阻塞项

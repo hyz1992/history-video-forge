@@ -1,7 +1,7 @@
 # 角色 Sheet 一致性设计（资产阶段参考图生成）
 
 - 日期：2026-09-18
-- 状态：待评审（design 阶段；终审通过后另建 implementation plan，不直接进入实现）
+- 状态：已实施（2026-09-21 按[实施计划](./2026-09-19-asset-character-sheet-consistency-implementation-plan.md)完成 T0–T6；模型位候选 (c) 经 T2 运行级确认与 T6 live check 维持，效果/成本/门禁裁决见 [live check 记录](../records/2026-09-21-asset-character-sheet-live-check.md)）
 - 定位：外部借鉴落地第一条主线。借鉴 ArcReel 的"资产 sheet 参考图"一致性方案（`agent_runtime_profile/.claude/skills/generate-assets/SKILL.md`、ADR 0072/0073），收敛本项目工程笔记痛点 E（人物跨分镜外貌不一致）与痛点 F（生图提示词不稳定）。
 - 上游事实来源：`docs/records/2026-05-09-video-pipeline-engineering-notes.md` §1.4 人物一致性策略、`docs/plans/README.md` 2026-09-18 前各状态块。
 

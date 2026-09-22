@@ -1,7 +1,7 @@
 # 角色 Sheet 一致性实施计划
 
 - 日期：2026-09-19
-- 状态：待终审（随 [设计文档](./2026-09-18-asset-character-sheet-consistency-design.md) 终审一并确认；终审通过前不开始任何 T 任务的代码改动）
+- 状态：已实施（2026-09-21，T0–T6 七个独立中文提交 `c3c66fc6`…`3202e0b6`；T2 验收前置的运行级确认通过——主机/端点/异步头/轮询四项成立，候选 (c) 维持、未触发 §0.1 回退条款；T6 live check 效果/成本/门禁裁决见 [live check 记录](../records/2026-09-21-asset-character-sheet-live-check.md)，开关默认值保持关闭）
 - 设计入口：[2026-09-18-asset-character-sheet-consistency-design.md](./2026-09-18-asset-character-sheet-consistency-design.md)（六轮审查 27 项发现全部闭环，循环已终止）
 - 审查移交条款：后续评审对象为本计划本身；design 不再迭代（除非终审推翻决策）
 

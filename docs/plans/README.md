@@ -2,6 +2,10 @@
 
 ## 当前状态
 
+截至 2026-09-21：
+
+- [角色 sheet 一致性](./2026-09-18-asset-character-sheet-consistency-design.md)已实施完成（T0–T6 七个独立中文提交 `c3c66fc6`…`3202e0b6`）：T1 原子提交（两处任务类型枚举 + 计划级白名单 + compiler 阈值/构造器/注入 + env，typecheck 探针证实原子范围完整）；T2 验收前置的付费运行级确认通过（主机/端点/`X-DashScope-Async`/`GET /tasks` 四项成立，候选 (c) 维持、未触发回退条款）；T5 fake 冒烟六条强断言（含局部重跑 P3 防线）；T6 live check 7/7 完成，人工目视确认跨分镜一致性成立、且相对纯文本锚点有净增量。**开关 `ASSET_CHARACTER_SHEET_ENABLED` 默认保持关闭**（冻结 image 模型默认仍为 wan2.6-t2i、2K 档单价未核实、默认生图模型切换属独立决策，见 roadmap 待做项），裁决与逐图回执见 [live check 记录](../records/2026-09-21-asset-character-sheet-live-check.md)。
+
 截至 2026-09-19：
 
 - [角色 sheet 一致性设计](./2026-09-18-asset-character-sheet-consistency-design.md)已完成六轮审查循环（F1-F9、N1-N18 共 27 项发现全部闭环，审查—整改循环已按双方一致终止），配套[实施计划](./2026-09-19-asset-character-sheet-consistency-implementation-plan.md)就绪（T0-T6，含 fake 假绿防线与 live check 显式授权门）。两项待决：设计终审确认；§3.4 模型位三候选拍板（工作默认候选 c，零合同变更，终审可否决改选 a/b）。终审通过前不进入 T1 实施。
