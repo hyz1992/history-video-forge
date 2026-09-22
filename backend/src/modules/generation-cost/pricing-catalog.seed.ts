@@ -72,8 +72,8 @@ export const DASHSCOPE_MEDIA_CANDIDATES_V1: MediaAdditionalModel[] = [
     // 角色 sheet 一致性的参考图模型位（2026-09-18 设计 §3.4/§3.6，候选 (c)）：
     // 该模型同时支持 0 图调用与参考图调用（2026-09-21 运行级确认：异步建任务 +
     // GET /tasks 轮询 + base64 参考图注入，请求参数见 T2 提交信息）。
-    // 单价未核实 → 候选行入库即 unpriced（unbounded，诚实原则），
-    // live check 核实后登记到已核实定价表。
+    // 单价已核实（2026-09-22 官方模型价格页：北京 0.20 元/张，不分尺寸档），
+    // 已核实价登记在 DASHSCOPE_MEDIA_CANDIDATE_PRICED_PRICING。
     capability: "image.generate",
     providerKey: "dashscope",
     modelId: "wan2.7-image",
@@ -205,6 +205,22 @@ const DASHSCOPE_MEDIA_CANDIDATE_PRICED_PRICING: Record<
   string,
   (scope: Exclude<DashscopeDeploymentScope, "unknown">) => Record<string, unknown> | null
 > = {
+  "wan2.7-image": (scope) =>
+    scope === "singapore"
+      ? // dashscope-intl 新加坡价未入目录（官方页国际行 0.224826 元/张，与现有
+        // wan2.6-t2i 新加坡 unpriced 口径一致，待运营核实 dashscope-intl 主机后登记）。
+        null
+      : {
+          // 阿里云百炼北京价（2026-09-22 官方"模型价格"页核实
+          // help.aliyun.com/zh/model-studio/model-pricing）：0.20 元/张；
+          // 仅输出计费、按成功张数计费（API 参考：费用 = 单价 × 成功生成的图片张数），
+          // **不按 1K/2K 尺寸分档**（分档仅 qwen-image 系列）——sheet 的 2K 画幅同价。
+          unit_type: "image",
+          currency: "CNY",
+          price_micros_per_image: "200000",
+          effective_at: SEED_EFFECTIVE_AT,
+          source_note: `${DASHSCOPE_MEDIA_SOURCE_NOTE}（wan2.7-image，help.aliyun.com/zh/model-studio/model-pricing）`,
+        },
   "wan2.6-i2v-flash": (scope) =>
     scope === "singapore"
       ? // dashscope-intl 新加坡 wan2.6-i2v-flash 有声价未核实：unpriced → unbounded。
