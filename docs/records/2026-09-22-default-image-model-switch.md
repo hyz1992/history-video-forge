@@ -40,3 +40,18 @@
 - wan2.6-t2i 保留为可选候选，用户可在设置 > Provider/Model 高级选择中切回。
 - singapore（dashscope-intl）两行维持 unpriced/unbounded；官方页已有国际行数字（wan2.6-t2i 0.220177、wan2.7-image 0.224826 元/张），待运营确认主机与币种口径后登记。
 - **下一步关联决策（未做）**：默认模型切换后，角色 sheet 开关 `ASSET_CHARACTER_SHEET_ENABLED` 的生效前提已满足；是否把该开关默认值翻转为开（每次资产运行对达标角色 +0.20 元/角色）按计划 §1 T6 门禁属下一个独立评估项，本记录不代决策。
+
+### 补录（2026-09-22，同日第二次决策）：sheet 开关默认值翻转为开启
+
+用户拍板"开"。`ASSET_CHARACTER_SHEET_ENABLED` env 默认值 false → true（`env.ts`，
+唯一 env 读取点），`.env.example` 同步；`readBooleanEnv` 仍只接受 true/false（未知值
+启动失败）。生效前提（默认 image 模型为 wan2.7-image）已随本记录主决策满足，
+live check 效果/成本达标（§1 T6 门禁）。
+
+成本影响：每个达标角色（label 命中 ≥3 个有分镜图的 segment）+1 张定妆图 = +0.20 元/角色；
+命中分镜图任务注入参考图不改变单张计费。回滚面：显式 `ASSET_CHARACTER_SHEET_ENABLED=false`
+（纯文本锚点），或 `ASSET_PLANNING_GENERATION_MODE=legacy`（不产 sheet 任务）。
+
+验证：typecheck 0 error；全量 2000 条测试 48 failed 与翻转前基线逐文件一致
+（45 既有 + harness topic 域 3 既有），零新增失败；新增 env 默认值测试 3 条
+（默认开 / 显式 false 可回滚 / 非法值启动失败），`tests/backend/config/env.test.ts` 6 条全绿。

@@ -4,7 +4,7 @@
 
 截至 2026-09-21：
 
-- [角色 sheet 一致性](./2026-09-18-asset-character-sheet-consistency-design.md)已实施完成（T0–T6 七个独立中文提交 `c3c66fc6`…`3202e0b6`）：T1 原子提交（两处任务类型枚举 + 计划级白名单 + compiler 阈值/构造器/注入 + env，typecheck 探针证实原子范围完整）；T2 验收前置的付费运行级确认通过（主机/端点/`X-DashScope-Async`/`GET /tasks` 四项成立，候选 (c) 维持、未触发回退条款）；T5 fake 冒烟六条强断言（含局部重跑 P3 防线）；T6 live check 7/7 完成，人工目视确认跨分镜一致性成立、且相对纯文本锚点有净增量。**开关 `ASSET_CHARACTER_SHEET_ENABLED` 默认保持关闭**（单价已于 2026-09-22 核实为 0.20 元/张且不按尺寸分档、已登记定价目录，见记录补录；默认生图模型已于 2026-09-22 按用户决策切换为 wan2.7-image——sheet 开关的生效前提随之满足，开关默认值翻转与否是下一个独立评估项，见 [切换决策记录](../records/2026-09-22-default-image-model-switch.md)），裁决与逐图回执见 [live check 记录](../records/2026-09-21-asset-character-sheet-live-check.md)。
+- [角色 sheet 一致性](./2026-09-18-asset-character-sheet-consistency-design.md)已实施完成（T0–T6 七个独立中文提交 `c3c66fc6`…`3202e0b6`）：T1 原子提交（两处任务类型枚举 + 计划级白名单 + compiler 阈值/构造器/注入 + env，typecheck 探针证实原子范围完整）；T2 验收前置的付费运行级确认通过（主机/端点/`X-DashScope-Async`/`GET /tasks` 四项成立，候选 (c) 维持、未触发回退条款）；T5 fake 冒烟六条强断言（含局部重跑 P3 防线）；T6 live check 7/7 完成，人工目视确认跨分镜一致性成立、且相对纯文本锚点有净增量。**开关 `ASSET_CHARACTER_SHEET_ENABLED` 已于 2026-09-22 按用户决策翻转为默认开启**（默认生图模型同日切换为 wan2.7-image 使生效前提满足；单价 0.20 元/张不分档已核实登记；回滚面 = 显式 false 或 legacy 模式，见 [切换决策记录](../records/2026-09-22-default-image-model-switch.md) 补录），裁决与逐图回执见 [live check 记录](../records/2026-09-21-asset-character-sheet-live-check.md)。
 
 截至 2026-09-19：
 

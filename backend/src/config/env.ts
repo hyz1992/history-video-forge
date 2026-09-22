@@ -22,6 +22,8 @@ export interface AppEnv {
    * 角色 sheet 一致性（2026-09-18 设计 §3.6，实施计划 §1 T1）：开关与出场阈值的
    * 唯一 env 读取点。编译器只消费调用方机械传入的值（AssetPlanCompilerInput.characterSheet），
    * 从而"开关关/开"的单测不必操纵环境变量。
+   * 2026-09-22：enabled 默认 true（用户决策，前提是默认 image 模型为 wan2.7-image；
+   * 决策记录 docs/records/2026-09-22-default-image-model-switch.md）。
    */
   assetPlanningCharacterSheet: {
     enabled: boolean;
@@ -128,7 +130,11 @@ function buildEnv(dotEnvValues: Record<string, string>): AppEnv {
       enabled: readBooleanEnv(
         readNonEmptyEnvValue("ASSET_CHARACTER_SHEET_ENABLED", dotEnvValues),
         "ASSET_CHARACTER_SHEET_ENABLED",
-        false,
+        // 2026-09-22 用户决策：默认模型已切换为 wan2.7-image（支持 0 图 + 参考图调用），
+        // sheet 开关的生效前提满足，且 live check 效果/成本达标（§1 T6 门禁）——
+        // 默认值翻转为开。回滚面：显式设 false，或 ASSET_PLANNING_GENERATION_MODE=legacy
+        //（legacy 路径不产 sheet 任务）。
+        true,
       ),
       minSegmentHits: readPositiveIntegerEnv(
         readNonEmptyEnvValue(
