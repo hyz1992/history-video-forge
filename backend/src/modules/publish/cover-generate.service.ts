@@ -25,7 +25,10 @@ export interface CoverGenerateResult {
 }
 
 const DEFAULT_BASE_URL = "https://dashscope.aliyuncs.com";
-const DEFAULT_MODEL = "wan2.6-t2i";
+// 2026-09-22 用户决策：随资产侧默认生图模型一并切换为 wan2.7-image。
+// 本服务的 multimodal-generation 同步端点已实测兼容 wan2.7-image
+//（2026-09-22 探针：HTTP 200 choices 形态带图，与 wan2.6 同构）。
+const DEFAULT_MODEL = "wan2.7-image";
 const DEFAULT_SIZE = "1080*1920";
 // Wan2.6 uses the multimodal generation endpoint for text-to-image
 const WAN_ENDPOINT = "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation";

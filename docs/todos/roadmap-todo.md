@@ -79,7 +79,7 @@
 - [x] `S2-3` Prompt 治理：版本、hash、fixtures、变更说明、运行快照与 `prompts/` 正式 prompt 规则对齐（2026-07-18 完成）
 - [x] `S2-4` 选题筛选条件扩充：结构化筛选合同、连续历史区间、生成提示词、fingerprint/持久化/诊断与新建项目弹窗已落地（2026-08-08 完成；真实 LLM live check 未纳入默认验收）
 - [x] `S2-5` 事件库与自定义选题：系统推荐、事件库、自定义三入口进入同一 Topic Package 链路（2026-07-20 G7 验收通过）
-- [ ] 独立决策：默认生图模型是否从 `wan2.6-t2i` 切换为 `wan2.7-image`（角色 sheet 一致性的生效前置——候选 (c) 下开关实际生效要求运行快照冻结的 image 模型支持参考图，当前默认模型下开关开启只会走"确知不支持 → `skipped_with_fallback`"）。决策输入：[live check 记录](../records/2026-09-21-asset-character-sheet-live-check.md) §3.4 模型对照（wan2.7-image 写实且无现代器物；wan2.6-image 偏半插画且引入现代物品，且其编辑形态强制 1~4 图、不能承担 sheet 自身的 0 图调用）与 §6 门禁裁决。前置条件已满足：单价已核实（2026-09-22 官方模型价格页：北京 0.20 元/张，仅输出计费、不按 1K/2K 分档）并已登记定价目录（cn-beijing 200000 micros，见记录补录）
+- [x] 独立决策（2026-09-22 用户拍板）：默认生图模型 `wan2.6-t2i` → `wan2.7-image`，已实施——目录默认行翻转、wan2.6-t2i 转非默认候选（保留可选）、cover 服务同步切换（multimodal 同步端点实测兼容）、前端展示 label 同步、`.env.example` 同步；价格输入（0.20 元/张持平不分档）与效果输入（live check §3.4）见 [决策记录](../records/2026-09-22-default-image-model-switch.md)。关联待评估项：角色 sheet 开关 `ASSET_CHARACTER_SHEET_ENABLED` 的生效前提已随切换满足，默认值翻转与否是下一个独立决策
 - [ ] `S2-6` 历史内容策略配置化：在不降低历史故事质量的前提下抽象策略
 - [ ] `S2-7` 神话故事等非历史模式扩展：放在历史故事质量和策略稳定之后
 - [ ] 修正 topic runtime 旧测试对 fingerprint 旧语义的断言

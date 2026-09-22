@@ -33,7 +33,8 @@ export interface PricingConfig {
  * 不参与任何授权/预算决策；真实提交必须使用后端 quote。
  */
 export const PRICING: PricingConfig = {
-  image: { unitPrice: 0.20, label: "wan2.6-t2i" },
+  // 2026-09-22 默认生图模型切换为 wan2.7-image（单价不变 0.20 元/张，不分尺寸档）。
+  image: { unitPrice: 0.20, label: "wan2.7-image" },
   video720p: { unitPricePerSec: 0.60, label: "wan2.7-i2v (720P)" },
   video1080p: { unitPricePerSec: 1.00, label: "wan2.7-i2v (1080P)" },
   tts: { unitPricePer10kChars: 0.80, label: "qwen3-tts-vd" },

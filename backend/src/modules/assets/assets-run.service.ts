@@ -373,7 +373,12 @@ export function readDashscopeConfig(input: DashscopeProviderConfig | undefined) 
       input?.imageModel ??
       process.env.ALIYUN_DASHSCOPE_TEXT_TO_IMAGE_MODEL ??
       process.env.ALIYUN_DASHSCOPE_MODEL ??
-      "wan2.6-t2i",
+      // 2026-09-22 用户决策：默认生图模型切换为 wan2.7-image（价格与 wan2.6-t2i 持平
+      // 0.20 元/张且不按尺寸分档；live check 证实写实度更高且无现代器物污染，
+      // 见 docs/records/2026-09-21-asset-character-sheet-live-check.md §3.4 与
+      // docs/records/2026-09-22-default-image-model-switch.md）。该模型同时支持
+      // 0 图与参考图调用，是角色 sheet 一致性（候选 c）的生效前提。
+      "wan2.7-image",
     imageSize: input?.imageSize,
     imagePollIntervalMs: input?.imagePollIntervalMs,
     imageMaxPollAttempts: input?.imageMaxPollAttempts,

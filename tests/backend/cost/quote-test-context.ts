@@ -4,6 +4,7 @@ import { createLegacyProject as createProject } from "../projects/legacy-project
 import { applyProviderModelCatalogSeed } from "../../../backend/src/modules/generation-cost/provider-model-catalog.repository.js";
 import {
   buildPricingCatalogSeed,
+  DASHSCOPE_MEDIA_CANDIDATES_V1,
   type LlmTierSeedInput,
 } from "../../../backend/src/modules/generation-cost/pricing-catalog.seed.js";
 import type { GenerationCapabilityReadinessInput } from "../../../backend/src/modules/generation-cost/generation-capability-readiness.js";
@@ -17,7 +18,9 @@ import type { AssetPlan, StoryboardPlan } from "../../../shared/src/index.js";
 
 export const CN_BEIJING_MEDIA_READINESS = {
   registeredModels: [
-    { capability: "image.generate" as const, providerKey: "dashscope", modelId: "wan2.6-t2i" },
+    // 与 seed 同源派生（内置候选含默认 wan2.7-image 与候选 wan2.6-t2i/wan2.6-i2v-flash），
+    // 手写镜像会重现"目录行被判 media_model_not_registered"的漂移。
+    ...DASHSCOPE_MEDIA_CANDIDATES_V1,
     { capability: "video.image_to_video" as const, providerKey: "dashscope", modelId: "wan2.7-i2v-2026-04-25" },
     { capability: "tts.synthesize" as const, providerKey: "dashscope", modelId: "qwen3-tts-instruct-flash" },
   ],

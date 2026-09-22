@@ -81,6 +81,16 @@ export const DASHSCOPE_MEDIA_CANDIDATES_V1: MediaAdditionalModel[] = [
     qualityTier: "high",
     speedTier: "standard",
   },
+  {
+    // 2026-09-22 默认生图模型切换为 wan2.7-image 后，原默认 wan2.6-t2i 转为
+    // 非默认候选保留可选（前端高级选择仍可见）。
+    capability: "image.generate",
+    providerKey: "dashscope",
+    modelId: "wan2.6-t2i",
+    displayName: "万相文生图（wan2.6-t2i）",
+    qualityTier: "standard",
+    speedTier: "standard",
+  },
 ];
 
 /**
@@ -205,6 +215,18 @@ const DASHSCOPE_MEDIA_CANDIDATE_PRICED_PRICING: Record<
   string,
   (scope: Exclude<DashscopeDeploymentScope, "unknown">) => Record<string, unknown> | null
 > = {
+  "wan2.6-t2i": (scope) =>
+    scope === "singapore"
+      ? // 新加坡价未核实口径保持不变（原默认行时期即 unpriced）。
+        null
+      : {
+        // 2026-09-22 官方模型价格页核实：0.20 元/张（与默认行同源同页）。
+        unit_type: "image",
+        currency: "CNY",
+        price_micros_per_image: "200000",
+        effective_at: SEED_EFFECTIVE_AT,
+        source_note: `${DASHSCOPE_MEDIA_SOURCE_NOTE}（wan2.6-t2i，help.aliyun.com/zh/model-studio/model-pricing）`,
+      },
   "wan2.7-image": (scope) =>
     scope === "singapore"
       ? // dashscope-intl 新加坡价未入目录（官方页国际行 0.224826 元/张，与现有

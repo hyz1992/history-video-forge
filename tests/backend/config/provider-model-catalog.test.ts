@@ -762,8 +762,8 @@ describe("resolve generation cost bootstrap input", () => {
 
     const intl = resolveGenerationCostBootstrapInput(makeDeps("https://dashscope-intl.aliyuncs.com"));
     expect(intl.media.deploymentScope).toBe("singapore");
-    // env 默认 3 个媒体模型 + 内置媒体候选（DASHSCOPE_MEDIA_CANDIDATES_V1：wan2.6-i2v-flash、wan2.7-image）。
-    expect(intl.media.registeredModels.length).toBe(5);
+    // env 默认 3 个媒体模型 + 内置媒体候选（DASHSCOPE_MEDIA_CANDIDATES_V1：wan2.6-i2v-flash、wan2.7-image、wan2.6-t2i）。
+    expect(intl.media.registeredModels.length).toBe(6);
     expect(intl.media.registeredModels).toContainEqual({
       capability: "video.image_to_video",
       providerKey: "dashscope",
