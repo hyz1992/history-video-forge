@@ -1,7 +1,7 @@
 # 资产面板「角色定妆图」区 实施计划
 
 - 日期：2026-09-23
-- 状态：待批准（批准后按 T1→T4 逐任务实施，每任务独立中文提交）
+- 状态：已实施（2026-09-23，T1–T4 四个独立提交 `365eb65a`/`50f09080`/`1e0120fb`/`1d84b325`；验收逐项结果与缺陷记录见 [验收记录](../records/2026-09-23-asset-panel-character-sheet-section-acceptance.md)）
 - 上游依据：
   - 设计：`docs/plans/2026-09-18-asset-character-sheet-consistency-design.md` §3.1（sheet 任务"需可见、可手动重生成、可 accept/reject"）、§3.5（降级可见性）
   - 实施计划：`docs/plans/2026-09-19-asset-character-sheet-consistency-implementation-plan.md` §1 T4（"character_sheet 任务类型标签/展示/重生成入口"）
