@@ -119,3 +119,16 @@ export function characterSheetStateTagType(
 export function countReadyCharacterSheets(rows: readonly CharacterSheetRow[]): number {
   return rows.filter((row) => row.artifactId !== null).length;
 }
+
+/**
+ * 上传替换的文件选择 accept 值：取所有定妆图任务 `accepted_file_types` 的并集
+ * （同一时刻只可能为一个任务选文件；用并集是为了让浏览器过滤器覆盖各任务的策略差异，
+ * 真正的白名单校验仍在后端与各任务的 policy 上）。
+ */
+export function sheetUploadAcceptTypes(rows: readonly CharacterSheetRow[]): string {
+  const types = new Set<string>();
+  for (const row of rows) {
+    for (const type of row.acceptedFileTypes) types.add(type);
+  }
+  return [...types].join(",");
+}

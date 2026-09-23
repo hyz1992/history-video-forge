@@ -9,6 +9,7 @@
 import type { AssetArtifact, AssetPlan } from "../../../../../../shared/src/index.js";
 import type { AssetProviderAdapter, AssetProviderContext } from "../../assets-provider-adapter.js";
 import {
+  characterSheetArtifactMetadata,
   resolveCharacterSheetReferenceImages,
   type SheetReferenceImage,
 } from "../../character-sheet-reference.js";
@@ -219,20 +220,6 @@ function collectHttpUrls(root: unknown): string[] {
 async function sleep(ms: number): Promise<void> {
   if (ms <= 0) return;
   await new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-/** sheet 产物的可追溯元数据：执行期按 metadata 查找 sheet 的锚点（设计 §3.1）。 */
-function characterSheetArtifactMetadata(
-  planTask: AssetPlan["tasks"][number],
-): Record<string, unknown> {
-  if (planTask.task_type !== "character_sheet") return {};
-  const characterId = planTask.parameters.character_id;
-  const characterLabel = planTask.parameters.character_label;
-  return {
-    sheet_role: "character_sheet",
-    ...(typeof characterId === "string" ? { character_id: characterId } : {}),
-    ...(typeof characterLabel === "string" ? { character_label: characterLabel } : {}),
-  };
 }
 
 export function createDashscopeImageProvider(

@@ -14,6 +14,7 @@ import type { AssetPlan, AssetTask } from "../../../shared/src/index.js";
 import { AssetManifest, AssetTaskExecution } from "../../../shared/src/index.js";
 import { buildInitialAssetManifest } from "../../../backend/src/modules/assets/assets-manifest-builder.js";
 import { allowedArtifactTypesForTask } from "../../../backend/src/modules/assets/assets-run.service.js";
+import { TASK_TYPE_TO_ARTIFACT_TYPE } from "../../../backend/src/modules/assets/assets.routes.js";
 
 const EMPTY_POLICY = {
   allowed: false,
@@ -147,5 +148,19 @@ describe("character_sheet 的手动上传 artifact 类型面", () => {
   it("与 image_still 同为 image（缺失时上传路径会取到 undefined 后 500）", () => {
     expect(allowedArtifactTypesForTask("character_sheet")).toEqual(["image"]);
     expect(allowedArtifactTypesForTask("image_still")).toEqual(["image"]);
+  });
+
+  it("route 层与 service 层两份 artifact 类型映射必须互相覆盖（2026-09-23 验收缺陷回归）", () => {
+    // 实证缺陷：route 层的 TASK_TYPE_TO_ARTIFACT_TYPE 缺 character_sheet 时，
+    // 上传恒 422 asset_manual_upload_not_allowed —— 入口开放、提交必败。
+    // 两份映射是同一条约束的两处实现，必须同步；此处交叉校验防再次漂移。
+    expect(TASK_TYPE_TO_ARTIFACT_TYPE["character_sheet"]).toBe("image");
+    for (const taskType of Object.keys(TASK_TYPE_TO_ARTIFACT_TYPE)) {
+      const serviceTypes = allowedArtifactTypesForTask(taskType as never);
+      expect(serviceTypes, `${taskType} 在 service 层缺映射`).toBeDefined();
+      expect(serviceTypes, `${taskType} 的 route/service 映射不一致`).toContain(
+        TASK_TYPE_TO_ARTIFACT_TYPE[taskType],
+      );
+    }
   });
 });

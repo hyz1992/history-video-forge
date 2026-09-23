@@ -14,7 +14,7 @@
 
 import { readFile } from "node:fs/promises";
 
-import type { AssetManifest, AssetPlan } from "../../../../shared/src/index.js";
+import type { AssetArtifact, AssetManifest, AssetPlan } from "../../../../shared/src/index.js";
 
 export interface SheetReferenceImage {
   base64: string;
@@ -51,6 +51,74 @@ export function characterIdsForInjection(
   return characterIds;
 }
 
+/**
+ * sheet 产物的可追溯元数据（`sheet_role` + `character_id`/`character_label`）。
+ *
+ * **provider 产物与手动上传产物共用同一份实现**：注入解析按这套 metadata 查找
+ * （见 resolveCharacterSheetReferenceImages），任一路径漏盖章都会让该产物**静默不参与注入**。
+ * 手动上传路径曾经漏盖（2026-09-23 计划自审发现 1）。
+ */
+export function characterSheetArtifactMetadata(planTask: {
+  task_type: string;
+  parameters: Record<string, unknown>;
+}): Record<string, unknown> {
+  if (planTask.task_type !== "character_sheet") return {};
+  const characterId = planTask.parameters.character_id;
+  const characterLabel = planTask.parameters.character_label;
+  return {
+    sheet_role: "character_sheet",
+    ...(typeof characterId === "string" ? { character_id: characterId } : {}),
+    ...(typeof characterLabel === "string" ? { character_label: characterLabel } : {}),
+  };
+}
+
+/**
+ * 解析某角色当前可用的 sheet 产物（**顺序敏感**，见下）：
+ *
+ * ① 该角色的 sheet 任务若在工作 manifest 中还有 execution，**以它的当前选择为准**
+ *   （`output_artifact_ids[0]`）：accept 与手动上传都会把当前件挪到队首
+ *   （`assets-run.service` 的 acceptArtifact 注释即 "marks it as the selected artifact"）。
+ *   选择为空、或队首不是 sheet 产物时，视为**该角色当前无可注入产物**——
+ *   不再退回扫描旧产物，否则"上传替换/清空选择"会被悄悄忽略。
+ * ② 该任务没有 execution 时（局部重跑把非目标旧 execution 过滤掉，实施计划 P3），
+ *   退回按 artifact metadata 扫描；同一角色有多个候选时取**最后一个**
+ *   （provider 重生成与手动上传都是追加写入，最后者即最新）。
+ */
+function findCharacterSheetArtifact(input: {
+  manifest: AssetManifest;
+  assetPlan: AssetPlan;
+  characterId: string;
+}): AssetArtifact | undefined {
+  const matches = (candidate: AssetArtifact): boolean => {
+    const metadata = candidate.metadata as Record<string, unknown> | undefined;
+    return (
+      candidate.artifact_type === "image" &&
+      metadata?.sheet_role === "character_sheet" &&
+      metadata?.character_id === input.characterId
+    );
+  };
+  const sheetTaskIds = input.assetPlan.tasks
+    .filter(
+      (task) =>
+        task.task_type === "character_sheet" &&
+        task.parameters.character_id === input.characterId,
+    )
+    .map((task) => task.task_id);
+  for (const taskId of sheetTaskIds) {
+    const execution = input.manifest.executions.find(
+      (candidate) => candidate.task_id === taskId,
+    );
+    if (!execution) continue;
+    const selectedId = execution.output_artifact_ids[0];
+    const selected = selectedId
+      ? input.manifest.artifacts.find((candidate) => candidate.artifact_id === selectedId)
+      : undefined;
+    return selected && matches(selected) ? selected : undefined;
+  }
+  const candidates = input.manifest.artifacts.filter(matches);
+  return candidates.at(-1);
+}
+
 export async function resolveCharacterSheetReferenceImages(input: {
   manifest: AssetManifest;
   assetPlan: AssetPlan;
@@ -79,13 +147,10 @@ export async function resolveCharacterSheetReferenceImages(input: {
       );
       continue;
     }
-    const artifact = input.manifest.artifacts.find((candidate) => {
-      const metadata = candidate.metadata as Record<string, unknown> | undefined;
-      return (
-        candidate.artifact_type === "image" &&
-        metadata?.sheet_role === "character_sheet" &&
-        metadata?.character_id === characterId
-      );
+    const artifact = findCharacterSheetArtifact({
+      manifest: input.manifest,
+      assetPlan: input.assetPlan,
+      characterId,
     });
     if (!artifact) {
       notes.push(`注入跳过：未找到角色 ${characterId} 的 sheet 产物，按纯文本锚点生成`);

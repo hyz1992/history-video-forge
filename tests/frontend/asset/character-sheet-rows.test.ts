@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildCharacterSheetRows,
+  sheetUploadAcceptTypes,
   characterSheetStateLabel,
   characterSheetStateTagType,
   countReadyCharacterSheets,
@@ -114,5 +115,21 @@ describe("buildCharacterSheetRows", () => {
   it("无 sheet 任务时返回空数组（legacy 项目零变化的前提）", () => {
     expect(build({ tasks: [{ task_id: "img_1", task_type: "image_still", parameters: {}, manual_upload_policy: null }] })).toEqual([]);
     expect(resolveCharacterSheetState("")).toBe("pending");
+  });
+});
+
+describe("sheetUploadAcceptTypes", () => {
+  it("取各任务 accepted_file_types 的并集（覆盖策略差异，真实校验仍在后端）", () => {
+    const rows = build({
+      tasks: [
+        task(),
+        task({ task_id: "sheet_002" as never, manual_upload_policy: { accepted_file_types: ["image/webp"] } as never }),
+      ],
+    });
+    expect(sheetUploadAcceptTypes(rows)).toBe("image/png,image/jpeg,image/webp");
+  });
+
+  it("无 sheet 任务时返回空串（分区不渲染，input 也不会被触发）", () => {
+    expect(sheetUploadAcceptTypes([])).toBe("");
   });
 });

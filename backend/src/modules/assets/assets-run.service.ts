@@ -1,6 +1,7 @@
 import { createAutodlImageToVideoProvider, AUTODL_VIDEO_MODEL } from './providers/autodl/autodl-image-to-video-provider.js';
 import { captureNarrationAssetsSource, withNarrationAssetsSource } from "./narration-assets-context.js";
 import { importNarrationManifest } from "./narration-manifest-importer.js";
+import { characterSheetArtifactMetadata } from "./character-sheet-reference.js";
 import { NarrationSourceError } from "../narration/narration-invalidation.js";
 import { Prisma } from "../../generated/prisma/client.js";
 import { AssetManifestV2, AssetPlan as AssetPlanSchema } from "../../../../shared/src/index.js";
@@ -1619,7 +1620,10 @@ export async function registerManualArtifact(input: RegisterManualArtifactInput)
     origin: "manual_upload",
     file_uri: fileUri,
     created_at: now,
-    metadata,
+    // 角色 sheet 的手动上传件必须与 provider 产物携带同一套可追溯元数据：执行期的参考图
+    // 注入按 metadata（sheet_role + character_id）查找，漏盖章会让"上传替换后的定妆图"
+    // 静默不参与注入（2026-09-23 计划自审发现 1）。其余任务类型零变化。
+    metadata: { ...metadata, ...characterSheetArtifactMetadata(planTask) },
   };
 
   const parsedArtifact = AssetArtifactSchema.safeParse(newArtifactCandidate);

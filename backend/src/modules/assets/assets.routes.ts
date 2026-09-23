@@ -446,8 +446,19 @@ function checkMagicNumber(buffer: Buffer, mimeType: string): boolean {
   return magic.every((byte, i) => buffer[i] === byte);
 }
 
-const TASK_TYPE_TO_ARTIFACT_TYPE: Record<string, string> = {
+/**
+ * 手动上传的 artifact 类型映射（route 层闸门）。
+ *
+ * **与 assets-run.service 的 allowedArtifactTypesForTask 是同一条约束的两份实现**：
+ * 两者都必须覆盖同一批任务类型，否则表现为"入口开放、提交必败"。
+ * 2026-09-23 浏览器验收实证：character_sheet 在这里缺键 → 上传恒 422
+ * `asset_manual_upload_not_allowed`（单测只覆盖 service 层因而漏检）。
+ * 两条映射的一致性由 tests/backend/assets/character-sheet-task-type.test.ts 交叉校验。
+ */
+export const TASK_TYPE_TO_ARTIFACT_TYPE: Record<string, string> = {
   image_still: "image",
+  // 角色 sheet 的产物类型与分镜图一致（设计 §3.1：artifact_type 仍为 image）。
+  character_sheet: "image",
   video_clip: "video",
 };
 

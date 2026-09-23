@@ -24,6 +24,7 @@ import {
   characterSheetStateLabel,
   characterSheetStateTagType,
   countReadyCharacterSheets,
+  sheetUploadAcceptTypes,
 } from "../../utils/asset-sheets";
 import { createFetchGenerationConfigApi, type PublicCapabilityEntryDto } from "../../stores/generation-config";
 import { getAssetGeneratingView, type AssetGenerationProgress } from "../../utils/asset-generating-view";
@@ -382,6 +383,27 @@ const readyCharacterSheetCount = computed(() => countReadyCharacterSheets(charac
 
 function characterSheetFileUrl(artifactId: string): string {
   return `/api/projects/${projectId.value}/artifacts/${artifactId}/file`;
+}
+
+/** 定妆图上传替换：同一时刻只有一个待上传任务（与分镜卡片的上传语义一致）。 */
+const sheetUploadTaskId = ref<string | null>(null);
+const sheetFileInput = ref<HTMLInputElement | null>(null);
+const sheetAcceptTypes = computed(() => sheetUploadAcceptTypes(characterSheetRows.value));
+
+function triggerSheetUpload(taskId: string) {
+  sheetUploadTaskId.value = taskId;
+  sheetFileInput.value?.click();
+}
+
+function onSheetFileSelected(event: Event) {
+  const target = event.target as HTMLInputElement;
+  const file = target.files?.[0];
+  const taskId = sheetUploadTaskId.value;
+  // 先清空再派发：允许用户连续两次选择同一个文件（否则 change 不触发）。
+  target.value = "";
+  sheetUploadTaskId.value = null;
+  if (!file || !taskId) return;
+  handleUploadFile(taskId, file);
 }
 
 /**
@@ -1840,8 +1862,31 @@ function handleConfirm() {
                 :title="row.notes.join('；')"
               >{{ row.notes.join("；") }}</span>
             </div>
+            <div class="asset-sheet-actions">
+              <el-button
+                size="small"
+                :loading="assetsStore.state.generatingTaskIds.has(row.taskId)"
+                :disabled="isAssetsBusy"
+                :data-testid="`asset-sheet-generate-${row.taskId}`"
+                @click="handleGenerateTask(row.taskId)"
+              >{{ row.artifactId ? "重新生成" : "生成" }}</el-button>
+              <el-button
+                size="small"
+                :disabled="isAssetsBusy"
+                :data-testid="`asset-sheet-upload-${row.taskId}`"
+                @click="triggerSheetUpload(row.taskId)"
+              >上传替换</el-button>
+            </div>
           </div>
         </div>
+        <input
+          ref="sheetFileInput"
+          type="file"
+          :accept="sheetAcceptTypes"
+          style="display:none"
+          data-testid="asset-sheet-file-input"
+          @change="onSheetFileSelected"
+        />
         <p class="asset-sheets-hint">
           仅出场达到阈值的角色会生成定妆图。替换或重新生成定妆图<strong>不会自动重跑已生成的分镜图</strong>；
           需对具体分镜重新生成，才会注入新的定妆图。
@@ -2068,7 +2113,7 @@ function handleConfirm() {
   display: flex;
   gap: 10px;
   align-items: center;
-  width: 320px;
+  width: 392px;
   padding: 8px;
   border-radius: 6px;
   background: rgba(255, 255, 255, 0.02);
@@ -2113,6 +2158,13 @@ function handleConfirm() {
 .asset-sheet-sub {
   font-size: 11px;
   color: var(--text-secondary, rgba(255, 255, 255, 0.6));
+}
+
+.asset-sheet-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-left: auto;
 }
 
 .asset-sheet-note {
