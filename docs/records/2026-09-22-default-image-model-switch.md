@@ -55,3 +55,30 @@ live check 效果/成本达标（§1 T6 门禁）。
 验证：typecheck 0 error；全量 2000 条测试 48 failed 与翻转前基线逐文件一致
 （45 既有 + harness topic 域 3 既有），零新增失败；新增 env 默认值测试 3 条
 （默认开 / 显式 false 可回滚 / 非法值启动失败），`tests/backend/config/env.test.ts` 6 条全绿。
+
+### 补录 2（2026-09-23，浏览器验收发现并修复：默认行轮换顺序）
+
+内置浏览器真实运行验收（独立验收库 + 真实后端/浏览器）发现：**主决策的目录默认行翻转当时并未真正落地**——
+补丁脚本在改到候选清单时断言失败，整文件未写入，只有候选行进了仓库；而候选行被 seed 的去重逻辑
+（defaultMediaKeys）吃掉后行数不变，因此**基于行数的断言全部为绿，掩盖了"默认行仍是 wan2.6-t2i"**。
+运行中的应用侧证据：`/api/generation-capabilities` 返回 image.generate 默认项仍是 wan2.6-t2i。
+
+修复后进一步暴露第二个缺陷（更严重，只有**既有库升级路径**才会触发）：数据库有部分唯一索引
+`ProviderModelCatalog_capability_active_default_key`（`UNIQUE(capability) WHERE status='active' AND isDefault=1`），
+在 seed 批次内逐语句生效——seed 把"设新默认"排在"取消旧默认"之前时，**后端启动直接失败**
+（实测 `backend-server-failed: Unique constraint failed on the fields: (capability)`）。
+即：任何既有部署升级到该提交都会起不来。
+
+修复内容：
+- `pricing-catalog.seed.ts`：默认行改为 wan2.7-image（isDefault=true），并把 wan2.6-t2i 的
+  **取消默认行显式排在默认行之前**（附顺序硬约束注释）；wan2.6-t2i 仍保留在
+  `DASHSCOPE_MEDIA_CANDIDATES_V1` 供 bootstrap 的 registeredModels 使用，seed 侧由
+  defaultMediaKeys 去重（不会重复出行）
+- 新增 3 条针对性断言（此前缺失，正是假绿成因）：默认行 modelId = wan2.7-image、
+  **轮换顺序**（非默认行 index < 默认行 index）、北京两行均已核实价 0.20 元/张且新加坡保持 unpriced
+- 复验：真库升级路径重启后端成功，`/api/generation-capabilities` 显示
+  `wan2.7-image(is_default=true)` + `wan2.6-t2i(is_default=false, active)`
+
+教训（本记录留档）：**"模型位切换"这类默认值翻转，断言必须打在 isDefault 标志与轮换顺序上，
+而不是行数**；并且必须有一条**既有库升级路径**的验证（psql/sqlite 上先落旧状态再启动），
+纯"空库新建"的测试覆盖不到部分唯一索引的顺序约束。

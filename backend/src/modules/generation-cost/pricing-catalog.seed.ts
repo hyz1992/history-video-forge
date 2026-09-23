@@ -292,6 +292,13 @@ export function buildPricingCatalogSeed(input: {
   }
   const entries: ProviderModelCatalogRecord[] = [
     toRecord({
+      // 2026-09-22 模型轮换的第一步：**先取消旧默认**（wan2.6-t2i → 非默认、仍可选）。
+      // 顺序是硬约束：部分唯一索引 ProviderModelCatalog_capability_active_default_key
+      //（UNIQUE(capability) WHERE status='active' AND isDefault=1）在批次内逐语句生效，
+      // 若把"设新默认"排在"取消旧默认"之前，启动期 bootstrap 会直接失败
+      //（2026-09-23 浏览器验收在既有库升级路径上实测到 backend-server-failed）。
+      // 该行由本节显式发出，因此 DASHSCOPE_MEDIA_CANDIDATES_V1 中的同名候选会被
+      // defaultMediaKeys 去重跳过（该常量仍用于 bootstrap 的 registeredModels）。
       id: `image.generate.dashscope.${scope}.wan2.6-t2i`,
       capability: "image.generate",
       providerKey: "dashscope",
@@ -313,11 +320,47 @@ export function buildPricingCatalogSeed(input: {
                 "dashscope-intl 新加坡文生图价格未核实：按 unbounded 处理，运营核实后登记",
             }
           : {
+              // 2026-09-22 官方模型价格页核实：0.20 元/张（与默认行同源同页）。
               unit_type: "image",
               currency: "CNY",
               price_micros_per_image: "200000",
               effective_at: SEED_EFFECTIVE_AT,
-              source_note: DASHSCOPE_MEDIA_SOURCE_NOTE,
+              source_note: `${DASHSCOPE_MEDIA_SOURCE_NOTE}（wan2.6-t2i，help.aliyun.com/zh/model-studio/model-pricing）`,
+            },
+      isDefault: false,
+    }),
+    toRecord({
+      // 2026-09-22 模型轮换的第二步：设新默认（必须在上一行之后发出，见上注）。
+      // wan2.7-image 是 resolver auto 的落点，与 assets-run 的 env 兜底默认、
+      // cover 服务默认同源。
+      id: `image.generate.dashscope.${scope}.wan2.7-image`,
+      capability: "image.generate",
+      providerKey: "dashscope",
+      modelId: "wan2.7-image",
+      displayName: "万相图像生成与编辑 2.7（wan2.7-image，支持参考图）",
+      qualityTier: "high",
+      speedTier: "standard",
+      parameterCapabilitiesJson: { deployment_scope: scope },
+      pricingVersion: mediaPricingVersion(scope),
+      pricingJson:
+        scope === "singapore"
+          ? {
+              // 新加坡 workspace 的 wan2.7-image 价格未入目录（官方页有国际行
+              // 0.224826 元/张，dashscope-intl 主机口径待运营核实）：unpriced → unbounded。
+              unit_type: "image",
+              currency: "CNY",
+              unpriced: true,
+              effective_at: SEED_EFFECTIVE_AT,
+              source_note:
+                "dashscope-intl 新加坡图像生成价格未核实：按 unbounded 处理，运营核实后登记",
+            }
+          : {
+              // 2026-09-22 官方模型价格页核实：0.20 元/张，仅输出计费、不按 1K/2K 分档。
+              unit_type: "image",
+              currency: "CNY",
+              price_micros_per_image: "200000",
+              effective_at: SEED_EFFECTIVE_AT,
+              source_note: `${DASHSCOPE_MEDIA_SOURCE_NOTE}（wan2.7-image，help.aliyun.com/zh/model-studio/model-pricing）`,
             },
       isDefault: true,
     }),

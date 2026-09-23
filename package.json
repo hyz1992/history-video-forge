@@ -48,6 +48,7 @@
     "harness:bgm-smoke-batch": "tsx harness/scripts/media-library/render-bgm-smoke-batch.ts",
     "harness:compose-runtime-smoke": "tsx harness/scripts/runtime/compose-runtime-smoke.ts",
     "harness:product-acceptance-live-check": "tsx harness/scripts/runtime/product-acceptance-live-check.ts",
+    "harness:seed-character-sheet-browser-fixture": "tsx harness/scripts/runtime/seed-character-sheet-browser-fixture.ts",
     "harness:seed-second-aggregate-browser-fixture": "tsx harness/scripts/runtime/seed-second-aggregate-browser-fixture.ts",
     "harness:backfill-missing-usage": "tsx harness/scripts/maintenance/backfill-missing-usage-records.ts",
     "harness:render-runtime-smoke": "tsx harness/scripts/runtime/render-runtime-smoke.ts",

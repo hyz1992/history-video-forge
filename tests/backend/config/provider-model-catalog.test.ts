@@ -67,7 +67,9 @@ describe("pricing catalog seed", () => {
 
     const image = byCapability.get("image.generate");
     expect(image?.providerKey).toBe("dashscope");
-    expect(image?.modelId).toBe("wan2.6-t2i");
+    // 2026-09-22 用户决策：默认生图模型切换为 wan2.7-image（价格持平、不分尺寸档）。
+    // 这条断言针对 **isDefault 落点本身**——只数行数的断言在此前漏掉了默认行未翻转的缺陷。
+    expect(image?.modelId).toBe("wan2.7-image");
     expect(image?.status).toBe("active");
     expect(image?.isDefault).toBe(true);
 
@@ -270,6 +272,53 @@ describe("provider model catalog repository", () => {
       "simulated writer failure",
     );
     expect(db.providerModelCatalog.has(failingId)).toBe(false);
+  });
+});
+
+describe("image.generate default row (2026-09-22 model switch)", () => {
+  it("resolver auto 的落点是 wan2.7-image，且每个 capability 仍恰好一个 isDefault", () => {
+    for (const scope of ["cn-beijing", "singapore"] as const) {
+      const seed = buildPricingCatalogSeed({
+        llm: { mode: "stub" },
+        media: { deploymentScope: scope },
+      });
+      const imageDefaults = seed.filter((e) => e.capability === "image.generate" && e.isDefault);
+      expect(imageDefaults, scope).toHaveLength(1);
+      expect(imageDefaults[0]!.modelId, scope).toBe("wan2.7-image");
+      expect(imageDefaults[0]!.status, scope).toBe("active");
+      // wan2.6-t2i 保留为非默认候选项（前端高级选择仍可见）。
+      const superseded = seed.find(
+        (e) => e.capability === "image.generate" && e.modelId === "wan2.6-t2i",
+      );
+      expect(superseded?.isDefault, scope).toBe(false);
+      expect(superseded?.status, scope).toBe("active");
+    }
+  });
+
+  it("轮换顺序：image.generate 的旧默认（非默认行）必须排在默认行之前", () => {
+    // 硬约束来源：部分唯一索引 ProviderModelCatalog_capability_active_default_key
+    // （UNIQUE(capability) WHERE status='active' AND isDefault=1）在 seed 批次内逐语句生效。
+    // 顺序反了会让既有库升级时启动失败（2026-09-23 浏览器验收实测 backend-server-failed）。
+    const seed = buildPricingCatalogSeed({ llm: { mode: "stub" }, media: { deploymentScope: "cn-beijing" } });
+    const indexes = seed
+      .map((entry, index) => ({ entry, index }))
+      .filter(({ entry }) => entry.capability === "image.generate");
+    const demoted = indexes.find(({ entry }) => !entry.isDefault && entry.modelId === "wan2.6-t2i")!;
+    const promoted = indexes.find(({ entry }) => entry.isDefault)!;
+    expect(demoted.index).toBeLessThan(promoted.index);
+  });
+
+  it("已核实价登记：wan2.7-image 与 wan2.6-t2i 在北京均为 0.20 元/张，新加坡保持 unpriced", () => {
+    const beijing = buildPricingCatalogSeed({ llm: { mode: "stub" }, media: { deploymentScope: "cn-beijing" } });
+    for (const modelId of ["wan2.7-image", "wan2.6-t2i"]) {
+      const row = beijing.find((e) => e.capability === "image.generate" && e.modelId === modelId)!;
+      expect((row.pricingJson as { price_micros_per_image?: string }).price_micros_per_image, modelId).toBe("200000");
+    }
+    const singapore = buildPricingCatalogSeed({ llm: { mode: "stub" }, media: { deploymentScope: "singapore" } });
+    for (const modelId of ["wan2.7-image", "wan2.6-t2i"]) {
+      const row = singapore.find((e) => e.capability === "image.generate" && e.modelId === modelId)!;
+      expect(row.pricingJson, modelId).toMatchObject({ unpriced: true });
+    }
   });
 });
 
