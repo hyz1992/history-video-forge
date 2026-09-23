@@ -173,7 +173,9 @@ export function resolveImageModelPricingHint(
 
 /** Human-readable cost hint for a single task type. */
 export function getTaskCostHint(taskType: string): string {
-  if (taskType === "image_still")
+  // 角色 sheet 是付费图片任务（+0.20 元/达标角色），必须与分镜图一样给出费用提示，
+  // 否则面板的 ↻ 重生成会在无费用确认的情况下直接扣费（2026-09-23 浏览器验收发现）。
+  if (taskType === "image_still" || taskType === "character_sheet")
     return `约 ¥${PRICING.image.unitPrice.toFixed(2)}/张`;
   if (taskType === "video_clip")
     return `约 ¥${PRICING.video720p.unitPricePerSec.toFixed(2)}/秒`;

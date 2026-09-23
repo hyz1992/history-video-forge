@@ -1241,12 +1241,22 @@ async function handleGenerateTask(taskId: string) {
   // Show cost hint for paid task types
   const taskLabel = task ? (TASK_TYPE_LABELS[task.task_type] ?? task.task_type) : taskId;
   let costHint = task ? getTaskCostHint(task.task_type) : "";
-  if ((task?.task_type === "video_clip" || task?.task_type === "image_still") && projectId.value) {
+  // character_sheet 同样按项目当前配置的图片模型报价（浏览器验收发现的缺口：漏掉它会让
+  // sheet 重生成跳过费用确认，只剩一个不含模型名的兜底提示）。
+  if (
+    (task?.task_type === "video_clip" ||
+      task?.task_type === "image_still" ||
+      task?.task_type === "character_sheet") &&
+    projectId.value
+  ) {
     // 单价跟随项目当前配置的模型与质量档位（S2-2C 目录），提示同时给出模型名
     const pricing = await resolveGenerationPricingOnce(projectId.value);
     if (task.task_type === "video_clip" && pricing.video) {
       costHint = `约 ¥${pricing.video.unitPricePerSec.toFixed(2)}/秒（${pricing.video.qualityLabel}），模型：${pricing.video.displayName}`;
-    } else if (task.task_type === "image_still" && pricing.image) {
+    } else if (
+      (task.task_type === "image_still" || task.task_type === "character_sheet") &&
+      pricing.image
+    ) {
       costHint = `约 ¥${pricing.image.unitPrice.toFixed(2)}/张，模型：${pricing.image.displayName}`;
     }
   }

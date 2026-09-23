@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  getTaskCostHint,
   resolveImageModelPricingHint,
   resolveVideoModelPricingHint,
 } from "../../../frontend/src/utils/pricing.js";
@@ -232,5 +233,18 @@ describe("resolveVideoModelPricingHint", () => {
     expect(
       resolveVideoModelPricingHint([videoEntry({ availability: "disabled" })], null),
     ).toBeNull();
+  });
+});
+
+describe("单任务重生成的费用提示（2026-09-23 浏览器验收发现的缺口）", () => {
+  it("角色 sheet 与分镜图一样必须有费用提示（否则 ↻ 会在无确认下扣费）", () => {
+    const imageHint = getTaskCostHint("image_still");
+    expect(imageHint).toMatch(/¥0\.20\/张/);
+    // character_sheet 曾落到默认分支返回空串 → 面板跳过费用确认对话框。
+    expect(getTaskCostHint("character_sheet")).toBe(imageHint);
+  });
+
+  it("不知道费率的任务类型仍返回空串（不伪造费用）", () => {
+    expect(getTaskCostHint("subtitle_track")).toBe("");
   });
 });
