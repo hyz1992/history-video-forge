@@ -19,6 +19,12 @@ import StageLoadingBar from "../workspace/StageLoadingBar.vue";
 import SegmentAssetCard from "./SegmentAssetCard.vue";
 import StrictFallbackDialog from "./StrictFallbackDialog.vue";
 import { computeCostBreakdown, estimatePlanCost, getTaskCostHint, getVideoUpgradeCostHint, estimateBlockedItemsCost, resolveVideoModelPricingHint, resolveImageModelPricingHint, PRICING, type PlanTaskLike } from "../../utils/pricing";
+import {
+  buildCharacterSheetRows,
+  characterSheetStateLabel,
+  characterSheetStateTagType,
+  countReadyCharacterSheets,
+} from "../../utils/asset-sheets";
 import { createFetchGenerationConfigApi, type PublicCapabilityEntryDto } from "../../stores/generation-config";
 import { getAssetGeneratingView, type AssetGenerationProgress } from "../../utils/asset-generating-view";
 
@@ -360,6 +366,23 @@ const artifactsById = computed(() => {
   }
   return map;
 });
+
+/**
+ * 角色定妆图（2026-09-23 实施计划 T1）：跨 segment 的参考资产，恒为 null segment，
+ * 不在任何分镜卡片里，因此由本面板单独成区展示；派生逻辑在 utils/asset-sheets 内有单测。
+ */
+const characterSheetRows = computed(() =>
+  buildCharacterSheetRows({
+    tasks: assetTasks.value,
+    executionsByTaskId: executionsByTaskId.value,
+    artifactsById: artifactsById.value,
+  }),
+);
+const readyCharacterSheetCount = computed(() => countReadyCharacterSheets(characterSheetRows.value));
+
+function characterSheetFileUrl(artifactId: string): string {
+  return `/api/projects/${projectId.value}/artifacts/${artifactId}/file`;
+}
 
 /**
  * 各分镜在成片中的真实时序（按 manifest TTS chunk 实际时长累计，与 compose
@@ -1766,6 +1789,65 @@ function handleConfirm() {
         </div>
       </details>
 
+      <!-- 角色定妆图（跨 segment 的参考资产；仅在计划含该任务类型时渲染，legacy 项目零变化） -->
+      <section
+        v-if="characterSheetRows.length > 0"
+        class="asset-sheets"
+        data-testid="asset-character-sheets"
+      >
+        <h4 class="asset-sheets-title">
+          角色定妆图（{{ readyCharacterSheetCount }}/{{ characterSheetRows.length }}）
+        </h4>
+        <div class="asset-sheets-grid">
+          <div
+            v-for="row in characterSheetRows"
+            :key="row.taskId"
+            class="asset-sheet-card"
+            :data-testid="`asset-sheet-${row.taskId}`"
+          >
+            <el-image
+              v-if="row.artifactId"
+              :src="characterSheetFileUrl(row.artifactId)"
+              :preview-src-list="[characterSheetFileUrl(row.artifactId)]"
+              :preview-teleported="true"
+              fit="cover"
+              class="asset-sheet-image"
+              :data-testid="`asset-sheet-image-${row.taskId}`"
+            >
+              <template #error>
+                <span class="asset-sheet-thumb-fallback">产物文件不可读</span>
+              </template>
+            </el-image>
+            <span v-else class="asset-sheet-thumb-fallback asset-sheet-thumb-empty">
+              {{ characterSheetStateLabel(row.state, false) }}
+            </span>
+            <div class="asset-sheet-meta">
+              <span class="asset-sheet-name">{{ row.label }}</span>
+              <span
+                class="asset-sheet-sub"
+                :title="row.matchedSegmentIds.join('、') || undefined"
+              >
+                计划命中 {{ row.hitCount ?? "—" }} 段
+              </span>
+              <el-tag size="small" :type="characterSheetStateTagType(row.state)">
+                {{ characterSheetStateLabel(row.state, row.artifactId !== null) }}
+              </el-tag>
+              <!-- note 只在降级/失败态显示：完成态只有 provider 流水 note（如
+                   "dashscope image generated"），对用户无信息量（计划 §3 状态矩阵）。 -->
+              <span
+                v-if="row.notes.length > 0 && (row.state === 'degraded' || row.state === 'failed')"
+                class="asset-sheet-note"
+                :title="row.notes.join('；')"
+              >{{ row.notes.join("；") }}</span>
+            </div>
+          </div>
+        </div>
+        <p class="asset-sheets-hint">
+          仅出场达到阈值的角色会生成定妆图。替换或重新生成定妆图<strong>不会自动重跑已生成的分镜图</strong>；
+          需对具体分镜重新生成，才会注入新的定妆图。
+        </p>
+      </section>
+
       <!-- 分镜列表 -->
       <div class="asset-segments-header">
         <span class="asset-segments-count">共 {{ segmentCount }} 个镜头</span>
@@ -1963,6 +2045,92 @@ function handleConfirm() {
 }
 
 /* ---- Asset overview details ---- */
+.asset-sheets {
+  margin: 12px 0 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  border-radius: 8px;
+}
+
+.asset-sheets-title {
+  margin: 0 0 10px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.asset-sheets-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.asset-sheet-card {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  width: 320px;
+  padding: 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.asset-sheet-image {
+  width: 96px;
+  height: 54px;
+  flex: 0 0 96px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.asset-sheet-thumb-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 96px;
+  height: 54px;
+  flex: 0 0 96px;
+  border-radius: 4px;
+  border: 1px dashed var(--border-subtle, rgba(255, 255, 255, 0.16));
+  font-size: 11px;
+  color: var(--text-secondary, rgba(255, 255, 255, 0.6));
+  text-align: center;
+  line-height: 1.2;
+}
+
+.asset-sheet-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.asset-sheet-name {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.asset-sheet-sub {
+  font-size: 11px;
+  color: var(--text-secondary, rgba(255, 255, 255, 0.6));
+}
+
+.asset-sheet-note {
+  font-size: 11px;
+  color: var(--el-color-warning);
+  max-width: 190px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.asset-sheets-hint {
+  margin: 10px 0 0;
+  font-size: 11px;
+  color: var(--text-secondary, rgba(255, 255, 255, 0.6));
+  line-height: 1.5;
+}
+
 .asset-overview-details {
   border: 1px solid var(--border-default);
   border-radius: var(--radius-card);
