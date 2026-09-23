@@ -1673,6 +1673,27 @@ export async function registerManualArtifact(input: RegisterManualArtifactInput)
   manifestRecord.manifestJson = manifest as unknown as Record<string, unknown>;
   manifestRecord.validationResultJson = localValidation as unknown as Record<string, unknown>;
 
+  // Step 12b: **落库**（2026-09-23 修复既有缺口）
+  // 此前上传只改内存对象：进程重启即丢失，且口播前置项目的 run 从数据库的 active manifest
+  // 取工作副本（narrationContext.activeManifest）——上传替换/手动上传因此对后续运行完全不可见。
+  // 持久化沿用 run 路径的 writer 组合（saveAssetManifestRecord + saveAssetManifest + syncProject）。
+  await saveAssetManifestRecord(db, {
+    id: manifestRecord.id,
+    projectId: project.id,
+    topicPackageId: manifestRecord.topicPackageId,
+    scriptRecordId: manifestRecord.scriptRecordId,
+    storyboardRecordId: manifestRecord.storyboardRecordId,
+    assetPlanRecordId: manifestRecord.assetPlanRecordId,
+    manifestJson: manifestRecord.manifestJson,
+    validationResultJson: manifestRecord.validationResultJson,
+    executionStateJson: manifestRecord.executionStateJson,
+    graphTraceSummaryJson: manifestRecord.graphTraceSummaryJson,
+    runtimeDiagnosticsJson: manifestRecord.runtimeDiagnosticsJson,
+  });
+  // （saveAssetManifestRecord 内部已调用 thirdAggregateWriter.saveAssetManifest 落库，
+  //   此处只需同步 project 聚合。）
+  await db.firstAggregateWriter?.syncProject(project);
+
   // Step 13: Update project status based on validation decision
   if (localValidation.decision === "ready_for_compose") {
     project.status = "assets_ready";

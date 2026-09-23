@@ -256,6 +256,42 @@ describe("手动上传的角色 sheet 参与注入（自审发现 1）", () => {
     expect(injection.images).toHaveLength(1);
   });
 
+  it("上传结果必须落库（既有缺口回归：只改内存会让后续 run 完全看不到上传件）", async () => {
+    storageDir = join(tmpdir(), `sheet-upload-persist-${Date.now()}`);
+    await mkdir(storageDir, { recursive: true });
+    const { db, project, plan, manifest } = await makeContext(storageDir);
+    const saved: Array<{ manifestArtifacts: number; projectStatus: string }> = [];
+    db.thirdAggregateWriter = {
+      async saveAssetManifest(record: { manifestJson: unknown }) {
+        saved.push({
+          manifestArtifacts: ((record.manifestJson as { artifacts?: unknown[] }).artifacts ?? []).length,
+          projectStatus: project.status,
+        });
+      },
+    } as never;
+    const filePath = join(storageDir, "persist.png");
+    await writeFile(filePath, Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
+
+    const result = await registerManualArtifact({
+      db,
+      project,
+      taskId: TASK_ID,
+      artifactType: "image",
+      fileUri: filePath,
+      mimeType: "image/png",
+      metadata: { width: 2048, height: 1152 },
+    });
+
+    expect(result.statusCode).toBe(200);
+    // 内存侧：artifact 已并入 manifest
+    expect((db.assetManifestRecords.get("manifest_001")!.manifestJson as typeof manifest).artifacts).toHaveLength(
+      manifest.artifacts.length + 1,
+    );
+    // 持久化侧：writer 收到的是**含上传件**的 manifest（缺这一步上传就是"内存态假成功"）
+    expect(saved).toHaveLength(1);
+    expect(saved[0]!.manifestArtifacts).toBe(manifest.artifacts.length + 1);
+  });
+
   it("非 sheet 任务的上传元数据不被盖章（零变化）", async () => {
     storageDir = join(tmpdir(), `sheet-upload-plain-${Date.now()}`);
     await mkdir(storageDir, { recursive: true });
