@@ -132,3 +132,25 @@ export function sheetUploadAcceptTypes(rows: readonly CharacterSheetRow[]): stri
   }
   return [...types].join(",");
 }
+
+/**
+ * 分镜卡片上的定妆图注入标记（2026-09-23 实施计划 T3）。
+ *
+ * 语义（对应设计 §3.3 的可用性注入）：分镜图任务的 `character_sheet_task_ids` 由编译期写入；
+ * 该键存在即"该镜有角色命中"，值里的定妆图若有产物才会真正被注入，否则运行期降级为文本锚点。
+ * 因此未生成时显式标注"（未生成）"，避免用户以为已经注入。
+ */
+export function sheetReferenceLabel(input: {
+  parameters: Record<string, unknown> | null | undefined;
+  sheetsByTaskId: ReadonlyMap<string, { label: string; artifactId: string | null }>;
+}): string {
+  const raw = input.parameters?.character_sheet_task_ids;
+  const taskIds = Array.isArray(raw) ? raw.filter((id): id is string => typeof id === "string") : [];
+  if (taskIds.length === 0) return "未注入参考图（该镜无角色命中）";
+  const parts = taskIds.map((taskId) => {
+    const sheet = input.sheetsByTaskId.get(taskId);
+    if (!sheet) return `${taskId}（未知定妆图任务）`;
+    return sheet.artifactId ? sheet.label : `${sheet.label}（未生成）`;
+  });
+  return `参考：${parts.join("、")}`;
+}

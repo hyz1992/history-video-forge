@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch, nextTick, onMounted, onUnmounted } from "vue";
+import { sheetReferenceLabel } from "../../utils/asset-sheets";
 import { ElTooltip, ElTag, ElButton, ElIcon, ElMessage, ElMessageBox, ElDialog, ElInput } from "element-plus";
 import { Upload, CopyDocument } from "@element-plus/icons-vue";
 
@@ -44,6 +45,8 @@ const props = defineProps<{
   pauseNote?: string | null;
   imageTasks: AssetTask[];
   videoTasks: AssetTask[];
+  /** task_id → 角色定妆图（T3 注入标记）；缺省时不显示标记（旧调用方零变化）。 */
+  sheetRefsByTaskId?: Map<string, { label: string; artifactId: string | null }>;
   executionsByTaskId: Map<string, ExecutionInfo>;
   artifactsById: Map<string, ArtifactInfo>;
   uploadingTaskId: string | null;
@@ -329,6 +332,17 @@ const canAutoGenerate = computed(() => {
   const task = currentTask.value;
   if (!task) return false;
   return AUTO_GENERATABLE_TYPES.has(task.task_type);
+});
+
+/** 当前图像任务的定妆图注入标记（仅图像任务有注入语义）。 */
+const activeSheetReferenceNote = computed(() => {
+  if (!props.sheetRefsByTaskId) return null;
+  const task = activeTasks.value[activeMediaIndex.value];
+  if (!task || task.task_type !== "image_still") return null;
+  return sheetReferenceLabel({
+    parameters: task.parameters as Record<string, unknown> | null | undefined,
+    sheetsByTaskId: props.sheetRefsByTaskId,
+  });
 });
 
 const acceptFileTypes = computed(() => {
@@ -998,6 +1012,12 @@ function nextMedia() {
            title="双击编辑提示词">
           {{ activePromptText }}
         </p>
+        <!-- T3：该镜的定妆图注入情况（有引用/未生成/该镜无角色命中） -->
+        <p
+          v-if="activeSheetReferenceNote"
+          class="segment-sheet-reference"
+          data-testid="segment-sheet-reference"
+        >{{ activeSheetReferenceNote }}</p>
       </div>
 
       <!-- Task indicator & switcher (multi-task) + action buttons -->
@@ -1581,6 +1601,13 @@ function nextMedia() {
 @keyframes prompt-flash {
   0%, 100% { background: transparent; }
   50% { background: color-mix(in srgb, var(--accent-primary) 15%, transparent); }
+}
+
+.segment-sheet-reference {
+  margin: 4px 0 0;
+  font-size: 11px;
+  color: var(--text-secondary, rgba(255, 255, 255, 0.6));
+  line-height: 1.4;
 }
 
 .segment-prompt-textarea {

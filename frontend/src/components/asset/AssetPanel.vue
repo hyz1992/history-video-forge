@@ -381,6 +381,15 @@ const characterSheetRows = computed(() =>
 );
 const readyCharacterSheetCount = computed(() => countReadyCharacterSheets(characterSheetRows.value));
 
+/** T3：task_id → 角色名/当前产物，供分镜卡片显示注入标记。 */
+const sheetRefsByTaskId = computed(() => {
+  const map = new Map<string, { label: string; artifactId: string | null }>();
+  for (const row of characterSheetRows.value) {
+    map.set(row.taskId, { label: row.label, artifactId: row.artifactId });
+  }
+  return map;
+});
+
 function characterSheetFileUrl(artifactId: string): string {
   return `/api/projects/${projectId.value}/artifacts/${artifactId}/file`;
 }
@@ -1909,6 +1918,7 @@ function handleConfirm() {
           :pause-note="hasSpeechRoutes ? pauseNoteFor(index) : null"
           :image-tasks="imageTasksBySegment.get(segment.segment_id) ?? []"
           :video-tasks="videoTasksBySegment.get(segment.segment_id) ?? []"
+          :sheet-refs-by-task-id="sheetRefsByTaskId"
           :executions-by-task-id="executionsByTaskId"
           :artifacts-by-id="artifactsById"
           :uploading-task-id="assetsStore.state.isUploading"

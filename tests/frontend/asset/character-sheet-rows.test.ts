@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildCharacterSheetRows,
+  sheetReferenceLabel,
   sheetUploadAcceptTypes,
   characterSheetStateLabel,
   characterSheetStateTagType,
@@ -131,5 +132,39 @@ describe("sheetUploadAcceptTypes", () => {
 
   it("无 sheet 任务时返回空串（分区不渲染，input 也不会被触发）", () => {
     expect(sheetUploadAcceptTypes([])).toBe("");
+  });
+});
+
+describe("sheetReferenceLabel（T3 分镜卡片注入标记）", () => {
+  const sheets = new Map([
+    ["sheet_001", { label: "李世民", artifactId: "artifact_a" }],
+    ["sheet_002", { label: "李建成", artifactId: null }],
+  ]);
+
+  it("有引用且产物齐备", () => {
+    expect(sheetReferenceLabel({ parameters: { character_sheet_task_ids: ["sheet_001"] }, sheetsByTaskId: sheets }))
+      .toBe("参考：李世民");
+  });
+
+  it("多角色按任务顺序拼接", () => {
+    expect(sheetReferenceLabel({ parameters: { character_sheet_task_ids: ["sheet_001", "sheet_002"] }, sheetsByTaskId: sheets }))
+      .toBe("参考：李世民、李建成（未生成）");
+  });
+
+  it("未生成时显式标注（避免误以为已注入）", () => {
+    expect(sheetReferenceLabel({ parameters: { character_sheet_task_ids: ["sheet_002"] }, sheetsByTaskId: sheets }))
+      .toBe("参考：李建成（未生成）");
+  });
+
+  it("该镜无角色命中 / 参数缺失 / 非法值都落到明确文案", () => {
+    expect(sheetReferenceLabel({ parameters: {}, sheetsByTaskId: sheets })).toBe("未注入参考图（该镜无角色命中）");
+    expect(sheetReferenceLabel({ parameters: null, sheetsByTaskId: sheets })).toBe("未注入参考图（该镜无角色命中）");
+    expect(sheetReferenceLabel({ parameters: { character_sheet_task_ids: "sheet_001" }, sheetsByTaskId: sheets }))
+      .toBe("未注入参考图（该镜无角色命中）");
+  });
+
+  it("引用到未知定妆图任务时不静默", () => {
+    expect(sheetReferenceLabel({ parameters: { character_sheet_task_ids: ["sheet_999"] }, sheetsByTaskId: sheets }))
+      .toBe("参考：sheet_999（未知定妆图任务）");
   });
 });
