@@ -1291,7 +1291,7 @@ function handleUploadFile(taskId: string, file: File) {
 
 async function handleGenerateTask(taskId: string) {
   const task = assetTasks.value.find(t => t.task_id === taskId);
-  if (task && (task.task_type === "image_still" || task.task_type === "video_clip")) return;
+  if (task?.task_type === "video_clip") return;
   // Show cost hint for paid task types
   const taskLabel = task ? (TASK_TYPE_LABELS[task.task_type] ?? task.task_type) : taskId;
   let costHint = task ? getTaskCostHint(task.task_type) : "";
