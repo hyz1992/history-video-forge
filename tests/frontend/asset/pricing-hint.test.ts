@@ -34,30 +34,46 @@ function videoEntry(overrides: Partial<PublicCapabilityEntryDto>): PublicCapabil
   };
 }
 
+function imageEntry(overrides: Partial<PublicCapabilityEntryDto>): PublicCapabilityEntryDto {
+  return {
+    id: "image.generate.dashscope.cn-beijing.wan2.6-t2i",
+    capability: "image.generate",
+    provider_key: "dashscope",
+    model_id: "wan2.6-t2i",
+    model_version: null,
+    display_name: "万相文生图（wan2.6-t2i）",
+    quality_tier: "standard",
+    speed_tier: "standard",
+    parameter_capabilities: {},
+    pricing_version: "dashscope-media-cn-beijing-2026-08-17",
+    pricing: {
+      unit_type: "image",
+      currency: "CNY",
+      price_micros_per_image: "200000",
+    },
+    status: "active",
+    is_default: true,
+    availability: "enabled",
+    ...overrides,
+  };
+}
+
 describe("resolveImageModelPricingHint", () => {
-  function imageEntry(overrides: Partial<PublicCapabilityEntryDto>): PublicCapabilityEntryDto {
-    return {
-      id: "image.generate.dashscope.cn-beijing.wan2.6-t2i",
-      capability: "image.generate",
-      provider_key: "dashscope",
-      model_id: "wan2.6-t2i",
-      model_version: null,
-      display_name: "万相文生图（wan2.6-t2i）",
-      quality_tier: "standard",
-      speed_tier: "standard",
-      parameter_capabilities: {},
-      pricing_version: "dashscope-media-cn-beijing-2026-08-17",
-      pricing: {
-        unit_type: "image",
-        currency: "CNY",
-        price_micros_per_image: "200000",
-      },
-      status: "active",
-      is_default: true,
-      availability: "enabled",
-      ...overrides,
-    };
-  }
+  it("混合目录中只选择图片默认模型，不误选视频默认模型", () => {
+    const entries = [
+      videoEntry({}),
+      imageEntry({
+        id: "image.generate.dashscope.cn-beijing.wan2.7-image",
+        model_id: "wan2.7-image",
+        display_name: "万相图片生成（wan2.7-image）",
+      }),
+    ];
+    expect(resolveImageModelPricingHint(entries, null)).toEqual({
+      unitPrice: 0.2,
+      displayName: "万相图片生成（wan2.7-image）",
+      modelId: "wan2.7-image",
+    });
+  });
 
   it("auto（null）解析到 is_default 图片模型（wan2.6-t2i ¥0.20/张）", () => {
     const entries = [
@@ -107,6 +123,15 @@ describe("resolveImageModelPricingHint", () => {
 });
 
 describe("resolveVideoModelPricingHint", () => {
+  it("混合目录中只选择视频默认模型，不误选图片默认模型", () => {
+    const entries = [imageEntry({}), videoEntry({})];
+    expect(resolveVideoModelPricingHint(entries, null)).toEqual({
+      unitPricePerSec: 0.6,
+      displayName: "万相图生视频（wan2.7-i2v）",
+      modelId: "wan2.7-i2v-2026-04-25",
+    });
+  });
+
   it("auto（currentEntryId=null）解析到 is_default 条目（wan2.7 ¥0.60/秒）", () => {
     const entries = [
       videoEntry({

@@ -148,7 +148,7 @@ export function resolveImageModelPricingHint(
   currentEntryId: string | null,
 ): { unitPrice: number; displayName: string; modelId: string } | null {
   const imageEntries = entries.filter(
-    (entry) => entry.status === "active" && entry.availability === "enabled",
+    (entry) => entry.capability === "image.generate" && entry.status === "active" && entry.availability === "enabled",
   );
   if (imageEntries.length === 0) return null;
   const current =
@@ -188,6 +188,7 @@ export function getTaskCostHint(taskType: string): string {
  */
 export interface CatalogModelEntryLike {
   id: string;
+  capability: string;
   model_id: string;
   display_name: string;
   status: string;
@@ -212,7 +213,7 @@ export function resolveVideoModelPricingHint(
   quality: VideoApiQuality = "standard_720p",
 ): { unitPricePerSec: number; displayName: string; modelId: string } | null {
   const videoEntries = entries.filter(
-    (entry) => entry.status === "active" && entry.availability === "enabled",
+    (entry) => entry.capability === "video.image_to_video" && entry.status === "active" && entry.availability === "enabled",
   );
   if (videoEntries.length === 0) return null;
   const current =
