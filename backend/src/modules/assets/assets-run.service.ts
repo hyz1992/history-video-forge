@@ -934,12 +934,14 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
   const taskIdSet = input.taskIds ? new Set(input.taskIds) : null;
 
   // S2-2A 任务 6 整改：在 executions 过滤前注入旧 producer executions 的产出证据。
-  // 局部重试时 image_still / render_motion_cue 的新 executions 是 planned 且无
-  // output（本轮不重跑它们），但 fallback 决策的 producer 绑定依赖这些证据。
+  // 局部重试时，未选中的 image_still / render_motion_cue 新 executions 是 planned 且无
+  // output；fallback 决策的 producer 绑定仍依赖它们的旧产出证据。
   if (existingManifest && taskIdSet) {
     const oldExecutions = (Array.isArray(existingManifest.executions) ? existingManifest.executions : []) as Array<Record<string, unknown>>;
     for (const exec of manifest.executions) {
       if (exec.task_type !== "image_still" && exec.task_type !== "render_motion_cue") continue;
+      // 显式指定的任务保留新 execution 的 planned 状态，才能真正重跑。
+      if (taskIdSet.has(exec.task_id)) continue;
       if (exec.output_artifact_ids.length > 0) continue;
       const oldExec = oldExecutions.find((candidate) => candidate.task_id === exec.task_id);
       if (!oldExec) continue;
@@ -1289,12 +1291,12 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
         const newIds = (Array.isArray(newExec.output_artifact_ids) ? newExec.output_artifact_ids : []) as string[];
         const replacesVideo = !!narrationContext && newExec.task_type === "video_clip" && newIds.length > 0;
         if (replacesVideo) for (const id of oldIds) if (!newIds.includes(id)) replacedVideoArtifactIds.add(id);
-        // 角色定妆图的 output_artifact_ids[0] 是当前选择：本轮成功重生成后，
+        // 图片任务的 output_artifact_ids[0] 是当前选择：本轮成功重生成后，
         // 新图必须成为当前件，同时保留旧图供手动改选。失败/跳过则保留原选择。
-        const selectsNewSheet = newExec.task_type === "character_sheet" &&
+        const selectsNewImage = (newExec.task_type === "character_sheet" || newExec.task_type === "image_still") &&
           newExec.status === "completed" && newIds.length > 0;
         const mergedIds = [...new Set(
-          replacesVideo ? newIds : selectsNewSheet ? [...newIds, ...oldIds] : [...oldIds, ...newIds],
+          replacesVideo ? newIds : selectsNewImage ? [...newIds, ...oldIds] : [...oldIds, ...newIds],
         )];
         (newExec as Record<string, unknown>).output_artifact_ids = mergedIds;
       }

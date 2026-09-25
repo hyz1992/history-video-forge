@@ -1459,6 +1459,40 @@ describe("execution engine integration", () => {
     expect(ids).toContain(oldId);
     expect(secondManifest.artifacts.find((artifact) => artifact.artifact_id === ids[0])?.origin).toBe("provider");
   });
+
+  it("指定已完成分镜图重跑会创建新 provider job 并选中新产物", async () => {
+    tempDir = join(tmpdir(), `assets-image-rerun-${Date.now()}`);
+    await mkdir(tempDir, { recursive: true });
+    const { db, project } = await prepareProjectWithAssetPlan();
+    project.storageRootDir = tempDir;
+    const taskId = "img_001";
+
+    const first = await runAssetsGeneration({
+      db, project, voiceProfileId: "voice_preset_cold_authority", executionMode: "auto_available",
+      taskIds: [taskId],
+    });
+    expect(first.statusCode).toBe(200);
+    const firstManifest = (first.body as { manifest: AssetManifest }).manifest;
+    const oldId = firstManifest.executions.find((execution) => execution.task_id === taskId)!
+      .output_artifact_ids[0]!;
+    expect(oldId).toBeDefined();
+    const firstJobCount = [...db.assetProviderJobRecords.values()].filter((job) => job.taskId === taskId).length;
+    expect(firstJobCount).toBe(1);
+
+    const second = await runAssetsGeneration({
+      db, project, voiceProfileId: "voice_preset_cold_authority", executionMode: "auto_available",
+      taskIds: [taskId],
+    });
+    expect(second.statusCode).toBe(200);
+    const secondManifest = (second.body as { manifest: AssetManifest }).manifest;
+    const ids = secondManifest.executions.find((execution) => execution.task_id === taskId)!
+      .output_artifact_ids;
+    expect([...db.assetProviderJobRecords.values()].filter((job) => job.taskId === taskId)).toHaveLength(2);
+    expect(ids[0]).not.toBe(oldId);
+    expect(ids).toContain(oldId);
+    expect(secondManifest.segment_routes.find((route) => route.segment_id === "sb_001")?.primary_visual_artifact_id)
+      .toBe(ids[0]);
+  });
   it("task_ids only generates the specified task and preserves other routes", async () => {
     tempDir = join(tmpdir(), `assets-test-${Date.now()}`);
     await mkdir(tempDir, { recursive: true });
