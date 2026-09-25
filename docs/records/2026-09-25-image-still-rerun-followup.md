@@ -10,9 +10,9 @@
 |---|---|---|
 | 分镜图卡片单任务入口 | 已修 | 真实 Chromium 修复前点击第 15 镜“生成”：费用弹窗 0、POST 0；修复后第 16 镜弹窗包含 ¥0.20 与 `wan2.7-image`，取消 POST 0；拦截生成 POST 的浏览器轮次确认只提交 `img_s015_01` 一次，未将请求送达后端。 |
 | 显式 `task_ids` 重跑已完成 `image_still` | 已修 | 新服务回归修复前第二次运行仅 1 条 provider job（预期 2，按预期转红）；修复后 2 条 fake provider job，新产物排在当前选择首位、旧产物仍在列表中，分镜 route 指向新产物。 |
-| 上传替换后的定妆图参与分镜重跑 | 部分修 | 新服务级 fake-provider 闭环：先生成旧分镜图，再手动替换定妆图并指定重跑；新 provider job 的 `reference_image_count=1`，`reference_base64_lengths` 与上传文件一致，同时生成新分镜产物。浏览器第 16 镜显示“参考：李世民、李渊”；其所需 `sheet_003` 当前选择为手动上传件。真实 DashScope 回执仍**未验证**。 |
+| 上传替换后的定妆图参与分镜重跑（原验收 5b） | 已修 | fake-provider 闭环已通过。用户明确授权具体素材外发后，真实浏览器提交第 16 镜 `img_s015_01`；DashScope 图片 job 的 `reference_image_count=2`，其中一张参考图解码后的 SHA-256 与当前手动上传的 `sheet_003` 文件完全一致。新分镜产物成为当前选择，刷新后仍能加载。 |
 
-真实付费请求在执行前被自动审批拒绝；本轮新增真实费用 ¥0，API 视频调用 0。
+自动审批起初因具体素材外发范围不明拒绝真实调用；用户随后明确授权，受控执行了一次图片任务。本轮新增真实费用 **¥0.20**，API 视频调用 0。
 
 ## 根因与修复
 
@@ -27,9 +27,17 @@
 - 指定分镜图重跑服务回归 1/1，从红转绿；上传件注入 fake-provider 闭环 1/1 通过。
 - 角色定妆图 harness、角色引擎与执行引擎回归 14/14；资产前端相关测试 54/54。
 - `npm run typecheck:backend` 与 `npm run build:frontend` 通过。
-- 真实 Chromium：修复前空点击、修复后费用确认取消、拦截 POST 的确认提交，共 3 轮；确认提交轮次的请求由浏览器本地拦截并返回桩响应，没有真实派发。
+- 真实 Chromium：修复前空点击、费用确认取消、拦截 POST 的确认提交、授权后真实图片生成、刷新后图片加载，共 5 轮。拦截 POST 的轮次未真实派发；真实生成轮次只有 1 次图片任务 POST。
 - 既有 `assets-run-service.test.ts` 整文件仍有无效音色 fixture 等基线红灯；上述结果只声明针对性回归通过。
 
-## 真实回执阻断
+## 授权后真实回执
 
-尝试执行第 16 镜 `img_s015_01` 的真实付费图片生成时，自动审批在命令执行前拒绝，理由是该调用会将**项目提示词和已上传的角色定妆图**发送到外部 DashScope 并计费，而用户此前的授权只概括允许真实付费调用，没有明确授权这份具体素材发送到该服务。没有通过其他路径重试外发。本轮无法取得 DashScope 的新 `reference_image_count` 回执；5b 仍保持“部分修”，真实端到端为“未验证”。如需完成这一项，须由用户明确授权上述素材外发与本次约 ¥0.20 的图片调用，然后再执行一次受控真实重跑并记录 provider job 与用量。
+首次真实调用在执行前被自动审批拒绝，理由是项目提示词和已上传角色定妆图外发至 DashScope 的授权不够具体；当时没有绕过拦截。用户随后明确回复“我同意授权”，受控执行一次 `wan2.7-image` 图片任务。
+
+- 运行 `09b1ab83-4148-4b57-82cb-a5433fd1decb`，目标 `img_s015_01`（第 16 镜，引用 `sheet_001` 与 `sheet_003`）。浏览器生成请求成功，manifest execution 为 `completed`，新 artifact `artifact_img_img_s015_01_muh4prq2` 是当前选择，route 指向它；图片文件存在，浏览器刷新后 `naturalWidth > 0`。
+- 本运行仅 1 条 `dashscope_image` provider job；`rawRequestJson.reference_image_count=2`。解析请求中的两张参考图，一张解码后与当前手动上传的李渊 sheet 文件 SHA-256 完全一致，上传件大小 3,432,982 字节。这证明上传件实际进入了本次供应商请求，而不只是本地解析器命中。
+- 唯一用量记录为 `image.generate` / `dashscope` / `wan2.7-image` / `succeeded`，`actualCostMicros=200000`（¥0.20）；本运行视频 job 0。原 5b 的真实端到端验收通过。
+
+## 剩余观察
+
+本次 `AssetProviderJobRecord.status` 仍为 `prepared` 且 `providerJobId` 未持久化，虽然 manifest 已完成、产物可读且 usage 为 `succeeded`。这属于供应商 job 生命周期/回执对账的既有记录缺口，不影响上述参考图载荷、产物和费用三项证据；后续应独立处理，避免仅凭 job 状态判断运行结果。

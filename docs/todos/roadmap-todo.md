@@ -115,8 +115,8 @@
 - [ ] DashScope 图生视频真实小样本验证默认不执行；如要验证需明确批准成本并记录 request id、耗时、费用和失败模式
 - [x] 完成 `资产面板角色定妆图区`（2026-09-23）：面板新增常驻分区（缩略图 + 计划命中段数 + 状态/note + 重新生成 + 上传替换）、分镜卡片显示注入标记（参考：角色名 / 未注入）；同时修复三个真实缺陷——route 层 artifact 类型映射缺 character_sheet（上传恒 422）、注入解析忽略"当前选择"（上传替换/改选不生效）、手动上传从不落库（后续 run 完全看不到上传件）。计划与验收记录见 [计划](../plans/2026-09-23-asset-panel-character-sheet-section-implementation-plan.md) 与 [验收记录](../records/2026-09-23-asset-panel-character-sheet-section-acceptance.md)
 - [x] 修复显式 `task_ids` 重跑 `image_still` 静默无操作与资产卡片按钮空点击（2026-09-25）：指定任务不再回填旧终态，新 fake provider job 与当前新产物由服务级回归验证；页面恢复费用确认与单任务请求，真实 Chromium 拦截 POST 验证入口。上传件经 fake provider 注入回执验证。详见 [续验记录](../records/2026-09-25-image-still-rerun-followup.md)。
-- [ ] 角色定妆图上传后真实分镜重跑回执（原验收 5b）：本轮真实 DashScope 图片调用因素材外发授权范围被自动审批拒绝；待用户明确授权项目提示词和已上传定妆图发送到 DashScope 后，受控执行一次约 ¥0.20 的图片任务并核对 `reference_image_count` 与费用记录。
-- [ ] 角色 sheet 遗留观察项（2026-09-21 留档，详见 [live check 记录](../records/2026-09-21-asset-character-sheet-live-check.md) §5）：dashscope image adapter 未持久化供应商 `request_id`（回执对账只能用 task id）。该记录当时所列“手动上传缺 `character_id` metadata、不能注入”与“降级 note 未展示”已由 2026-09-23 的上传持久化/注入修复和 2026-09-25 的 note 展示修复处理；新上传件的**真实分镜重跑回执**仍待素材外发授权及受控实测，不能据本地 fake 回执判为真实端到端通过。
+- [x] 角色定妆图上传后真实分镜重跑回执（原验收 5b，2026-09-25）：用户明确授权具体素材外发后，真实浏览器重跑第 16 镜；DashScope 请求 `reference_image_count=2`，其中一张解码 SHA-256 与当前上传件一致；新图片可见且刷新持久，实际记账 ¥0.20，API 视频 0。详见 [续验记录](../records/2026-09-25-image-still-rerun-followup.md)。
+- [ ] 角色 sheet 遗留观察项（2026-09-21 留档，详见 [live check 记录](../records/2026-09-21-asset-character-sheet-live-check.md) §5）：dashscope image adapter 未持久化供应商 `request_id`，且 2026-09-25 一次已完成图片调用的 job 行仍为 `prepared`、`providerJobId=null`（manifest completed、产物可读、usage succeeded）；供应商 job 生命周期/回执对账需独立修复。该记录当时所列“手动上传缺 `character_id` metadata、不能注入”与“降级 note 未展示”已由 2026-09-23 的上传持久化/注入修复和 2026-09-25 的 note 展示修复处理；上传件的真实分镜注入回执现已通过上条验收。
 - Asset Planning global normalization / structural repair 异常恢复目前只有 non-live 证据；后续 7 个有效 live 轮次均未触发该分支。该证据缺口不自动升级为付费 live 任务，仅在真实故障复现或另行明确授权时验证，详见 [最近一次 Asset Planning live 记录](../records/2026-08-10-asset-planning-intent-compiler-live-check.md)。
 
 ## 阻塞项
