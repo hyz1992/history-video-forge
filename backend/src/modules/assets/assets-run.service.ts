@@ -1289,7 +1289,13 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
         const newIds = (Array.isArray(newExec.output_artifact_ids) ? newExec.output_artifact_ids : []) as string[];
         const replacesVideo = !!narrationContext && newExec.task_type === "video_clip" && newIds.length > 0;
         if (replacesVideo) for (const id of oldIds) if (!newIds.includes(id)) replacedVideoArtifactIds.add(id);
-        const mergedIds = [...new Set(replacesVideo ? newIds : [...oldIds, ...newIds])];
+        // 角色定妆图的 output_artifact_ids[0] 是当前选择：本轮成功重生成后，
+        // 新图必须成为当前件，同时保留旧图供手动改选。失败/跳过则保留原选择。
+        const selectsNewSheet = newExec.task_type === "character_sheet" &&
+          newExec.status === "completed" && newIds.length > 0;
+        const mergedIds = [...new Set(
+          replacesVideo ? newIds : selectsNewSheet ? [...newIds, ...oldIds] : [...oldIds, ...newIds],
+        )];
         (newExec as Record<string, unknown>).output_artifact_ids = mergedIds;
       }
       mergedExecs.push(newExec as unknown as Record<string, unknown>);

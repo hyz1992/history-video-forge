@@ -1415,6 +1415,50 @@ describe("execution engine integration", () => {
     }
   });
 
+  it("单角色定妆图重生成把新产物设为当前选择并保留旧产物", async () => {
+    tempDir = join(tmpdir(), `assets-sheet-rerun-${Date.now()}`);
+    await mkdir(tempDir, { recursive: true });
+    const { db, project } = await prepareProjectWithAssetPlan();
+    project.storageRootDir = tempDir;
+
+    const planRecord = db.assetPlanRecords.get(ASSET_PLAN_RECORD_ID)!;
+    const plan = planRecord.planJson as AssetPlan;
+    const imageTask = plan.tasks.find((task) => task.task_type === "image_still")!;
+    const sheetTask = {
+      ...imageTask,
+      task_id: "sheet_001",
+      task_type: "character_sheet",
+      source_segment_id: null,
+      production_intent: "角色定妆参考图",
+      prompt_draft: "李世民定妆参考图",
+      parameters: { character_id: "char_1", character_label: "李世民", segment_hit_count: 3, size: "2048*1152" },
+    } as AssetPlan["tasks"][number];
+    plan.tasks.unshift(sheetTask);
+    plan.cost_summary.total_tasks += 1;
+    plan.cost_summary.by_type.character_sheet = 1;
+
+    const first = await runAssetsGeneration({
+      db, project, voiceProfileId: "voice_preset_cold_authority", executionMode: "auto_available",
+      taskIds: [sheetTask.task_id],
+    });
+    expect(first.statusCode).toBe(200);
+    const firstManifest = (first.body as { manifest: AssetManifest }).manifest;
+    const oldId = firstManifest.executions.find((execution) => execution.task_id === sheetTask.task_id)!
+      .output_artifact_ids[0];
+    expect(oldId).toBeDefined();
+
+    const second = await runAssetsGeneration({
+      db, project, voiceProfileId: "voice_preset_cold_authority", executionMode: "auto_available",
+      taskIds: [sheetTask.task_id],
+    });
+    expect(second.statusCode).toBe(200);
+    const secondManifest = (second.body as { manifest: AssetManifest }).manifest;
+    const ids = secondManifest.executions.find((execution) => execution.task_id === sheetTask.task_id)!
+      .output_artifact_ids;
+    expect(ids[0]).not.toBe(oldId);
+    expect(ids).toContain(oldId);
+    expect(secondManifest.artifacts.find((artifact) => artifact.artifact_id === ids[0])?.origin).toBe("provider");
+  });
   it("task_ids only generates the specified task and preserves other routes", async () => {
     tempDir = join(tmpdir(), `assets-test-${Date.now()}`);
     await mkdir(tempDir, { recursive: true });
