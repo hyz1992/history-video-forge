@@ -2181,9 +2181,9 @@ function handleConfirm() {
   font-size: 11px;
   color: var(--el-color-warning);
   max-width: 190px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .asset-sheets-hint {
