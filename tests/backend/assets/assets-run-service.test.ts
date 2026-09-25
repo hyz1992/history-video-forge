@@ -1,4 +1,4 @@
-import { mkdir, rm } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -1493,6 +1493,73 @@ describe("execution engine integration", () => {
     expect(secondManifest.segment_routes.find((route) => route.segment_id === "sb_001")?.primary_visual_artifact_id)
       .toBe(ids[0]);
   });
+
+  it("手动替换定妆图后指定分镜重跑会注入上传件", async () => {
+    tempDir = join(tmpdir(), `assets-manual-sheet-rerun-${Date.now()}`);
+    await mkdir(tempDir, { recursive: true });
+    const { db, project } = await prepareProjectWithAssetPlan();
+    project.storageRootDir = tempDir;
+    const plan = db.assetPlanRecords.get(ASSET_PLAN_RECORD_ID)!.planJson as AssetPlan;
+    const imageTask = plan.tasks.find((task) => task.task_type === "image_still")!;
+    const sheetTask = {
+      ...imageTask,
+      task_id: "sheet_001",
+      task_type: "character_sheet",
+      source_segment_id: null,
+      production_intent: "角色定妆参考图",
+      prompt_draft: "李世民定妆参考图",
+      parameters: { character_id: "char_1", character_label: "李世民", segment_hit_count: 3, size: "2048*1152" },
+    } as AssetPlan["tasks"][number];
+    plan.tasks.unshift(sheetTask);
+    imageTask.parameters = { ...imageTask.parameters, character_sheet_task_ids: [sheetTask.task_id] };
+    plan.cost_summary.total_tasks += 1;
+    plan.cost_summary.by_type.character_sheet = 1;
+
+    const first = await runAssetsGeneration({
+      db, project, voiceProfileId: "voice_preset_cold_authority", executionMode: "auto_available",
+      taskIds: [sheetTask.task_id],
+    });
+    expect(first.statusCode).toBe(200);
+    const initialImage = await runAssetsGeneration({
+      db, project, voiceProfileId: "voice_preset_cold_authority", executionMode: "auto_available",
+      taskIds: [imageTask.task_id],
+    });
+    expect(initialImage.statusCode).toBe(200);
+    const previousId = (initialImage.body as { manifest: AssetManifest }).manifest.executions
+      .find((execution) => execution.task_id === imageTask.task_id)!.output_artifact_ids[0];
+
+    const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=", "base64");
+    const manualBytes = Buffer.concat([png, Buffer.from("manual-sheet-selection")]);
+    const manualPath = join(tempDir, "manual-sheet.png");
+    await writeFile(manualPath, manualBytes);
+    const upload = await registerManualArtifact({
+      db, project, taskId: sheetTask.task_id, artifactType: "image",
+      fileUri: manualPath, mimeType: "image/png", metadata: { width: 2048, height: 1152 },
+    });
+    expect(upload.statusCode).toBe(200);
+    const selectedSheetId = (upload.body as { manifest: AssetManifest }).manifest.executions
+      .find((execution) => execution.task_id === sheetTask.task_id)!.output_artifact_ids[0];
+    const selectedSheet = (upload.body as { manifest: AssetManifest }).manifest.artifacts
+      .find((artifact) => artifact.artifact_id === selectedSheetId);
+    expect(selectedSheet).toMatchObject({ origin: "manual_upload", metadata: { sheet_role: "character_sheet", character_id: "char_1" } });
+
+    const rerun = await runAssetsGeneration({
+      db, project, voiceProfileId: "voice_preset_cold_authority", executionMode: "auto_available",
+      taskIds: [imageTask.task_id],
+    });
+    expect(rerun.statusCode).toBe(200);
+    const manifest = (rerun.body as { manifest: AssetManifest }).manifest;
+    const ids = manifest.executions.find((execution) => execution.task_id === imageTask.task_id)!.output_artifact_ids;
+    expect(ids[0]).not.toBe(previousId);
+    expect(ids).toContain(previousId);
+    const imageJobs = [...db.assetProviderJobRecords.values()].filter((job) => job.taskId === imageTask.task_id);
+    expect(imageJobs).toHaveLength(2);
+    expect(imageJobs[1]!.rawRequestJson).toMatchObject({
+      reference_image_count: 1,
+      reference_base64_lengths: [manualBytes.toString("base64").length],
+    });
+  });
+
   it("task_ids only generates the specified task and preserves other routes", async () => {
     tempDir = join(tmpdir(), `assets-test-${Date.now()}`);
     await mkdir(tempDir, { recursive: true });
