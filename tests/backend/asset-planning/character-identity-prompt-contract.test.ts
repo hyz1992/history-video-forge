@@ -3,6 +3,19 @@ import { describe, expect, it } from "vitest";
 
 // 仅验证正式 prompt 的输入/输出合同与规则存在，不代表真实 LLM 或出图质量已通过。
 describe("稳定角色身份的正式 prompt 合同", () => {
+  it("全局身份按脚本主叙事时点确定年龄阶段，无法可靠确认时不猜具体年龄", () => {
+    const prompt = readFileSync(new URL("../../../prompts/asset-planning/asset-planner.prompt.md", import.meta.url), "utf8");
+    expect(prompt).toContain("先依据 `script_text` 的主叙事时点确定年龄阶段");
+    expect(prompt).toContain("不得套用人物其他时期的年龄");
+    expect(prompt).toContain("无法可靠确认精确年龄时，只写宽年龄阶段，不猜具体数字");
+    expect(prompt).toContain("version: v1.5.0");
+    expect(prompt).toContain("language: zh-CN");
+    expect(prompt).toContain("ProjectArtBible");
+    expect(prompt).toContain("`identity_description`");
+    expect(prompt).toContain("跨镜稳定的年龄区间、脸型、五官和体型");
+    expect(prompt).toContain("不包含服饰、冠帽、兵器、动作或背景");
+  });
+
   it("分段规划明确衣冠器物和多人关系，并保留稳定身份与当前分镜的造型职责", () => {
     const prompt = readFileSync(new URL("../../../prompts/asset-planning/segment-intent-planner.prompt.md", import.meta.url), "utf8");
     expect(prompt).toContain("关键衣冠器物除名称外，写出可辨识的形状、结构和颜色");
