@@ -3,9 +3,13 @@ import { describe, expect, it } from "vitest";
 
 // 仅验证正式 prompt 的输入/输出合同与规则存在，不代表真实 LLM 或出图质量已通过。
 describe("稳定角色身份的正式 prompt 合同", () => {
-  it("分段规划保留稳定身份，由当前分镜决定造型，参考图服饰不成为跨镜制服", () => {
+  it("分段规划明确衣冠器物和多人关系，并保留稳定身份与当前分镜的造型职责", () => {
     const prompt = readFileSync(new URL("../../../prompts/asset-planning/segment-intent-planner.prompt.md", import.meta.url), "utf8");
-    expect(prompt).toContain("version: v1.3.0");
+    expect(prompt).toContain("关键衣冠器物除名称外，写出可辨识的形状、结构和颜色");
+    expect(prompt).toContain("多人镜明确各角色的位置、动作及其与核心物件的关系");
+    expect(prompt).toContain("不因空位补出新的关键人物");
+    expect(prompt).toContain("不得改写分镜或新增史实");
+    expect(prompt).toContain("version: v1.4.0");
     expect(prompt).toContain("language: zh-CN");
     expect(prompt).toContain("SegmentIntentPlannerInput");
     expect(prompt).toContain("SegmentAssetIntentBatchDraft");
