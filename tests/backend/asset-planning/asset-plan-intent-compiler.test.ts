@@ -486,12 +486,23 @@ describe("角色稳定身份与分镜造型分离", () => {
       .map((task) => task.parameters.character_sheet_task_ids)).toEqual([["sheet_001"], ["sheet_001"]]);
   });
 
-  it("定妆图约束单人正面全身、时代中性服饰和纯色背景，排除兵器与多造型对照", () => {
+  it("定妆图约束单人正面全身远景、完整入画与留白，保留中性服饰和纯色背景", () => {
     const input = identityInput();
     input.characterSheet = { enabled: true, minSegmentHits: 2 };
     const { plan } = compileAssetPlanFromIntents(input);
     const sheet = plan.tasks.find((task) => task.task_type === "character_sheet")!;
-    for (const constraint of ["单人", "正面全身", "单套中性服饰", "纯色背景", "无兵器", "无同人多姿态", "无多套服装对照"]) {
+    for (const constraint of [
+      "单人",
+      "正面自然站立",
+      "全身远景",
+      "头顶至双脚及脚下地面完整入画",
+      "人物居中且四周留白",
+      "单套中性服饰",
+      "纯色背景",
+      "无兵器",
+      "无同人多姿态",
+      "无多套服装对照",
+    ]) {
       expect(sheet.prompt_draft).toContain(constraint);
     }
   });
