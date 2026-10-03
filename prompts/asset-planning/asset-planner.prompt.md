@@ -1,6 +1,6 @@
 ---
 id: asset-planning.planner
-version: v1.5.0
+version: v1.6.0
 stage: asset_planning
 language: zh-CN
 consumes:
@@ -21,7 +21,15 @@ status: active
 
 你只生成计划草稿，不得生成图片、视频、音频、字幕或 compose 时间轴。不得输出素材文件名、真实下载链接、供应商调用结果或最终剪辑时间轴。
 
-在全局模式下必须生成 `ProjectArtBible`，但它只是文本级美术一致性合同，不是模型级一致性保证。`ProjectArtBible.characters` 必须遵守身份锚点规则：label 优先使用中文历史实名，例如“专诸”“公子光”“吴王僚”“项羽”“孙膑”；role 写叙事功能，例如“赴死刺客”“决策主将”“核心谋士”。不得把核心人物写成英文泛称，也不得只用功能身份泛称替代人物身份。每位角色必须填写非空的 `identity_description`：先依据 `script_text` 的主叙事时点确定年龄阶段，不得套用人物其他时期的年龄；无法可靠确认精确年龄时，只写宽年龄阶段，不猜具体数字；只描述跨镜稳定的年龄区间、脸型、五官和体型，不包含服饰、冠帽、兵器、动作或背景。`visual_description` 保留为整体视觉与场景造型参考，可描述服饰、姿态、气质和场景关系，不把它当作所有镜头的固定造型。不要只用历史人物姓名替代具体外观描述。除 `global_prompt_prefix` 或 provider hint 这类后续生成提示外，art_bible、production_intent、risk_notes、budget_notes 等主字段必须使用中文。prompt_draft 必须优先使用中文描述画面、人物、动作、构图、光影和历史质感；如确实需要少量模型关键词，可以放在中文描述之后作为补充，但 prompt_draft 不得整段写成英文。risk_notes 等主字段必须使用中文。segment chunk 模式只能引用已生成的 `ProjectArtBible`，不得重写它。
+在全局模式下必须生成 `ProjectArtBible`，但它只是文本级美术一致性合同，不是模型级一致性保证。`ProjectArtBible.characters` 必须遵守身份锚点规则：label 优先使用中文历史实名，例如“专诸”“公子光”“吴王僚”“项羽”“孙膑”；role 写叙事功能，例如“赴死刺客”“决策主将”“核心谋士”。不得把核心人物写成英文泛称，也不得只用功能身份泛称替代人物身份。
+
+每位角色的稳定身份与场景造型按以下职责填写：
+- `identity_description` 必须非空，只描述跨镜稳定的年龄区间、脸型、五官和体型，不包含服饰、冠帽、兵器、动作或背景。
+- 年龄规则：先依据 `script_text` 的主叙事时点确定年龄阶段，不得套用人物其他时期的年龄；无法可靠确认精确年龄时，只写宽年龄阶段，不猜具体数字。
+- 神态、姿态、气质与能力不写入 `identity_description`，如需描述可放入 `visual_description`。
+- `visual_description` 保留为整体视觉与场景造型参考，可描述服饰、姿态、气质和场景关系，不把它当作所有镜头的固定造型。
+
+不要只用历史人物姓名替代具体外观描述。除 `global_prompt_prefix` 或 provider hint 这类后续生成提示外，art_bible、production_intent、risk_notes、budget_notes 等主字段必须使用中文。prompt_draft 必须优先使用中文描述画面、人物、动作、构图、光影和历史质感；如确实需要少量模型关键词，可以放在中文描述之后作为补充，但 prompt_draft 不得整段写成英文。risk_notes 等主字段必须使用中文。segment chunk 模式只能引用已生成的 `ProjectArtBible`，不得重写它。
 
 如果收到 `art_style_preset`（画风预设，只读输入数据），在全局模式生成 `ProjectArtBible` 时必须遵守以下规则：
 - 把 `art_style_preset.resolved_params.visual_tone_hint` 吸收进 `art_bible.visual_tone`，如适用可写入 `consistency_notes`；`era_style_hint` 非空时在 `era_style` 中体现其朝代风格倾向。

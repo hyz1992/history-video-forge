@@ -3,12 +3,16 @@ import { describe, expect, it } from "vitest";
 
 // 仅验证正式 prompt 的输入/输出合同与规则存在，不代表真实 LLM 或出图质量已通过。
 describe("稳定角色身份的正式 prompt 合同", () => {
-  it("全局身份按脚本主叙事时点确定年龄阶段，无法可靠确认时不猜具体年龄", () => {
+  it("全局身份只描述主叙事时点的稳定身体特征，并与神态、姿态、气质和能力分工", () => {
     const prompt = readFileSync(new URL("../../../prompts/asset-planning/asset-planner.prompt.md", import.meta.url), "utf8");
+    expect(prompt).toContain("- `identity_description` 必须非空，只描述跨镜稳定的年龄区间、脸型、五官和体型");
+    expect(prompt).toContain("神态、姿态、气质与能力不写入 `identity_description`，如需描述可放入 `visual_description`");
+    expect(prompt).toContain("- `visual_description` 保留为整体视觉与场景造型参考");
+    expect(prompt).toContain("不把它当作所有镜头的固定造型");
     expect(prompt).toContain("先依据 `script_text` 的主叙事时点确定年龄阶段");
     expect(prompt).toContain("不得套用人物其他时期的年龄");
     expect(prompt).toContain("无法可靠确认精确年龄时，只写宽年龄阶段，不猜具体数字");
-    expect(prompt).toContain("version: v1.5.0");
+    expect(prompt).toContain("version: v1.6.0");
     expect(prompt).toContain("language: zh-CN");
     expect(prompt).toContain("ProjectArtBible");
     expect(prompt).toContain("`identity_description`");
