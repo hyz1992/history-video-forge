@@ -10,7 +10,7 @@
 
 **设计：** `docs/plans/2026-10-03-character-consistency-repair-design.md` 单元 C。
 
-**执行状态（2026-10-03）：** C1 提交 `75e1f8dc`；两轮审查后异常记账与恢复提交时间均闭环，父 agent 独立复跑相关 49 项通过。真实 SQLite 重载通过，修复后真实 DashScope 落库仍未验证；收口范围见[验收记录](../records/2026-10-03-character-consistency-repair-acceptance.md)。
+**执行状态（2026-10-03）：** C1 提交 `75e1f8dc`；两轮审查后异常记账与恢复提交时间均闭环，父 agent 独立复跑相关 49 项通过。真实 SQLite 重载通过，后续[三图真实复验](../records/2026-10-03-character-consistency-repair-live-check.md)确认三个 DashScope job 完成态、ID、响应及时间真实落库，重启后仍保留；收口范围见[验收记录](../records/2026-10-03-character-consistency-repair-acceptance.md)。
 
 ## Chunk 1：状态和响应持久化
 
@@ -30,5 +30,5 @@
 - [x] 检查 dev 分支和改动范围，复跑受影响测试、prompt 治理、前后端构建/类型检查；最小检查通过后不无依据扩大测试。
 - [x] 内置浏览器验证单元 B；单元 C 以确定性 adapter + SQLite 的真实持久化事实验收，不借用旧任务 prepared 行宣称新代码失败或成功。
 - [x] 在 `docs/records/2026-10-03-character-consistency-repair-acceptance.md` 记录原始清单逐项状态、命令结果、浏览器截图路径、提交与限制；`docs/plans/README.md` 加入该设计、计划及验收链接。
-- [x] 明确标记：新规则的真实定妆图和两种服饰分镜目视未验证。若继续付费验收，先提交具体样例与估算预算并获取新授权，不能复用已用完的 0.40 元授权。
+- [x] 离线收口时将真实画面标为未验证；先提交具体三图样例和估算 0.60 元预算，再取得新授权执行，未复用原 0.40 元授权。实测仍保留全身构图未通过与新 global 语义未验证。
 - [x] 自审收口文档并中文提交“记录角色一致性整改验证结果”。

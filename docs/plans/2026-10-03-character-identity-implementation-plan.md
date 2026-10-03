@@ -10,7 +10,7 @@
 
 **设计：** `docs/plans/2026-10-03-character-consistency-repair-design.md` 单元 A。
 
-**执行状态（2026-10-03）：** A1 提交 `0c12f142`，A2 提交 `ba26dfcf`；两阶段审查及对应离线检查通过。下方任务完成只代表代码合同与编译行为，新 global 语义和真实图片效果仍未验证，见[验收记录](../records/2026-10-03-character-consistency-repair-acceptance.md)。
+**执行状态（2026-10-03）：** A1 提交 `0c12f142`，A2 提交 `ba26dfcf`；两阶段审查及对应离线检查通过。后续新增授权[三图真实复验](../records/2026-10-03-character-consistency-repair-live-check.md)完成，单人写实、同人观感与造型切换在样本内通过；全身构图未满足，新 global 语义仍未验证，见[验收记录](../records/2026-10-03-character-consistency-repair-acceptance.md)。
 
 ## Chunk 1：身份合同
 
@@ -36,4 +36,4 @@
 - [x] 编译 helper 使用 `identity_description ?? visual_description`；sheet 构造参数接收 identity、visual tone、global prefix，调用方从 art bible 提供冻结值；保留尺寸、阈值、任务引用和模型。选择身份仅做字段读取，不增加服饰匹配规则。
 - [x] 分段 prompt 明确当前造型权威；optimizer 保留稳定身份、允许按分镜修正造型。每份更新版本与中文 changelog，禁止复制新正式 prompt 到业务代码；验证 A1 已同步的全局与修复合同。
 - [x] 运行 `npx vitest run --configLoader runner --no-file-parallelism tests/backend/asset-planning/asset-plan-intent-compiler.test.ts tests/backend/asset-planning/asset-planning-generation.test.ts tests/backend/asset-planning/character-identity-prompt-contract.test.ts tests/harness/assets-character-sheet-smoke.test.ts`，以及 `npm run harness:check-prompts`、`npm run typecheck:backend`，全部预期通过。
-- [x] 两阶段审查后中文提交“修复角色定妆图与分镜造型约束冲突”。无新增付费调用。真实画面验收继续标未验证。
+- [x] 两阶段审查后中文提交“修复角色定妆图与分镜造型约束冲突”。该实现任务无新增付费调用，提交时真实画面标未验证；后续授权复验状态见上方执行状态。

@@ -4,7 +4,7 @@
 
 截至 2026-10-03：
 
-- [角色一致性验收整改](./2026-10-03-character-consistency-repair-design.md)已完成四个独立代码任务：稳定身份合同、定妆图/分镜造型分离、空参考文案、供应商任务生命周期。实施见[身份与造型计划](./2026-10-03-character-identity-implementation-plan.md)、[文案计划](./2026-10-03-character-reference-copy-implementation-plan.md)、[生命周期计划](./2026-10-03-provider-job-lifecycle-implementation-plan.md)；233 项不同范围测试分区通过，内置浏览器文案复验通过。**新图质量、修复后供应商实测及新 global 语义未验证，不宣称整体签收**。原 0.40 元验收预算已用完，本轮新增调用为 0；具体三图 0.60 元复验请求已准备，待新授权。逐项证据与限制见[整改验收记录](../records/2026-10-03-character-consistency-repair-acceptance.md)。计划暂留当前入口，待真实复验收口。
+- [角色一致性验收整改](./2026-10-03-character-consistency-repair-design.md)已完成四个独立代码任务：稳定身份合同、定妆图/分镜造型分离、空参考文案、供应商任务生命周期。实施见[身份与造型计划](./2026-10-03-character-identity-implementation-plan.md)、[文案计划](./2026-10-03-character-reference-copy-implementation-plan.md)、[生命周期计划](./2026-10-03-provider-job-lifecycle-implementation-plan.md)；233 项不同范围测试分区通过，内置浏览器文案复验通过。后续用户新增授权的[三图真实复验](../records/2026-10-03-character-consistency-repair-live-check.md)已完成，3 次调用估算共 0.60 元：单人写实、三图同人观感、甲胄/衮冕造型切换及真实账本通过，QA 重启后仍保留。**定妆图仍是半身，全身构图未通过；新 global 语义、全片稳定性及精确历史形制未验证，不宣称整体签收**。两笔预算（原 0.40 元、新增 0.60 元）均已用完；本轮停止新增调用。逐项证据见[整改验收记录](../records/2026-10-03-character-consistency-repair-acceptance.md)。计划暂留当前入口，待剩余质量项收口。
 
 截至 2026-09-21：
 
