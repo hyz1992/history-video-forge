@@ -4,6 +4,8 @@
 
 截至 2026-10-03：
 
+- 用户新增最多 50 元预算，继续[定妆图全身构图整改](./2026-10-03-character-sheet-full-body-design.md)，按[有界实测与实施计划](./2026-10-03-character-sheet-full-body-implementation-plan.md)先比较取景，再修改编译模板和验证参考作用。本设计最多 8 次生图、估算 1.60 元；逐批核对，不以耗尽预算为目标。
+
 - [角色一致性验收整改](./2026-10-03-character-consistency-repair-design.md)已完成四个独立代码任务：稳定身份合同、定妆图/分镜造型分离、空参考文案、供应商任务生命周期。实施见[身份与造型计划](./2026-10-03-character-identity-implementation-plan.md)、[文案计划](./2026-10-03-character-reference-copy-implementation-plan.md)、[生命周期计划](./2026-10-03-provider-job-lifecycle-implementation-plan.md)；233 项不同范围测试分区通过，内置浏览器文案复验通过。后续用户新增授权的[三图真实复验](../records/2026-10-03-character-consistency-repair-live-check.md)已完成，3 次调用估算共 0.60 元：单人写实、三图同人观感、甲胄/衮冕造型切换及真实账本通过，QA 重启后仍保留。**定妆图仍是半身，全身构图未通过；新 global 语义、全片稳定性及精确历史形制未验证，不宣称整体签收**。两笔预算（原 0.40 元、新增 0.60 元）均已用完；本轮停止新增调用。逐项证据见[整改验收记录](../records/2026-10-03-character-consistency-repair-acceptance.md)。计划暂留当前入口，待剩余质量项收口。
 
 截至 2026-09-21：
