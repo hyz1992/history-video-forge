@@ -16,13 +16,18 @@ describe("稳定角色身份的正式 prompt 合同", () => {
     expect(prompt).toContain("不包含服饰、冠帽、兵器、动作或背景");
   });
 
-  it("分段规划明确衣冠器物和多人关系，并保留稳定身份与当前分镜的造型职责", () => {
+  it("分段规划展开可见衣冠器物并保留原动作瞬间、多人职责与稳定身份", () => {
     const prompt = readFileSync(new URL("../../../prompts/asset-planning/segment-intent-planner.prompt.md", import.meta.url), "utf8");
-    expect(prompt).toContain("关键衣冠器物除名称外，写出可辨识的形状、结构和颜色");
-    expect(prompt).toContain("多人镜明确各角色的位置、动作及其与核心物件的关系");
+    expect(prompt).toContain("在 `image_prompt` 中展开关键衣冠器物能画出的外形、结构和颜色");
+    expect(prompt).toContain("不能只写名称、术语或数字");
+    expect(prompt).toContain("将其定格为正在发生的可见瞬间");
+    expect(prompt).toContain("保留原动作、动作主体及其与核心物件的相对关系");
+    expect(prompt).toContain("不得把动作替换为泛化站姿");
+    expect(prompt).toContain("多人镜中各角色的位置、动作和职责忠于原分镜");
+    expect(prompt).toContain("明确各角色与核心物件的关系");
     expect(prompt).toContain("不因空位补出新的关键人物");
     expect(prompt).toContain("不得改写分镜或新增史实");
-    expect(prompt).toContain("version: v1.4.0");
+    expect(prompt).toContain("version: v1.5.0");
     expect(prompt).toContain("language: zh-CN");
     expect(prompt).toContain("SegmentIntentPlannerInput");
     expect(prompt).toContain("SegmentAssetIntentBatchDraft");
