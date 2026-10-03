@@ -227,7 +227,8 @@ async function updateTaskPromptController(
     return { statusCode: 400, body: { error: "missing_prompt_draft" } };
   }
 
-  const plan = assetPlanRecord.planJson as Record<string, unknown> as { tasks?: Array<{ task_id: string; prompt_draft?: string | null }> };
+  // 在持久化成功前保留原内存记录，避免保存失败或数据库重载造成假保存。
+  const plan = structuredClone(assetPlanRecord.planJson);
   const tasks = plan.tasks ?? [];
   const task = tasks.find((t) => t.task_id === taskId);
   if (!task) {
@@ -235,7 +236,10 @@ async function updateTaskPromptController(
   }
 
   task.prompt_draft = payload.prompt_draft;
-  assetPlanRecord.planJson = plan as unknown as typeof assetPlanRecord.planJson;
+  await saveAssetPlanRecord(context.app.db, {
+    ...assetPlanRecord,
+    planJson: plan,
+  });
 
   return {
     statusCode: 200,

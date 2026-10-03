@@ -1,0 +1,41 @@
+# 资产提示词编辑持久化修复设计与实施计划
+
+**目标**：样片生产时，在资产页编辑并保存图片/视频提示词后，后续查询、生成与服务恢复继续消费编辑后的提示词。
+
+**设计**：资产页 PATCH 路由当前只修改内存记录；真实数据库读取会重新装载旧计划。沿用现有 `saveAssetPlanRecord` 仓储边界，完整保留资产计划记录的身份、版本、上游引用与验证字段，仅替换目标任务 `prompt_draft`。不重建计划，不增加 LLM 调用，不修改正式 prompt 或公共 schema。持久化成功后再返回成功，避免产生假保存提示。
+
+**技术栈**：TypeScript、现有资产计划仓储与 Vitest。
+
+**范围**：`backend/src/modules/assets/assets.routes.ts`、现有资产路由测试或一个针对该路由的回归测试、本计划。
+
+**验收**：
+- [x] 路由成功保存后，持久化 writer 收到更新的完整资产计划，其他任务与字段保持原值。
+- [x] 重新装载后的读取/生成仍使用新提示词，测试先红后绿。
+- [x] 错误输入与不存在任务保持现有行为；不调用真实媒体 provider。
+- [x] 相关最小测试通过，检查 diff，使用中文提交。
+- [ ] 真实资产页面编辑、刷新、定点生成后核对结果与提示词；该步骤由主代理在样片生产中执行。
+
+**实施顺序**：先检查同文件已使用仓储保存的段落和测试约定；补回归测试并确认预期失败；最小修复；运行相关测试与类型检查（若受影响）；自审并提交。本任务在 `dev` 主工作区完成，不创建分支或 worktree。
+
+**执行方式**：使用 `superpowers:subagent-driven-development`，只委派本单一修复任务；实际样片的付费调用与浏览器操作由主代理继续串行控制。
+
+## 实施结果与证据
+
+**实际改动**：`updateTaskPromptController` 克隆完整资产计划，只替换目标任务的 `prompt_draft`，再等待 `saveAssetPlanRecord` 成功。仓储保留原记录身份、上游引用、验证/执行/诊断字段和创建时间；保存失败时原内存记录也保持不变。
+
+**先红后绿**：新增 `tests/backend/api/assets-prompt-persistence.test.ts`，使用临时 SQLite、真实 Prisma writer 和真实水合器。修复前两个图片/视频用例重载后得到旧提示词；写入失败用例得到错误的 200。修复后清空内存并重载，整个记录与期望完全一致，GET 快照保留新提示词，后续执行引擎把新提示词交给离线适配器的 `prepare`。补充缺少提示词、错误类型和未知任务三项既有错误行为检查。
+
+**最小验证命令**：
+
+```powershell
+npx vitest run --configLoader runner --no-file-parallelism tests/backend/api/assets-prompt-persistence.test.ts tests/backend/assets/assets-execution-engine.test.ts tests/backend/db/prisma-second-aggregate-writer.test.ts
+npx tsc -p backend/tsconfig.json --noEmit
+```
+
+2026-10-03 23:17（北京时间）：3 个文件、34 项测试通过；类型检查退出码 0。没有真实供应商调用、数据库迁移或运行服务重启。
+
+**扩大回归的已知限制**：现有 `tests/backend/api/assets-api.test.ts` 为 19 通过、9 失败；将路由短暂替换为修复前 HEAD 内容后独立运行，仍为相同 9 项失败，随后恢复修复文件。7 项失败来自旧测试未导入 `createLegacyProject`，2 项涉及既有自动授权与 `dry_run` 行为。本任务不扩展整改这些基线问题，不能把整个 assets API 测试文件声明为通过。
+
+**自审**：变更仅在既有仓储边界增加持久化；没有重建资产计划、增加 LLM 调用、修改正式 prompt、公共 schema 或其他用户文件。完整记录等值断言覆盖未编辑任务与所有记录元数据；真实媒体成品质量仍由主任务验收。
+
+**待验证**：真实资产页面编辑→刷新→定点生成→再次核对提示词。后端当前启动命令没有 `watch`，代码生效需要主代理确认无在途调用后定点重启对应服务；本修复执行者不重启服务。
