@@ -31,7 +31,7 @@ describe("稳定角色身份的正式 prompt 合同", () => {
     expect(prompt).toContain("明确各角色与核心物件的关系");
     expect(prompt).toContain("不因空位补出新的关键人物");
     expect(prompt).toContain("不得改写分镜或新增史实");
-    expect(prompt).toContain("version: v1.5.0");
+    expect(prompt).toContain("version: v1.6.0");
     expect(prompt).toContain("language: zh-CN");
     expect(prompt).toContain("SegmentIntentPlannerInput");
     expect(prompt).toContain("SegmentAssetIntentBatchDraft");
@@ -41,6 +41,9 @@ describe("稳定角色身份的正式 prompt 合同", () => {
     expect(prompt).toContain("服饰、冠帽、兵器、动作和场景");
     expect(prompt).toContain("参考图只负责身份");
     expect(prompt).toContain("不得把定妆图服装当作跨镜制服");
+    expect(prompt).toContain("逐个写明入镜角色（尤其主角）的当前场景服饰");
+    expect(prompt).toContain("不得只写背景人物的衣着");
+    expect(prompt).toContain("分镜未明写时，结合其叙事功能与 `visual_description` 中适用的造型补足");
   });
 
   it("优化器保留角色名和稳定身份，允许按当前分镜语义修正旧锚点造型", () => {
