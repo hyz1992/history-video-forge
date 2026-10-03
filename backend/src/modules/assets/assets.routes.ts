@@ -1,4 +1,5 @@
 import type { AppInstance, AppResponse, RouteContext } from "../../app";
+import type { DbClient } from "../../db/client";
 import { getProjectById } from "../projects/project.repository";
 import {
   registerManualArtifact,
@@ -25,6 +26,28 @@ import {
   submitGenerationRun,
 } from "../generation-run/submit-protocol.js";
 import type { GenerationQuoteSelection } from "../../../../shared/src/index.js";
+
+const assetPlanPromptLocks = new WeakMap<DbClient, Map<string, Promise<void>>>();
+
+function withAssetPlanPromptLock<T>(db: DbClient, planId: string, work: () => Promise<T>): Promise<T> {
+  let locks = assetPlanPromptLocks.get(db);
+  if (!locks) {
+    locks = new Map();
+    assetPlanPromptLocks.set(db, locks);
+  }
+  const previous = locks.get(planId) ?? Promise.resolve();
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => { release = resolve; });
+  locks.set(planId, gate);
+  return previous.then(async () => {
+    try {
+      return await work();
+    } finally {
+      release();
+      if (locks.get(planId) === gate) locks.delete(planId);
+    }
+  });
+}
 
 function readOptionalNumber(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
@@ -216,35 +239,38 @@ async function updateTaskPromptController(
     return { statusCode: 409, body: { error: "no_active_asset_plan" } };
   }
 
-  const assetPlanRecord = context.app.db.assetPlanRecords.get(assetPlanRecordId);
-  if (!assetPlanRecord) {
-    return { statusCode: 409, body: { error: "asset_plan_not_found" } };
-  }
+  return withAssetPlanPromptLock(context.app.db, assetPlanRecordId, async () => {
+    // 同一计划排队保存后必须重新取最新记录，不能复用等待前的整份快照。
+    const assetPlanRecord = context.app.db.assetPlanRecords.get(assetPlanRecordId);
+    if (!assetPlanRecord) {
+      return { statusCode: 409, body: { error: "asset_plan_not_found" } };
+    }
 
-  const taskId = context.params.taskId;
-  const payload = context.payload as { prompt_draft?: string } | undefined;
-  if (!payload || typeof payload.prompt_draft !== "string") {
-    return { statusCode: 400, body: { error: "missing_prompt_draft" } };
-  }
+    const taskId = context.params.taskId;
+    const payload = context.payload as { prompt_draft?: string } | undefined;
+    if (!payload || typeof payload.prompt_draft !== "string") {
+      return { statusCode: 400, body: { error: "missing_prompt_draft" } };
+    }
 
-  // 在持久化成功前保留原内存记录，避免保存失败或数据库重载造成假保存。
-  const plan = structuredClone(assetPlanRecord.planJson);
-  const tasks = plan.tasks ?? [];
-  const task = tasks.find((t) => t.task_id === taskId);
-  if (!task) {
-    return { statusCode: 404, body: { error: "task_not_found" } };
-  }
+    // 在持久化成功前保留原内存记录，避免保存失败或数据库重载造成假保存。
+    const plan = structuredClone(assetPlanRecord.planJson);
+    const tasks = plan.tasks ?? [];
+    const task = tasks.find((t) => t.task_id === taskId);
+    if (!task) {
+      return { statusCode: 404, body: { error: "task_not_found" } };
+    }
 
-  task.prompt_draft = payload.prompt_draft;
-  await saveAssetPlanRecord(context.app.db, {
-    ...assetPlanRecord,
-    planJson: plan,
+    task.prompt_draft = payload.prompt_draft;
+    await saveAssetPlanRecord(context.app.db, {
+      ...assetPlanRecord,
+      planJson: plan,
+    });
+
+    return {
+      statusCode: 200,
+      body: { task_id: taskId, prompt_draft: task.prompt_draft },
+    };
   });
-
-  return {
-    statusCode: 200,
-    body: { task_id: taskId, prompt_draft: task.prompt_draft },
-  };
 }
 
 async function optimizeTaskPromptController(

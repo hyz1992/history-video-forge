@@ -139,6 +139,40 @@ describe("asset prompt persistence", () => {
     expect(app.db.assetPlanRecords.get("plan")).toEqual(original);
     await hydrateSecondAggregates(app.db, client);
     expect(app.db.assetPlanRecords.get("plan")).toEqual(original);
+    // 失败不能阻塞后续编辑，也不能把失败的图片提示词带入下一次保存。
+    const next = await app.inject({ method: "PATCH", url: "/api/projects/project/assets/tasks/video_clip/prompt", payload: { prompt_draft: "失败后的视频新提示词" }, auth });
+    expect(next.statusCode).toBe(200);
+    original.planJson.tasks.find((task) => task.task_id === "video_clip")!.prompt_draft = "失败后的视频新提示词";
+    await hydrateSecondAggregates(app.db, client);
+    expect(app.db.assetPlanRecords.get("plan")).toEqual(original);
+  });
+
+  it("preserves both task prompts when edits to the same plan overlap", async () => {
+    const expected = structuredClone(app.db.assetPlanRecords.get("plan")!);
+    expected.planJson.tasks.find((task) => task.task_id === "image_still")!.prompt_draft = "图片新提示词";
+    expected.planJson.tasks.find((task) => task.task_id === "video_clip")!.prompt_draft = "视频新提示词";
+    let releaseFirst!: () => void;
+    let markFirstEntered!: () => void;
+    const firstEntered = new Promise<void>((resolve) => { markFirstEntered = resolve; });
+    const firstRelease = new Promise<void>((resolve) => { releaseFirst = resolve; });
+    const save = writer.saveAssetPlan.bind(writer);
+    let calls = 0;
+    vi.spyOn(writer, "saveAssetPlan").mockImplementation(async (record) => {
+      if (++calls === 1) { markFirstEntered(); await firstRelease; }
+      await save(record);
+    });
+
+    const first = app.inject({ method: "PATCH", url: "/api/projects/project/assets/tasks/image_still/prompt", payload: { prompt_draft: "图片新提示词" }, auth });
+    await firstEntered;
+    const second = app.inject({ method: "PATCH", url: "/api/projects/project/assets/tasks/video_clip/prompt", payload: { prompt_draft: "视频新提示词" }, auth });
+    // 给第二个请求一个完整事件循环轮次，确保其在第一份写入暂停时争用同一计划。
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    releaseFirst();
+    const responses = await Promise.all([first, second]);
+    expect(responses.map((response) => response.statusCode)).toEqual([200, 200]);
+    expect(app.db.assetPlanRecords.get("plan")).toEqual(expected);
+    await hydrateSecondAggregates(app.db, client);
+    expect(app.db.assetPlanRecords.get("plan")).toEqual(expected);
   });
 
   it.each([
