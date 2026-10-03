@@ -146,7 +146,7 @@ export function sheetReferenceLabel(input: {
 }): string {
   const raw = input.parameters?.character_sheet_task_ids;
   const taskIds = Array.isArray(raw) ? raw.filter((id): id is string => typeof id === "string") : [];
-  if (taskIds.length === 0) return "未注入参考图（该镜无角色命中）";
+  if (taskIds.length === 0) return "未配置角色定妆图参考";
   const parts = taskIds.map((taskId) => {
     const sheet = input.sheetsByTaskId.get(taskId);
     if (!sheet) return `${taskId}（未知定妆图任务）`;

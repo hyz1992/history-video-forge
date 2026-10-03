@@ -156,11 +156,13 @@ describe("sheetReferenceLabel（T3 分镜卡片注入标记）", () => {
       .toBe("参考：李建成（未生成）");
   });
 
-  it("该镜无角色命中 / 参数缺失 / 非法值都落到明确文案", () => {
-    expect(sheetReferenceLabel({ parameters: {}, sheetsByTaskId: sheets })).toBe("未注入参考图（该镜无角色命中）");
-    expect(sheetReferenceLabel({ parameters: null, sheetsByTaskId: sheets })).toBe("未注入参考图（该镜无角色命中）");
+  it("参数缺失、非数组或空数组时说明未配置参考", () => {
+    expect(sheetReferenceLabel({ parameters: {}, sheetsByTaskId: sheets })).toBe("未配置角色定妆图参考");
+    expect(sheetReferenceLabel({ parameters: null, sheetsByTaskId: sheets })).toBe("未配置角色定妆图参考");
     expect(sheetReferenceLabel({ parameters: { character_sheet_task_ids: "sheet_001" }, sheetsByTaskId: sheets }))
-      .toBe("未注入参考图（该镜无角色命中）");
+      .toBe("未配置角色定妆图参考");
+    expect(sheetReferenceLabel({ parameters: { character_sheet_task_ids: [] }, sheetsByTaskId: sheets }))
+      .toBe("未配置角色定妆图参考");
   });
 
   it("引用到未知定妆图任务时不静默", () => {
