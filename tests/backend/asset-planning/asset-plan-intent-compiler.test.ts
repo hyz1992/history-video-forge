@@ -414,6 +414,99 @@ describe("compileAssetPlanFromIntents", () => {
   });
 });
 
+describe("角色稳定身份与分镜造型分离", () => {
+  const identity = "四十岁左右，方脸，浓眉，鼻梁挺直，中等身高，肩背宽厚";
+  const legacyLooks = "紫袍佩刀，称帝时换天子衮冕，三套服饰并列对照";
+
+  function identityInput(): AssetPlanCompilerInput {
+    const input = makeInput(2);
+    input.globalDraft.art_bible.characters[0] = {
+      ...input.globalDraft.art_bible.characters[0]!,
+      identity_description: identity,
+      visual_description: legacyLooks,
+    };
+    const scenes = ["人物甲穿紫袍佩刀，在军帐发令", "人物甲穿天子衮冕，在宫殿登基"];
+    input.storyboard.segments.forEach((segment, index) => {
+      segment.scene_description = scenes[index]!;
+    });
+    input.chunks[0]!.draft.segments.forEach((entry, index) => {
+      entry.intents = entry.intents.map((intent) => intent.asset_kind === "image_still"
+        ? { ...intent, image_prompt: scenes[index]! }
+        : intent);
+    });
+    return input;
+  }
+
+  it("同一身份的两镜只追加稳定锚点，各自保留当前分镜服饰", () => {
+    const { plan } = compileAssetPlanFromIntents(identityInput());
+    const images = plan.tasks.filter((task) => task.task_type === "image_still");
+    expect(images).toHaveLength(2);
+    for (const imageTask of images) {
+      expect(imageTask.prompt_draft!.split("\n").find((line) => line.startsWith("[角色锚点]")))
+        .toBe(`[角色锚点] 人物甲：${identity}`);
+      expect(imageTask.prompt_draft).not.toContain(legacyLooks);
+      expect(imageTask.prompt_draft).not.toContain("三套服饰");
+    }
+    expect(images[0]!.prompt_draft).toContain("人物甲穿紫袍佩刀，在军帐发令");
+    expect(images[0]!.prompt_draft).not.toContain("天子衮冕");
+    expect(images[1]!.prompt_draft).toContain("人物甲穿天子衮冕，在宫殿登基");
+    expect(images[1]!.prompt_draft).not.toContain("紫袍佩刀");
+  });
+
+  it("旧角色缺少稳定身份时仍完整回退造型描述，不做本地语义抽取", () => {
+    const input = identityInput();
+    delete input.globalDraft.art_bible.characters[0]!.identity_description;
+    const { plan } = compileAssetPlanFromIntents(input);
+    for (const imageTask of plan.tasks.filter((task) => task.task_type === "image_still")) {
+      expect(imageTask.prompt_draft).toContain(`[角色锚点] 人物甲：${legacyLooks}`);
+    }
+  });
+
+  it("定妆图的提示与备用来源只使用稳定身份并继承冻结的项目画风", () => {
+    const input = identityInput();
+    input.characterSheet = { enabled: true, minSegmentHits: 2 };
+    input.globalDraft.art_bible.visual_tone = "工笔插画，细线淡彩";
+    input.globalDraft.art_bible.global_prompt_prefix = "绢本设色，纸张纹理";
+    const { plan } = compileAssetPlanFromIntents(input);
+    const sheet = plan.tasks.find((task) => task.task_type === "character_sheet")!;
+    expect(sheet.source_excerpt).toBe(identity);
+    expect(sheet.prompt_draft).toContain(identity);
+    expect(sheet.prompt_draft).not.toContain(legacyLooks);
+    expect(sheet.prompt_draft).toContain("工笔插画，细线淡彩");
+    expect(sheet.prompt_draft).toContain("绢本设色，纸张纹理");
+    expect(sheet.prompt_draft).toContain("战国");
+    expect(sheet.prompt_draft).toContain("无现代物品");
+    expect(sheet.prompt_draft).not.toContain("写实历史质感");
+    expect(sheet.prompt_draft).not.toContain("无动漫风");
+    expect(sheet.parameters).toMatchObject({ aspect_ratio: "16:9", size: "2048*1152" });
+    expect(sheet.manual_upload_policy).toMatchObject({
+      allowed: true, required: false, accepted_file_types: ["image/png", "image/jpeg"],
+    });
+    expect(plan.tasks.filter((task) => task.task_type === "image_still")
+      .map((task) => task.parameters.character_sheet_task_ids)).toEqual([["sheet_001"], ["sheet_001"]]);
+  });
+
+  it("定妆图约束单人正面全身、时代中性服饰和纯色背景，排除兵器与多造型对照", () => {
+    const input = identityInput();
+    input.characterSheet = { enabled: true, minSegmentHits: 2 };
+    const { plan } = compileAssetPlanFromIntents(input);
+    const sheet = plan.tasks.find((task) => task.task_type === "character_sheet")!;
+    for (const constraint of ["单人", "正面全身", "单套中性服饰", "纯色背景", "无兵器", "无同人多姿态", "无多套服装对照"]) {
+      expect(sheet.prompt_draft).toContain(constraint);
+    }
+  });
+
+  it("旧定妆任务保留完整造型描述回退，不宣称旧多造型内容已被清理", () => {
+    const input = identityInput();
+    delete input.globalDraft.art_bible.characters[0]!.identity_description;
+    input.characterSheet = { enabled: true, minSegmentHits: 2 };
+    const { plan } = compileAssetPlanFromIntents(input);
+    const sheet = plan.tasks.find((task) => task.task_type === "character_sheet")!;
+    expect(sheet.source_excerpt).toBe(legacyLooks);
+    expect(sheet.prompt_draft).toContain(legacyLooks);
+  });
+});
+
 describe("character_sheet 任务（T1：阈值、开关、注入关系）", () => {
   /**
    * 只改写 scene_description / visual_elements：阈值统计只看前者（与 [角色锚点] 同源），

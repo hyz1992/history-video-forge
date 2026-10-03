@@ -2987,7 +2987,8 @@ describe("generateAssetPlan", () => {
     const firstImage = plan.tasks.find(
       (task) => task.task_type === "image_still" && task.source_segment_id === "sb_001",
     )!;
-    expect(firstImage.prompt_draft).toContain(`[角色锚点] ${visibleLabel}：束发深衣，神情克制`);
+    expect(firstImage.prompt_draft).toContain(`[角色锚点] ${visibleLabel}：五十岁左右，窄长脸，细眉，身形矮小`);
+    expect(firstImage.prompt_draft).not.toContain("束发深衣，神情克制");
     expect(firstImage.prompt_draft).not.toContain("不应进入画面提示");
     expect(firstImage.prompt_draft).toContain("【视觉约束】");
   });

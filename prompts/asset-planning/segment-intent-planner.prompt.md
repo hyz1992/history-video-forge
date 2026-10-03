@@ -1,6 +1,6 @@
 ---
 id: asset-planning.segment-intent-planner
-version: v1.2.0
+version: v1.3.0
 stage: asset_planning
 language: zh-CN
 consumes:
@@ -25,6 +25,8 @@ status: active
 - 根据分镜叙事功能规划必要的 `sfx_cue`；配乐可以使用 `segment` 或 `segment_span` 局部范围。
 - 首个分块的第一段是全片全局 BGM 的唯一归属段，且全分块只能有一个全局 BGM。非首个分块禁止输出 `global`，但允许局部范围。
 - 视觉文字遵守 `art_bible`，具体写人物、动作、场景、构图、光影、时代物件与风险；不得改写分镜或新增史实。
+- 角色 `identity_description` 是跨镜稳定的年龄区间、脸型、五官、体型等身份特征；`visual_description` 是造型参考，不能把其中多套服饰整体复制为身份锚点。
+- 当前 `StoryboardSegment` 决定服饰、冠帽、兵器、动作和场景；参考图只负责身份，不得把定妆图服装当作跨镜制服。
 
 ## 五类意图字段白名单
 

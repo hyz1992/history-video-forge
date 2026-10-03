@@ -1,5 +1,8 @@
 # asset-planning.segment-intent-planner 变更记录
 
+## v1.3.0 - 2026-10-03
+- 区分跨镜稳定的 `identity_description` 与造型参考；当前分镜决定服饰、冠帽、兵器、动作和场景，定妆参考图仅用于身份一致性，不把参考服装固定为跨镜制服。
+
 ## v1.2.0 - 2026-08-15
 - 视觉路线合同改为消费 `segment_routes`（resolver 输出的最终路线）：`api_video` 段必须输出锚点图、`video_clip` 与 `render_motion_cue`；`remotion` 段只允许锚点图 + `render_motion_cue`。删除旧 `visual_strategy_preference` 规则与 null 默认分支。
 

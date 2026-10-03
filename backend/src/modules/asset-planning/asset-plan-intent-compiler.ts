@@ -14,6 +14,7 @@ import type { SegmentAssetIntentBatchDraft } from "./segment-asset-intent.js";
 import {
   buildCharacterSheetPrompt,
   characterHitsSegmentText,
+  characterIdentityDescription,
   enrichAssetVisualPrompt,
   segmentAnchorText,
 } from "./asset-plan-prompt-enrichment.js";
@@ -425,21 +426,24 @@ function createCharacterSheetTask(
   globalDraft: GlobalPlanningCompilerDraft,
 ): AssetTask {
   const { character, segmentIds } = entry;
+  const identityDescription = characterIdentityDescription(character);
   return {
     task_id: `sheet_${String(index + 1).padStart(3, "0")}`,
     order,
     task_type: "character_sheet",
     // sheet 是跨 segment 的参考资产：null segment，不进任何 segment route（设计 §3.1）。
     source_segment_id: null,
-    source_excerpt: character.visual_description,
+    source_excerpt: identityDescription,
     production_intent:
       `为角色「${character.label}」生成一张定妆参考图，供命中该角色的分镜图任务作参考图注入，提升跨分镜外貌一致性`,
     recommended_mode: "manual_allowed",
     provider_hint: null,
     prompt_draft: buildCharacterSheetPrompt({
       label: character.label,
-      visualDescription: character.visual_description,
+      identityDescription,
       eraStyle: globalDraft.art_bible.era_style,
+      visualTone: globalDraft.art_bible.visual_tone,
+      globalPromptPrefix: globalDraft.art_bible.global_prompt_prefix,
     }),
     parameters: {
       // character_id / sheet_role 是执行期按 artifact metadata 查找 sheet 的锚点

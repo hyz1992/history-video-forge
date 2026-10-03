@@ -27,7 +27,17 @@ const VISUAL_CONSTRAINT_BASE =
  * 确定性字符串常量，全程无 LLM 调用，不属于 prompt 资产，因此不放 prompts/。
  */
 const CHARACTER_SHEET_LAYOUT =
-  "定妆参考图，正面全身，服饰、发型与器物细节清晰可辨，简洁纯色背景，单人独立构图，无其他人物、无文字、无分镜构图";
+  "定妆参考图，单人独立构图，正面全身，符合时代的单套中性服饰，面部与体型特征清晰可辨，简洁纯色背景，无兵器、无同人多姿态、无多套服装对照、无其他人物、无文字、无分镜构图";
+
+const CHARACTER_SHEET_ERA_CONSTRAINT =
+  "发型、服饰、器物形制必须符合%s背景，无现代物品、无现代建筑、无民国/近代造型";
+
+/** 新计划消费稳定身份；旧计划完整回退，不在本地从造型描述抽取语义。 */
+export function characterIdentityDescription(
+  character: AssetPlan["art_bible"]["characters"][number],
+): string {
+  return character.identity_description ?? character.visual_description;
+}
 
 /** segment 文本口径（scene_description + visual_elements）：[角色锚点] 与 sheet 阈值统计同源。 */
 export function segmentAnchorText(
@@ -57,19 +67,22 @@ export function charactersHittingSegmentText(
 }
 
 /**
- * sheet 的 prompt_draft：角色 visual_description + 朝代风格 + 定妆图布局，
+ * sheet 的 prompt_draft：角色稳定身份（或旧描述回退）+ 冻结项目画风 + 时代与定妆布局，
  * 全部来自确定性模板（无 LLM 调用）。
  */
 export function buildCharacterSheetPrompt(input: {
   label: string;
-  visualDescription: string;
+  identityDescription: string;
   eraStyle: string;
+  visualTone: string;
+  globalPromptPrefix: string;
 }): string {
   const era = input.eraStyle.trim() || "当前项目朝代";
   return [
-    `角色定妆参考图「${input.label}」：${input.visualDescription}`,
+    `角色定妆参考图「${input.label}」：${input.identityDescription}`,
+    `【项目画风】${input.visualTone}；${input.globalPromptPrefix}`,
     `【定妆图布局】${CHARACTER_SHEET_LAYOUT}。`,
-    `【视觉约束】${VISUAL_CONSTRAINT_BASE.replace("%s", era)}。`,
+    `【视觉约束】${CHARACTER_SHEET_ERA_CONSTRAINT.replace("%s", era)}。`,
   ].join("\n");
 }
 
@@ -88,7 +101,7 @@ export function enrichAssetVisualPrompt(
         input.artBible.characters,
         segmentAnchorText(segment),
       )
-        .map((character) => `${character.label}：${character.visual_description}`)
+        .map((character) => `${character.label}：${characterIdentityDescription(character)}`)
         .join("；");
       if (anchors.length > 0) prompt = `${prompt}\n[角色锚点] ${anchors}`;
     }
