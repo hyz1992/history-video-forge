@@ -2,6 +2,10 @@
 
 ## 当前状态
 
+截至 2026-10-03：
+
+- [角色一致性验收整改](./2026-10-03-character-consistency-repair-design.md)已完成四个独立代码任务：稳定身份合同、定妆图/分镜造型分离、空参考文案、供应商任务生命周期。实施见[身份与造型计划](./2026-10-03-character-identity-implementation-plan.md)、[文案计划](./2026-10-03-character-reference-copy-implementation-plan.md)、[生命周期计划](./2026-10-03-provider-job-lifecycle-implementation-plan.md)；233 项不同范围测试分区通过，内置浏览器文案复验通过。**新图质量、修复后供应商实测及新 global 语义未验证，不宣称整体签收**。原 0.40 元验收预算已用完，本轮新增调用为 0；具体三图 0.60 元复验请求已准备，待新授权。逐项证据与限制见[整改验收记录](../records/2026-10-03-character-consistency-repair-acceptance.md)。计划暂留当前入口，待真实复验收口。
+
 截至 2026-09-21：
 
 - [角色 sheet 一致性](./2026-09-18-asset-character-sheet-consistency-design.md)已实施完成（T0–T6 七个独立中文提交 `c3c66fc6`…`3202e0b6`）：T1 原子提交（两处任务类型枚举 + 计划级白名单 + compiler 阈值/构造器/注入 + env，typecheck 探针证实原子范围完整）；T2 验收前置的付费运行级确认通过（主机/端点/`X-DashScope-Async`/`GET /tasks` 四项成立，候选 (c) 维持、未触发回退条款）；T5 fake 冒烟六条强断言（含局部重跑 P3 防线）；T6 live check 7/7 完成，人工目视确认跨分镜一致性成立、且相对纯文本锚点有净增量。**开关 `ASSET_CHARACTER_SHEET_ENABLED` 已于 2026-09-22 按用户决策翻转为默认开启**（默认生图模型同日切换为 wan2.7-image 使生效前提满足；单价 0.20 元/张不分档已核实登记；回滚面 = 显式 false 或 legacy 模式，见 [切换决策记录](../records/2026-09-22-default-image-model-switch.md) 补录），裁决与逐图回执见 [live check 记录](../records/2026-09-21-asset-character-sheet-live-check.md)。
