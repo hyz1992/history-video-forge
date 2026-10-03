@@ -34,11 +34,13 @@
 
 ## C：供应商任务生命周期
 
-执行引擎在现有 prepare → submit → poll 流程调用现有 job repository 更新方法：提交成功写 submitted、providerJobId、提交响应与首次 submittedAt；每次 poll 写 lastPolledAt、最新响应和 running/completed/failed 状态，终态写 completedAt；远端失败保留 errorCode/errorMessage。
+执行引擎在现有 prepare → submit → poll 流程调用现有 job repository 更新方法：提交成功写 submitted、providerJobId、提交响应与首次 submittedAt；实际尝试轮询前写 lastPolledAt（异常也保留尝试时间，上下文检查失败而未调用 poll 时不写）；取得结果后写最新非空响应和 running/completed/failed 状态，终态写 completedAt；远端失败保留 errorCode/errorMessage。poll 未提供响应时保留已知提交响应，不能用空值清掉已有对账依据。
 
 提交或轮询异常且尚未远端终态时写 failed 与异常信息。远端已 completed 后的下载/归一化失败只使本地 execution 失败，不能把已完成的远端 job 改成失败；保留其终态响应。`NarrationSourceError` 沿用现有抛出与记账语义，不把上下文过期冒充供应商失败。prepare 前失败没有 job，不创建虚假记录。更新不改变防重身份三元组、不增加提交或重试；保留原始请求、费用记账与路由。
 
 repository 更新时首次进入 submitted 补 submittedAt，重复提交态更新不改首次时间；既有终态时间保持首次终态时间。使用独立 SQLite 测试验证状态与响应可重载，不能只检查内存。已有 prepared 历史记录不做猜测回填。
+
+提交返回后先保留本次观测时间与回执，再写入账本；提交态写入暂时失败、后续失败态恢复写入时携带该已知时间。失败处理中的 job 更新继续抛错时，仍须先尝试既有费用记账再传播异常；所有写入持续失败则保留最后成功持久化的事实，并拒绝报告本地执行成功。
 
 ## 原始请求验收清单与结束口径
 

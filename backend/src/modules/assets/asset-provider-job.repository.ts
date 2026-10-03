@@ -36,6 +36,7 @@ export type UpdateAssetProviderJobPatch = Partial<
     | "rawResponseJson"
     | "errorCode"
     | "errorMessage"
+    | "submittedAt"
     | "lastPolledAt"
   >
 >;
@@ -90,11 +91,13 @@ export async function updateAssetProviderJobRecord(
   const updated: AssetProviderJobRecord = {
     ...existing,
     ...patch,
+    // 本次真实提交的观测时间可随恢复写入携带，已保存的首次时间永久优先。
+    submittedAt: existing.submittedAt ?? patch.submittedAt ?? (patch.status === "submitted" ? now : null),
     completedAt:
       patch.status === ("completed" as AssetProviderJobStatus) ||
       patch.status === ("failed" as AssetProviderJobStatus) ||
       patch.status === ("canceled" as AssetProviderJobStatus)
-        ? now
+        ? existing.completedAt ?? now
         : existing.completedAt,
     updatedAt: now,
   };

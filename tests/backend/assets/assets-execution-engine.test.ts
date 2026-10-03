@@ -1,8 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { createDbClient } from "../../../backend/src/db/client.js";
 import { executeAssetManifest } from "../../../backend/src/modules/assets/assets-execution-engine.js";
 import { createAssetProviderRegistry } from "../../../backend/src/modules/assets/assets-provider-registry.js";
+import { NarrationSourceError } from "../../../backend/src/modules/narration/narration-invalidation.js";
 import type { AssetProviderAdapter } from "../../../backend/src/modules/assets/assets-provider-adapter.js";
 import type { AssetManifest, AssetPlan } from "../../../shared/src/index.js";
 
@@ -123,6 +124,259 @@ function makeAssetPlan(): AssetPlan {
     global_production_notes: [],
   };
 }
+
+function makeLifecycleAdapter(patch: Partial<AssetProviderAdapter> = {}): AssetProviderAdapter {
+  return {
+    providerName: "fake_image",
+    providerType: "image",
+    canHandle: ({ taskType }) => taskType === "image_still",
+    prepare: async () => ({ providerJobId: null, rawRequestJson: { prompt: "古代宫殿" } }),
+    submit: async () => ({ providerJobId: "remote_001", rawResponseJson: { request_id: "submit_001" } }),
+    poll: async () => ({ status: "completed", rawResponseJson: { request_id: "poll_001" } }),
+    download: async () => [],
+    normalizeResult: async ({ downloadedArtifacts }) => ({ artifacts: downloadedArtifacts, notes: [] }),
+    cancel: async () => undefined,
+    ...patch,
+  };
+}
+
+function runLifecycle(db: ReturnType<typeof createDbClient>, adapter: AssetProviderAdapter,
+  beforeDispatch?: () => Promise<void>) {
+  return executeAssetManifest({
+    db, assetManifestRecordId: "manifest_001", assetRunId: "assets_run_001",
+    manifest: makeManifest(), registry: createAssetProviderRegistry([adapter]),
+    assetPlan: makeAssetPlan(), projectStorageRootDir: "unused", beforeDispatch,
+  });
+}
+
+function onlyJob(db: ReturnType<typeof createDbClient>) {
+  expect(db.assetProviderJobRecords.size).toBe(1);
+  return [...db.assetProviderJobRecords.values()][0]!;
+}
+
+describe("provider job lifecycle", () => {
+  it("已提交后 job 持续写失败仍尝试费用记账并传播持久化异常", async () => {
+    const db = createDbClient();
+    db.generationRuns.set("assets_run_001", { id: "assets_run_001", projectId: "p1", runConfigurationSnapshotId: "snapshot" } as never);
+    db.runConfigurationSnapshots.set("snapshot", { id: "snapshot", projectId: "p1", resolvedConfigurationJson: {}, pricingVersionSetJson: [] } as never);
+    const writeError = new Error("job_write_failed");
+    let usageWrites = 0;
+    let submits = 0;
+    let polls = 0;
+    let downloads = 0;
+    let dispatchedExecution: AssetManifest["executions"][number] | null = null;
+    db.thirdAggregateWriter = {
+      saveProviderJob: async record => {
+        if (record.status !== "prepared") throw writeError;
+        return record;
+      },
+      saveUsageCostRecord: async () => { usageWrites += 1; },
+    } as NonNullable<typeof db.thirdAggregateWriter>;
+    const adapter = makeLifecycleAdapter({
+      billing: { capability: "image.generate", providerKey: "dashscope", modelId: "test-model" },
+      submit: async ctx => {
+        submits += 1;
+        dispatchedExecution = ctx.execution;
+        ctx.onDispatch?.();
+        return { providerJobId: "remote_001", rawResponseJson: { request_id: "submit_001" } };
+      },
+      poll: async () => { polls += 1; return { status: "completed", rawResponseJson: null }; },
+      download: async () => { downloads += 1; return []; },
+    });
+    await expect(runLifecycle(db, adapter)).rejects.toBe(writeError);
+    expect(dispatchedExecution).toMatchObject({ status: "failed", attempts: 1 });
+    expect(submits).toBe(1);
+    expect(polls).toBe(0);
+    expect(downloads).toBe(0);
+    expect(onlyJob(db).status).toBe("prepared");
+    expect(usageWrites).toBe(1);
+    expect(db.usageCostRecords.size).toBe(1);
+    expect([...db.usageCostRecords.values()][0]).toMatchObject({
+      status: "failed", assetProviderJobRecordId: onlyJob(db).id, actualCostMicros: null,
+      providerRequestKey: "assets:assets_run_001:img_001", attemptIndex: 0,
+    });
+  });
+
+  it("submitted 写入失败后恢复 failed 保存真实提交返回时间而非恢复时间", async () => {
+    vi.useFakeTimers();
+    try {
+      const db = createDbClient();
+      const submittedAt = new Date("2026-10-03T01:00:01Z");
+      const recoveredAt = new Date("2026-10-03T01:00:02Z");
+      vi.setSystemTime(new Date("2026-10-03T01:00:00Z"));
+      let submits = 0;
+      let polls = 0;
+      db.thirdAggregateWriter = { saveProviderJob: async record => {
+        if (record.status === "submitted") {
+          vi.setSystemTime(recoveredAt);
+          throw new Error("job_write_failed");
+        }
+        return record;
+      } } as NonNullable<typeof db.thirdAggregateWriter>;
+      const result = await runLifecycle(db, makeLifecycleAdapter({
+        submit: async () => {
+          submits += 1;
+          vi.setSystemTime(submittedAt);
+          return { providerJobId: "remote_001", rawResponseJson: { request_id: "submit_001" } };
+        },
+        poll: async () => { polls += 1; return { status: "completed", rawResponseJson: null }; },
+      }));
+      expect(result.manifest.executions[0]?.status).toBe("failed");
+      expect(submits).toBe(1);
+      expect(polls).toBe(0);
+      expect(onlyJob(db)).toMatchObject({
+        status: "failed", submittedAt, completedAt: recoveredAt,
+        providerJobId: "remote_001", rawResponseJson: { request_id: "submit_001" },
+      });
+    } finally { vi.useRealTimers(); }
+  });
+
+  it("submit 成功后在 poll 前保存提交 ID、响应和首次提交时间", async () => {
+    const db = createDbClient();
+    let submitCalls = 0;
+    let pollCalls = 0;
+    let atPoll: ReturnType<typeof onlyJob> | null = null;
+    await runLifecycle(db, makeLifecycleAdapter({
+      submit: async () => {
+        submitCalls += 1;
+        return { providerJobId: "remote_001", rawResponseJson: { request_id: "submit_001" } };
+      },
+      poll: async () => {
+        pollCalls += 1;
+        atPoll = structuredClone(onlyJob(db));
+        return { status: "running", rawResponseJson: null };
+      },
+    }));
+    expect(submitCalls).toBe(1);
+    expect(pollCalls).toBe(1);
+    expect(atPoll).toMatchObject({
+      status: "submitted", providerJobId: "remote_001",
+      rawResponseJson: { request_id: "submit_001" }, submittedAt: expect.any(Date),
+      completedAt: null, lastPolledAt: expect.any(Date),
+    });
+    expect(onlyJob(db).status).toBe("running");
+  });
+
+  it.each(["running", "completed", "failed"] as const)("poll %s 保存状态、响应和轮询时间", async status => {
+    const db = createDbClient();
+    const result = await runLifecycle(db, makeLifecycleAdapter({
+      poll: async () => ({ status, rawResponseJson: { request_id: "poll_001", state: status },
+        ...(status === "failed" ? { errorCode: "remote_rejected", errorMessage: "供应商拒绝" } : {}) }),
+    }));
+    expect(onlyJob(db)).toMatchObject({
+      status, providerJobId: "remote_001", rawResponseJson: { request_id: "poll_001", state: status },
+      submittedAt: expect.any(Date), lastPolledAt: expect.any(Date),
+      completedAt: status === "running" ? null : expect.any(Date),
+      errorCode: status === "failed" ? "remote_rejected" : null,
+      errorMessage: status === "failed" ? "供应商拒绝" : null,
+    });
+    expect(result.manifest.executions[0]?.status).toBe(status);
+  });
+
+  it.each(["running", "completed", "failed"] as const)("poll %s 的空响应保留提交响应", async status => {
+    const db = createDbClient();
+    await runLifecycle(db, makeLifecycleAdapter({ poll: async () => ({ status, rawResponseJson: null }) }));
+    expect(onlyJob(db)).toMatchObject({ status, rawResponseJson: { request_id: "submit_001" } });
+  });
+
+  it.each(["submit", "poll"] as const)("%s 异常只终结非终态 job，保留已知响应", async stage => {
+    const db = createDbClient();
+    const result = await runLifecycle(db, makeLifecycleAdapter({
+      [stage]: async () => { throw new Error(`${stage} unavailable`); },
+    }));
+    expect(result.manifest.executions[0]?.status).toBe("failed");
+    expect(onlyJob(db)).toMatchObject({
+      status: "failed", errorCode: "adapter_pipeline_error", errorMessage: `${stage} unavailable`,
+      completedAt: expect.any(Date), lastPolledAt: stage === "poll" ? expect.any(Date) : null,
+      providerJobId: stage === "poll" ? "remote_001" : null,
+      rawResponseJson: stage === "poll" ? { request_id: "submit_001" } : null,
+    });
+  });
+
+  it("prepare 异常不创建 provider job", async () => {
+    const db = createDbClient();
+    const result = await runLifecycle(db, makeLifecycleAdapter({
+      prepare: async () => { throw new Error("prepare unavailable"); },
+    }));
+    expect(result.manifest.executions[0]?.status).toBe("failed");
+    expect(db.assetProviderJobRecords.size).toBe(0);
+  });
+
+  it.each(["download", "normalizeResult"] as const)("远端 completed 后 %s 失败不覆盖远端终态", async stage => {
+    const db = createDbClient();
+    const result = await runLifecycle(db, makeLifecycleAdapter({
+      [stage]: async () => { throw new Error(`${stage} unavailable`); },
+    }));
+    expect(result.manifest.executions[0]?.status).toBe("failed");
+    expect(onlyJob(db)).toMatchObject({
+      status: "completed", providerJobId: "remote_001", rawResponseJson: { request_id: "poll_001" },
+      completedAt: expect.any(Date), errorCode: null, errorMessage: null,
+    });
+  });
+
+  it.each(["prepare", "partial", "submitted", "completed"] as const)("%s 时来源失效保留已知状态并传播原异常与既有记账", async stage => {
+    const db = createDbClient();
+    db.generationRuns.set("assets_run_001", { id: "assets_run_001", projectId: "p1", runConfigurationSnapshotId: "snapshot" } as never);
+    db.runConfigurationSnapshots.set("snapshot", { id: "snapshot", projectId: "p1", resolvedConfigurationJson: {}, pricingVersionSetJson: [] } as never);
+    const error = new NarrationSourceError("narration_assets_source_stale");
+    let stale = false;
+    let downloads = 0;
+    const adapter = makeLifecycleAdapter({
+      billing: { capability: "image.generate", providerKey: "dashscope", modelId: "test-model" },
+      prepare: async () => {
+        if (stage === "prepare") throw error;
+        return { providerJobId: null, rawRequestJson: {} };
+      },
+      submit: async ctx => {
+        ctx.onDispatch?.();
+        if (stage === "partial") throw error;
+        if (stage === "submitted") stale = true;
+        return { providerJobId: "remote_001", rawResponseJson: { request_id: "submit_001" } };
+      },
+      poll: async () => { stale = true; return { status: "completed", rawResponseJson: { request_id: "poll_001" } }; },
+      download: async () => { downloads += 1; return []; },
+    });
+    await expect(runLifecycle(db, adapter, async () => { if (stale) throw error; })).rejects.toBe(error);
+    expect(downloads).toBe(0);
+    expect(db.usageCostRecords.size).toBe(stage === "prepare" ? 0 : 1);
+    if (stage === "prepare") { expect(db.assetProviderJobRecords.size).toBe(0); return; }
+    expect(onlyJob(db)).toMatchObject({
+      status: stage === "partial" ? "prepared" : stage,
+      providerJobId: stage === "partial" ? null : "remote_001",
+      rawResponseJson: stage === "partial" ? null : { request_id: stage === "submitted" ? "submit_001" : "poll_001" },
+      errorCode: null, errorMessage: null,
+      lastPolledAt: stage === "completed" ? expect.any(Date) : null,
+    });
+    expect([...db.usageCostRecords.values()][0]).toMatchObject({
+      status: "submitted", assetProviderJobRecordId: onlyJob(db).id,
+      providerRequestKey: "assets:assets_run_001:img_001", attemptIndex: 0,
+    });
+  });
+
+  it.each(["submitted", "completed"] as const)("%s 持久化失败不能返回成功或继续外部生命周期", async failedStatus => {
+    const db = createDbClient();
+    let polls = 0;
+    let downloads = 0;
+    // 只在写入边界注入故障；引擎与 repository 仍执行真实代码。
+    db.thirdAggregateWriter = { saveProviderJob: async record => {
+      if (record.status === failedStatus) throw new Error("provider_job_storage_unavailable");
+      return record;
+    } } as NonNullable<typeof db.thirdAggregateWriter>;
+    const result = await runLifecycle(db, makeLifecycleAdapter({
+      poll: async () => { polls += 1; return { status: "completed", rawResponseJson: { request_id: "poll_001" } }; },
+      download: async () => { downloads += 1; return []; },
+    }));
+    expect(result.manifest.executions[0]?.status).toBe("failed");
+    expect(polls).toBe(failedStatus === "submitted" ? 0 : 1);
+    expect(downloads).toBe(0);
+    expect(result.manifest.executions[0]?.notes.join(" ")).toContain("provider_job_storage_unavailable");
+    if (failedStatus === "submitted") {
+      expect(onlyJob(db)).toMatchObject({ status: "failed", providerJobId: "remote_001", rawResponseJson: { request_id: "submit_001" } });
+    } else {
+      expect(onlyJob(db)).toMatchObject({ status: "submitted", providerJobId: "remote_001", rawResponseJson: { request_id: "submit_001" } });
+    }
+  });
+});
 
 describe("assets execution engine", () => {
   it("runs an enabled adapter and records output artifacts", async () => {

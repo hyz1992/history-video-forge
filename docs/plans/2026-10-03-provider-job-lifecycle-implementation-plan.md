@@ -18,7 +18,7 @@
 
 - [ ] 写失败测试：提交态保存供应商 ID/响应/首次 submittedAt；running poll 保存状态和 lastPolledAt；completed/failed 保存终态响应和错误；提交或 poll 异常终结非终态 job；已远端 completed 后下载失败不覆盖远端状态；prepare 失败不造 job；NarrationSourceError 保留现有传播。测试使用零外部请求 adapter。
 - [ ] `npx vitest run --configLoader runner --no-file-parallelism tests/backend/assets/assets-execution-engine.test.ts tests/backend/assets/asset-provider-job-repository.test.ts` 确认新增期望失败。
-- [ ] repository 更新首次提交与终态时间；引擎 submit 成功调用 update，poll 后调用 update，catch 只失败尚未远端终态的 job，保留真实响应。沿用所有 usage 和 call-intent 标识，不增加自动重试。
+- [ ] repository 更新首次提交与终态时间；引擎 submit 成功调用 update，poll 后调用 update，catch 只失败尚未远端终态的 job，保留真实响应；poll 响应为空时保留已知提交响应。沿用所有 usage 和 call-intent 标识，不增加自动重试。
 - [ ] 增加独立临时 SQLite 重载断言：更新后的 ID、响应、时间和状态重新读取一致；复用现有迁移/关系 fixture，保证写盘不能只测 Map。
 - [ ] 上述测试通过；回跑 `npx vitest run --configLoader runner --no-file-parallelism tests/backend/assets/character-sheet-engine.test.ts tests/backend/assets/assets-execution-regression.test.ts tests/harness/assets-character-sheet-smoke.test.ts` 以及 `npm run typecheck:backend`，预期全部通过。
 - [ ] 两阶段审查后，中文提交“修复素材供应商任务状态与响应记账”。不猜测回填历史 prepared 行，不运行真实供应商调用。

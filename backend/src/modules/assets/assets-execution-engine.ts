@@ -13,7 +13,11 @@ import type {
 } from "../../../../shared/src/index.js";
 import type { DbClient } from "../../db/client.js";
 import { appendAssetsRunEvent } from "./assets-run.service.js";
-import { createAssetProviderJobRecord } from "./asset-provider-job.repository.js";
+import {
+  createAssetProviderJobRecord,
+  updateAssetProviderJobRecord,
+  type UpdateAssetProviderJobPatch,
+} from "./asset-provider-job.repository.js";
 import { recordProviderJobUsage } from "../generation-cost/usage-cost-recorder.js";
 import { DEFAULT_VIDEO_ESTIMATE_SECONDS } from "../generation-cost/generation-cost.service.js";
 import { readDashscopeConfig } from "./assets-run.service.js";
@@ -302,6 +306,14 @@ async function runAdapterPipeline(
   let dispatched = false;
   ctx.onDispatch = () => { dispatched = true; };
   let jobRecord: import("../../db/client.js").AssetProviderJobRecord | null = null;
+  const persistJobUpdate = async (patch: UpdateAssetProviderJobPatch) => {
+    if (!jobRecord) throw new Error("asset_provider_job_missing");
+    // 先保留已知供应商事实；写入失败时也不能丢失提交回执或误改远端终态。
+    jobRecord = { ...jobRecord, ...patch };
+    const persisted = await updateAssetProviderJobRecord(db, jobRecord.id, patch);
+    if (!persisted) throw new Error("asset_provider_job_missing");
+    jobRecord = persisted;
+  };
 
   try {
     // prepare
@@ -342,10 +354,24 @@ async function runAdapterPipeline(
     await ctx.beforeDispatch?.();
     const submitted = await adapter.submit(ctx, prepared);
     dispatched = true;
+    await persistJobUpdate({
+      status: "submitted",
+      submittedAt: jobRecord.submittedAt ?? new Date(),
+      providerJobId: submitted.providerJobId,
+      rawResponseJson: submitted.rawResponseJson,
+    });
 
     // poll
     await ctx.beforeDispatch?.();
+    // lastPolledAt 表示轮询尝试；来源检查通过后记录，HTTP 异常仍可追溯。
+    await persistJobUpdate({ lastPolledAt: new Date() });
     const pollResult = await adapter.poll(ctx, submitted);
+    await persistJobUpdate({
+      status: pollResult.status,
+      rawResponseJson: pollResult.rawResponseJson ?? jobRecord.rawResponseJson,
+      errorCode: pollResult.errorCode ?? null,
+      errorMessage: pollResult.errorMessage ?? null,
+    });
 
     if (pollResult.status === "failed") {
       execution.status = "failed";
@@ -444,7 +470,21 @@ async function runAdapterPipeline(
       `[engine] adapter pipeline error: ${message}`,
     ];
     if (jobRecord) {
-      await recordPaidUsage(db, ctx, paidUsageContext, assetRunId, execution, planTask, jobRecord, "failed", startedAtMs);
+      try {
+        if (jobRecord.status !== "completed" && jobRecord.status !== "failed" && jobRecord.status !== "canceled") {
+          await persistJobUpdate({
+            status: "failed",
+            submittedAt: jobRecord.submittedAt,
+            providerJobId: jobRecord.providerJobId,
+            rawResponseJson: jobRecord.rawResponseJson,
+            errorCode: "adapter_pipeline_error",
+            errorMessage: message,
+          });
+        }
+      } finally {
+        // job 更新失败仍沿用既有记账钩子；费用留痕后继续传播写入异常。
+        await recordPaidUsage(db, ctx, paidUsageContext, assetRunId, execution, planTask, jobRecord, "failed", startedAtMs);
+      }
     }
     // S2-2A 任务 6：管线异常同样按段视频策略处理
     await handleVideoStrategyFailure(
