@@ -18,11 +18,13 @@
 
 使用 subagent-driven-development，直接 dev，先合同测试红，再修改已有规则。更新现有测试的版本和规则断言；测试只证明合同存在，不冒充 LLM 质量测量。运行该测试、compiler、generation 和角色 sheet harness（runner、串行），以及 `npm run harness:check-prompts`。规格审查后质量审查，再中文提交。无 TS 业务代码变化，不重复无关构建。
 
+任务 1 已完成：`8b3fbdaa` 仅三文件；红阶段 1 failed / 1 passed，绿阶段及父独立复跑均 133/133，prompt 治理通过，规格审查后质量审查均 Approved（Critical / Important / Minor 为 0）。实际 LLM 与画面尚未验证，不能仅凭此声明衣冠和整镜已修。
+
 ## 任务 2：真实规划语义复验
 
 先准备只读 QA 输入与本地计划预览，复用当前完整 18 段 storyboard、script、既有口播时间轴、已冻结画风与解析路线；不改 Topic/Script/Storyboard，也不创建新生成阶段。调用现有 `generateAssetPlan` 和 registry/gateway，使真实 global、分块输出、结构检查与 compiler 都实际运行。只产出本地 QA 计划文件，未审查前不激活、不生图。
 
-路线和能力从该项目原 `asset_plan.generate` 配置快照读取；当前 QA 写实画风从已冻结 art_bible 机械映射为命名的人工 QA 风格快照传入，明确来源不是新 global 推导或新增正式画风 preset。源 timing JSON 与既有 narration_reference/脚本逐项校验，再开始调用。
+能力从该项目原 `asset_plan.generate` 快照 `1744042b-f0c1-4aa0-908e-124c8c183ebc` 读取。只读预检发现该行路线数组为空，因此路线使用首次 `assets.generate` 快照 `7342bc32-2d9c-4b2d-bb80-28a0006b4690` 的既有 18 条解析路线；与最新 QA 生成快照一致，配置 hash 为 `fnv1a64:ed03981a63553015`，不凭内容猜路线。视频参数按快照和现有计划保持 `720P`，不升规格。当前 QA 写实画风从已冻结 art_bible 机械映射为命名的人工 QA 风格快照传入，明确来源不是新 global 推导或新增正式画风 preset。源 timing JSON 与既有 narration_reference/脚本逐项校验，再开始调用。
 
 限十次 gateway 调度（含现有结构修复）、每请求一次供应商尝试、max_tokens 8192、单请求系统 prompt 与输入 UTF-8 字节合计不超过 50000，串行 chunk。沿用配置的 smart DeepSeek V4 Pro。记录 effectiveRequest、完整输入输出、prompt 版本哈希、请求次数、token usage；不得打印密钥。若环境实际模型不同、费用/次数越界、时间轴或结构失败，停止，不改输入迎合输出。
 
