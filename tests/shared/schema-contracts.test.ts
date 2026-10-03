@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { AssetPlanV2 } from "../../shared/src/asset-planning/asset-plan-v2.schema.js";
 
 import {
   AssetManifest,
@@ -25,6 +26,93 @@ import {
 } from "../../shared/src/index.js";
 
 describe("shared schema contracts", () => {
+  describe.each(["asset_plan_v1", "asset_plan_v2"] as const)(
+    "%s character identity compatibility",
+    (version) => {
+      const legacyCharacter = {
+        character_id: "char_yanzi",
+        label: "晏子",
+        role: "使节",
+        visual_description: "深色齐国朝服，身形矮小",
+        consistency_notes: ["保持同一人物面貌"],
+      };
+      const planWithCharacter = (character: Record<string, unknown>) => {
+        const common = {
+          plan_version: version,
+          source_storyboard_record_id: "storyboard_1",
+          source_script_record_id: "script_1",
+          source_topic_package_id: "topic_1",
+          art_bible: {
+            era_style: "战国",
+            visual_tone: "冷色",
+            characters: [character],
+            locations: [],
+            props: [],
+            global_prompt_prefix: "战国历史画面",
+            global_negative_prompts: [],
+            consistency_notes: [],
+          },
+          tasks: [{
+            task_id: "img_001", order: 0, task_type: "image_still",
+            source_segment_id: "sb_001", source_excerpt: "晏子站在殿前",
+            production_intent: "生成殿前画面", recommended_mode: "manual_allowed",
+            provider_hint: null, prompt_draft: "晏子站在战国宫殿前",
+            parameters: {}, risk_notes: [], cost_tier: "low", initial_status: "planned",
+          }],
+          dependencies: [],
+          cost_summary: { total_tasks: 1, by_type: {}, by_cost_tier: {}, estimated_provider_calls: 1, notes: [] },
+          global_production_notes: [],
+        };
+        if (version === "asset_plan_v1") {
+          return AssetPlan.parse({
+            ...common,
+            tts_plan: { voice_profile_id: "voice_1", estimated_total_duration_sec: 1, chunking_strategy: "sentence_boundary", chunks: [] },
+          });
+        }
+        return AssetPlanV2.parse({
+          ...common,
+          global_audio_strategy: {},
+          narration_reference: {
+            narration_record_id: "narration_1", audio_hash: "a".repeat(64),
+            timing_map_hash: "b".repeat(64), duration_ms: 1000,
+          },
+          narration_intervals: [{
+            segment_id: "sb_001",
+            range: { start_boundary_id: "b0", end_boundary_id: "b1", source_start: 0, source_end: 1, visual_start_ms: 0, visual_end_ms: 1000 },
+          }],
+        });
+      };
+
+      it("reads a frozen plan without adding an identity description", () => {
+        const plan = planWithCharacter(legacyCharacter);
+        expect(plan.art_bible.characters[0]).toEqual(legacyCharacter);
+        expect(plan.art_bible.characters[0]).not.toHaveProperty("identity_description");
+      });
+
+      it("preserves a supplied nonempty identity description", () => {
+        const identity = "五十岁左右，窄长脸，细眉，身形矮小";
+        const plan = planWithCharacter({ ...legacyCharacter, identity_description: ` ${identity} ` });
+        expect(plan.art_bible.characters[0]).toMatchObject({
+          ...legacyCharacter, identity_description: identity,
+        });
+      });
+
+      it.each(["", " \t\n "])("rejects an empty identity description %j", (identity) => {
+        let caught: unknown;
+        try {
+          planWithCharacter({ ...legacyCharacter, identity_description: identity });
+        } catch (error) {
+          caught = error;
+        }
+        expect(caught).toMatchObject({
+          issues: expect.arrayContaining([expect.objectContaining({
+            path: ["art_bible", "characters", 0, "identity_description"],
+          })]),
+        });
+      });
+    },
+  );
+
   it("parses shared voice intent, profile, and match result contracts", () => {
     const intent = VoiceIntent.parse({
       content_family: "historical_power",

@@ -1,4 +1,8 @@
 # asset-planning.asset-planner 变更记录
+## v1.4.0 - 2026-10-03
+- 新全局角色合同必填 `identity_description`，以年龄区间、脸型、五官、体型描述稳定身份，排除服饰、冠帽、兵器、动作和背景。
+- 保留 `visual_description` 为整体视觉与场景造型参考，明确不把该描述当作跨镜固定造型；同步字段白名单与 JSON 示例。
+
 ## v1.3.0 - 2026-08-21
 - S2-2B：新增 `art_style_preset` 只读输入规则——`visual_tone_hint`/`era_style_hint` 吸收进 `visual_tone`/`era_style`；`global_negative_prompts` 必须全部并入（不得删除 preset 项）；`global_prompt_prefix` 必须包含 preset 前缀文本；`style_keywords` 仅作中文描述后的模型关键词补充。画风预设不改变剧情、分镜、路线与付费决策。
 

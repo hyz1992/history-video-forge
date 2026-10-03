@@ -37,6 +37,8 @@ export const ArtBibleCharacter = z
     character_id: z.string().min(1),
     label: z.string().min(1),
     role: z.string().min(1),
+    // 旧冻结计划可缺省；新 global 草稿在生成入口要求该稳定身份字段。
+    identity_description: z.string().trim().min(1).optional(),
     visual_description: z.string().min(1),
     consistency_notes: z.array(z.string().min(1)),
   })

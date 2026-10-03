@@ -1,6 +1,6 @@
 ---
 id: asset-planning.planner
-version: v1.3.0
+version: v1.4.0
 stage: asset_planning
 language: zh-CN
 consumes:
@@ -21,7 +21,7 @@ status: active
 
 你只生成计划草稿，不得生成图片、视频、音频、字幕或 compose 时间轴。不得输出素材文件名、真实下载链接、供应商调用结果或最终剪辑时间轴。
 
-在全局模式下必须生成 `ProjectArtBible`，但它只是文本级美术一致性合同，不是模型级一致性保证。`ProjectArtBible.characters` 必须遵守身份锚点规则：label 优先使用中文历史实名，例如“专诸”“公子光”“吴王僚”“项羽”“孙膑”；role 写叙事功能，例如“赴死刺客”“决策主将”“核心谋士”。不得把核心人物写成英文泛称，也不得只用功能身份泛称替代人物身份。人物描述应使用服饰、身份、姿态、气质和场景关系，不要把历史人物姓名直接当成图片 prompt 主体。除 `global_prompt_prefix` 或 provider hint 这类后续生成提示外，art_bible、production_intent、risk_notes、budget_notes 等主字段必须使用中文。prompt_draft 必须优先使用中文描述画面、人物、动作、构图、光影和历史质感；如确实需要少量模型关键词，可以放在中文描述之后作为补充，但 prompt_draft 不得整段写成英文。risk_notes 等主字段必须使用中文。segment chunk 模式只能引用已生成的 `ProjectArtBible`，不得重写它。
+在全局模式下必须生成 `ProjectArtBible`，但它只是文本级美术一致性合同，不是模型级一致性保证。`ProjectArtBible.characters` 必须遵守身份锚点规则：label 优先使用中文历史实名，例如“专诸”“公子光”“吴王僚”“项羽”“孙膑”；role 写叙事功能，例如“赴死刺客”“决策主将”“核心谋士”。不得把核心人物写成英文泛称，也不得只用功能身份泛称替代人物身份。每位角色必须填写非空的 `identity_description`，只描述跨镜稳定的年龄区间、脸型、五官和体型，不包含服饰、冠帽、兵器、动作或背景；`visual_description` 保留为整体视觉与场景造型参考，可描述服饰、姿态、气质和场景关系，不把它当作所有镜头的固定造型。不要只用历史人物姓名替代具体外观描述。除 `global_prompt_prefix` 或 provider hint 这类后续生成提示外，art_bible、production_intent、risk_notes、budget_notes 等主字段必须使用中文。prompt_draft 必须优先使用中文描述画面、人物、动作、构图、光影和历史质感；如确实需要少量模型关键词，可以放在中文描述之后作为补充，但 prompt_draft 不得整段写成英文。risk_notes 等主字段必须使用中文。segment chunk 模式只能引用已生成的 `ProjectArtBible`，不得重写它。
 
 如果收到 `art_style_preset`（画风预设，只读输入数据），在全局模式生成 `ProjectArtBible` 时必须遵守以下规则：
 - 把 `art_style_preset.resolved_params.visual_tone_hint` 吸收进 `art_bible.visual_tone`，如适用可写入 `consistency_notes`；`era_style_hint` 非空时在 `era_style` 中体现其朝代风格倾向。
@@ -61,6 +61,7 @@ TTS 是最终时间轴的根，但 TTS 和字幕任务由本地服务确定性�
         "character_id": "char_1",
         "label": "",
         "role": "",
+        "identity_description": "四十岁左右，长方脸，浓眉，鼻梁挺直，中等体型",
         "visual_description": "",
         "consistency_notes": []
       }
@@ -110,7 +111,7 @@ TTS 是最终时间轴的根，但 TTS 和字幕任务由本地服务确定性�
 
 如果全片不规划任何 video_clip，请在 `manual_review_notes` 中说明原因（例如：题材偏话术对峙，全静态+运镜足够表达动作因果；或全片节奏适合图文叙事）。
 
-`ProjectArtBible.characters / locations / props` 的数组元素必须严格使用上述字段名；不得把 `character_id` 改成 `identity`，不得把 `visual_description` 改成 `appearance` 或 `description`，不得使用 `location_name`、`prop_name` 等替代字段。`role` 只属于 characters，locations 和 props 不得包含 `role`。
+`ProjectArtBible.characters / locations / props` 的数组元素必须严格使用上述字段名；characters 必须包含 `character_id`、`label`、`role`、`identity_description`、`visual_description`、`consistency_notes`。不得把 `character_id` 改成 `identity`，不得把 `identity_description` 或 `visual_description` 改成 `appearance` 或 `description`，不得使用 `location_name`、`prop_name` 等替代字段。`role` 和 `identity_description` 只属于 characters，locations 和 props 不得包含这两个字段。
 
 ## Segment Chunk 模式输出骨架
 

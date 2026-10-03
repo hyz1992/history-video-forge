@@ -756,9 +756,11 @@ shared schema 层应实现为判别联合，而不是扁平对象：
 
 | 子对象 | 必填字段 | 可选字段 | 说明 |
 |---|---|---|---|
-| `ArtBibleCharacter` | `character_id`、`label`、`role`、`visual_description`、`consistency_notes` | — | 角色一致性锚点；`role` 描述人物戏剧作用，必填 |
+| `ArtBibleCharacter` | `character_id`、`label`、`role`、`visual_description`、`consistency_notes` | `identity_description`（持久化兼容） | `role` 描述人物戏剧作用；`identity_description` 描述稳定身份，`visual_description` 描述整体视觉与场景造型参考 |
 | `ArtBibleLocation` | `location_id`、`label`、`visual_description`、`consistency_notes` | `role` | 场景一致性锚点；`role` 描述场景戏剧作用，可为 `string \| null \| undefined`（LLM 常自发提供，schema 以 `.nullish()` 接受） |
 | `ArtBibleProp` | `prop_id`、`label`、`visual_description`、`consistency_notes` | `role` | 道具一致性锚点；`role` 同上，可为空 |
+
+`identity_description` 在持久化 `AssetPlanV1 / AssetPlanV2` 中可缺省，以兼容旧冻结计划；若提供，去除首尾空白后必须非空。新生成的全局规划草稿要求每位角色必填该字段，缺失或空白只进入既有一次精确路径结构修复，修复失败拒绝生成计划。字段内容仅描述跨镜稳定的年龄区间、脸型、五官和体型，不包含服饰、冠帽、兵器、动作或背景；这些造型信息留在 `visual_description` 和当前分镜中。本地只校验结构，不抽取旧文本或判断身份描述语义；不自动迁移旧计划。
 
 ### `VoiceIntent`
 

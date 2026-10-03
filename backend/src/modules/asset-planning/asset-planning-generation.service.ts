@@ -63,7 +63,7 @@ import {
   type ChunkInteractionAccountingSnapshot,
 } from "./chunk-interaction-accounting.js";
 
-import { AssetPlanV1 } from "../../../../shared/src/asset-planning/asset-plan-v1.schema.js";
+import { ArtBibleCharacter, AssetPlanV1 } from "../../../../shared/src/asset-planning/asset-plan-v1.schema.js";
 import { verifyStoryboardNarrationContext } from "../storyboard/storyboard-narration-context.js";
 import { validateStoryboardTiming, type StoryboardTimingContext } from "../storyboard/storyboard-timing-projector.js";
 
@@ -368,7 +368,12 @@ const ManualUploadPolicyDraft = z
 const GlobalPlanningDraft = z
   .object({
     planning_mode: z.literal("global"),
-    art_bible: ProjectArtBible,
+    // 持久化合同兼容旧计划，新的全局规划必须明确给出稳定身份。
+    art_bible: ProjectArtBible.extend({
+      characters: z.array(ArtBibleCharacter.extend({
+        identity_description: ArtBibleCharacter.shape.identity_description.unwrap(),
+      })),
+    }),
     visual_budget: z.record(z.string(), z.unknown()),
     downgrade_policy: z.record(z.string(), z.unknown()),
     global_audio_strategy: z.record(z.string(), z.unknown()),
@@ -498,10 +503,14 @@ export async function generateAssetPlan(
   // S2-2B：画风 preset 确定性兜底合并（本地只做配置应用，不做语义判断）。
   // 使用快照冻结参数（input.artStylePreset），不读取注册表当前版本。
   if (input.artStylePreset) {
-    globalDraft.art_bible = mergeArtStylePresetIntoArtBible({
-      artBible: globalDraft.art_bible,
-      preset: input.artStylePreset,
-    });
+    globalDraft.art_bible = {
+      ...mergeArtStylePresetIntoArtBible({
+        artBible: globalDraft.art_bible,
+        preset: input.artStylePreset,
+      }),
+      // 画风合并只影响全局风格；保留已通过新规划合同的角色数组。
+      characters: globalDraft.art_bible.characters,
+    };
   }
 
   const chunks = chunkStoryboardSegments(input.storyboard, input.chunkSize);

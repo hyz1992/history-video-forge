@@ -1310,6 +1310,7 @@ describe("generateAssetPlan", () => {
             character_id: "character_1",
             label: "人物一",
             role: "核心人物",
+            identity_description: "四十岁左右，方脸，浓眉，中等体型",
             visual_description: "古代人物形象",
             consistency_notes: [],
           },
@@ -1363,6 +1364,102 @@ describe("generateAssetPlan", () => {
       expect(plan.art_bible[collectionKey][0]).not.toHaveProperty("extra_note");
     },
   );
+
+  it.each([undefined, " \t\n "])(
+    "repairs a missing or blank generated identity at its exact leaf path (%j)",
+    async (identityDescription) => {
+      const identity = "五十岁左右，窄长脸，细眉，身形矮小";
+      const character = {
+        character_id: "char_yanzi", label: "晏子", role: "使节",
+        visual_description: "深色齐国朝服，殿前站立", consistency_notes: ["保持面貌一致"],
+        ...(identityDescription === undefined ? {} : { identity_description: identityDescription }),
+      };
+      const draft = {
+        ...validGlobalPlanningDraft,
+        art_bible: { ...validGlobalPlanningDraft.art_bible, characters: [character] },
+      };
+      const { gateway, calls } = makeGateway((options) => {
+        if (options.promptId === "asset-planning.planner" &&
+          (options.input as { planning_mode?: string }).planning_mode === "global") return draft;
+        if (options.promptId === "asset-planning.global-structural-repair") {
+          return {
+            patch_type: "global_planning_structural_patch",
+            patches: [{ path: ["art_bible", "characters", 0, "identity_description"], value: identity }],
+          };
+        }
+        return validChunkPlanningDraftFor((options.input as { chunk: { segment_ids: string[] } }).chunk.segment_ids);
+      });
+
+      const plan = await generateAssetPlan(makeInput(gateway));
+
+      expect(plan.art_bible.characters[0]).toEqual({ ...character, identity_description: identity });
+      const repairCalls = calls.filter((call) => call.promptId === "asset-planning.global-structural-repair");
+      expect(repairCalls).toHaveLength(1);
+      expect(repairCalls[0]!.input).toMatchObject({
+        allowed_repair_paths: [["art_bible", "characters", 0, "identity_description"]],
+        schema_issues: [expect.objectContaining({ path: ["art_bible", "characters", 0, "identity_description"] })],
+      });
+    },
+  );
+
+  it.each([undefined, " \t\n "])(
+    "rejects a generated identity that remains invalid after repair (%j)",
+    async (identityDescription) => {
+      const draft = {
+        ...validGlobalPlanningDraft,
+        art_bible: {
+          ...validGlobalPlanningDraft.art_bible,
+          characters: [{
+            character_id: "char_yanzi", label: "晏子", role: "使节",
+            visual_description: "深色齐国朝服", consistency_notes: [],
+          }],
+        },
+      };
+      const { gateway, calls } = makeGateway((options) => {
+        if (options.promptId === "asset-planning.global-structural-repair") {
+          return {
+            patch_type: "global_planning_structural_patch",
+            patches: identityDescription === undefined ? [] : [{
+              path: ["art_bible", "characters", 0, "identity_description"], value: identityDescription,
+            }],
+          };
+        }
+        const input = options.input as { planning_mode?: string; chunk?: { segment_ids: string[] } };
+        if (input.planning_mode === "global") return draft;
+        return validChunkPlanningDraftFor(input.chunk?.segment_ids ?? []);
+      });
+
+      await expect(generateAssetPlan(makeInput(gateway))).rejects.toMatchObject({
+        code: "asset_global_plan_structural_repair_failed",
+        cause: {
+          final_issues: [expect.objectContaining({ path: ["art_bible", "characters", 0, "identity_description"] })],
+        },
+      });
+      expect(calls.map((call) => call.promptId)).toEqual([
+        "asset-planning.planner", "asset-planning.global-structural-repair",
+      ]);
+    },
+  );
+
+  it("keeps a valid generated identity without structural repair", async () => {
+    const character = {
+      character_id: "char_yanzi", label: "晏子", role: "使节",
+      identity_description: "五十岁左右，窄长脸，细眉，身形矮小",
+      visual_description: "深色齐国朝服，殿前站立", consistency_notes: [],
+    };
+    const { gateway, calls } = makeGateway((options) => {
+      const input = options.input as { planning_mode?: string; chunk?: { segment_ids: string[] } };
+      if (input.planning_mode === "global") {
+        return { ...validGlobalPlanningDraft, art_bible: { ...validGlobalPlanningDraft.art_bible, characters: [character] } };
+      }
+      return validChunkPlanningDraftFor(input.chunk?.segment_ids ?? []);
+    });
+
+    const plan = await generateAssetPlan(makeInput(gateway));
+
+    expect(plan.art_bible.characters[0]).toEqual(character);
+    expect(calls.map((call) => call.promptId)).not.toContain("asset-planning.global-structural-repair");
+  });
 
   it("builds a compact leaf repair input and invokes global repair exactly once", async () => {
     const invalidDraft = structuredClone(missingPropNotesFixture) as {
@@ -2877,8 +2974,8 @@ describe("generateAssetPlan", () => {
           art_bible: {
             ...validGlobalPlanningDraft.art_bible,
             characters: [
-              { character_id: "visible", label: visibleLabel, role: "画面人物", visual_description: "束发深衣，神情克制", consistency_notes: [] },
-              { character_id: "offscreen", label: "仅口播提及者", role: "画外人物", visual_description: "不应进入画面提示", consistency_notes: [] },
+              { character_id: "visible", label: visibleLabel, role: "画面人物", identity_description: "五十岁左右，窄长脸，细眉，身形矮小", visual_description: "束发深衣，神情克制", consistency_notes: [] },
+              { character_id: "offscreen", label: "仅口播提及者", role: "画外人物", identity_description: "四十岁左右，方脸，浓眉，中等体型", visual_description: "不应进入画面提示", consistency_notes: [] },
             ],
           },
         };

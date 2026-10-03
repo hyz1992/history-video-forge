@@ -1,6 +1,6 @@
 ---
 id: asset-planning.global-structural-repair
-version: v1.0.0
+version: v1.1.0
 stage: asset_planning
 language: zh-CN
 consumes:
@@ -42,6 +42,7 @@ status: active
 - 每个 `path` 必须原样取自 `allowed_repair_paths`，不得缩短、延长、改写或使用字符串形式的路径。
 - 同一路径最多输出一次。
 - `value` 必须满足该路径对应字段的结构要求；需要语义内容时，只能取自 `normalized_draft` 和调用方提供的 `repair_context`。
+- 若获准路径是某位角色的 `identity_description`，只在该精确路径补齐非空的稳定年龄区间、脸型、五官、体型描述，不写服饰、冠帽、兵器、动作或背景；依据该角色已有描述与已提供的上下文，不新增史实。不得为补身份改写合法的 `visual_description`、角色名或其他字段，也不得扩大获准路径。
 
 # 禁止事项
 
