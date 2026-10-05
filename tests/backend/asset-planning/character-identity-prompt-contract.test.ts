@@ -33,7 +33,7 @@ describe("稳定角色身份的正式 prompt 合同", () => {
     expect(prompt).toContain("动态状态不写入 `identity_description` 或覆盖全片的 `global_prompt_prefix`");
   });
 
-  it("分段规划展开可见衣冠器物并保留原动作瞬间、多人职责与稳定身份", () => {
+  it("分段规划消费当前状态并保留可见衣冠器物、原动作瞬间、多人职责与稳定身份", () => {
     const prompt = readFileSync(new URL("../../../prompts/asset-planning/segment-intent-planner.prompt.md", import.meta.url), "utf8");
     expect(prompt).toContain("在 `image_prompt` 中展开关键衣冠器物能画出的外形、结构和颜色");
     expect(prompt).toContain("不能只写名称、术语或数字");
@@ -44,7 +44,7 @@ describe("稳定角色身份的正式 prompt 合同", () => {
     expect(prompt).toContain("明确各角色与核心物件的关系");
     expect(prompt).toContain("不因空位补出新的关键人物");
     expect(prompt).toContain("不得改写分镜或新增史实");
-    expect(prompt).toContain("version: v1.6.0");
+    expect.soft(prompt).toContain("version: v1.7.0");
     expect(prompt).toContain("language: zh-CN");
     expect(prompt).toContain("SegmentIntentPlannerInput");
     expect(prompt).toContain("SegmentAssetIntentBatchDraft");
@@ -57,6 +57,14 @@ describe("稳定角色身份的正式 prompt 合同", () => {
     expect(prompt).toContain("逐个写明入镜角色（尤其主角）的当前场景服饰");
     expect(prompt).toContain("不得只写背景人物的衣着");
     expect(prompt).toContain("分镜未明写时，结合其叙事功能与 `visual_description` 中适用的造型补足");
+    expect.soft(prompt).toContain("按当前 `segment_id` 消费顶层 `art_bible.consistency_notes` 中适用的已冻结状态");
+    expect.soft(prompt).toContain("在 `image_prompt` 中写出本镜可见的关键状态证据，以两三项为宜，不机械凑数");
+    expect.soft(prompt).toContain("局部特写只写合理入画的证据，不为展示全部道具破坏构图");
+    expect.soft(prompt).toContain("`video_prompt` 与 `video_prompt_reserve` 延续同镜锚点的服装、身体状态和负载关系");
+    expect.soft(prompt).toContain("围绕当前主要动作展开，不新增状态转折或后文结果");
+    expect.soft(prompt).toContain("不让人物或负载突然恢复整洁");
+    expect.soft(prompt).toContain("状态安排缺省时，沿用当前分镜与适用的造型参考");
+    expect.soft(prompt).toContain("与分镜当前事件冲突时，以分镜当前事件为准，在 `risk_notes` 报告，不改剧情");
   });
 
   it("优化器保留角色名和稳定身份，允许按当前分镜语义修正旧锚点造型", () => {
