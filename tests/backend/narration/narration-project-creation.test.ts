@@ -56,6 +56,27 @@ async function setDbPref(client: Awaited<ReturnType<typeof createPrismaClient>>,
     return configuration;
 }
 describe("真实POST创建事务", () => {
+    it("新项目在口播资格选择后仍继承两槽 fixed DeepSeek V4 Flash 默认", async () => {
+        const { app, client } = await fixture();
+        const configuration = await setDbPref(client);
+        for (const slot of ["llm.smart", "llm.flash"] as const) {
+            configuration.capabilities[slot] = { mode: "fixed", provider_model_id: `${slot}.deepseek.deepseek-v4-flash` };
+        }
+        await client.userGenerationPreference.update({ where: { userId: "u" }, data: { configurationJson: configuration } });
+        const response = await app.inject({ method: "POST", url: "/api/projects", auth, payload: {
+            name: "Flash 默认继承", narration_selection: selected(),
+        } });
+        expect(response.statusCode).toBe(201);
+        const persisted = await client.projectGenerationConfiguration.findUniqueOrThrow({ where: { projectId: response.json().project_id } });
+        expect(persisted.sourceUserPreferenceRevision).toBe(2);
+        expect(persisted.configurationJson).toMatchObject({ capabilities: {
+            "llm.smart": configuration.capabilities["llm.smart"],
+            "llm.flash": configuration.capabilities["llm.flash"],
+            "tts.synthesize": { mode: "fixed", provider_model_id: selected().provider_model_id },
+        } });
+        expect((await client.userGenerationPreference.findUniqueOrThrow({ where: { userId: "u" } })).configurationJson).toEqual(configuration);
+    });
+
     it.each(["unknown_mode", "invalid_rate", "invalid_rate_with_selection"])("完整继承配置合同拒绝%s且零创建", async (invalid) => {
         const { app, client, writer } = await fixture();
         const configuration = await setDbPref(client);

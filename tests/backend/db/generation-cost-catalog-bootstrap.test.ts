@@ -14,6 +14,7 @@ import {
 } from "../../../backend/src/modules/generation-cost/generation-cost-bootstrap.js";
 import { DASHSCOPE_MEDIA_CANDIDATES_V1 } from "../../../backend/src/modules/generation-cost/pricing-catalog.seed.js";
 import { listProviderModelCatalog } from "../../../backend/src/modules/generation-cost/provider-model-catalog.repository.js";
+import { LLM_MODEL_CANDIDATES_V1 } from "../../../backend/src/modules/generation-cost/llm-model-catalog.js";
 import { applyAllDatabaseMigrations } from "./migration-test-utils.js";
 
 /**
@@ -92,6 +93,35 @@ async function createBootstrappedContext() {
 }
 
 describe("generation cost catalog bootstrap (prisma)", () => {
+  it("旧 Pro/GLM 默认切换为双 Flash 默认，在真实 SQLite 唯一索引下可重启并重复应用", async () => {
+    const { client, db } = await createBootstrappedContext();
+    const common = {
+      llmCandidates: LLM_MODEL_CANDIDATES_V1,
+      media: CONFIGURED_MEDIA_INPUT,
+      environment: NORMAL_ENVIRONMENT,
+    };
+    await bootstrapGenerationCostCatalog(db, { ...common, llm: RESOLVED_LLM_INPUT });
+    for (let restart = 0; restart < 2; restart++) {
+      await hydrateFirstAggregates(db, new Map() as never, client, { storageRoot: process.cwd() });
+      await bootstrapGenerationCostCatalog(db, { ...common, llm: {
+        mode: "resolved",
+        smart: { providerKey: "deepseek", modelId: "deepseek-v4-flash" },
+        flash: { providerKey: "deepseek", modelId: "deepseek-v4-flash" },
+      } });
+      for (const slot of ["llm.smart", "llm.flash"] as const) {
+        const defaults = await client.providerModelCatalog.findMany({
+          where: { capability: slot, status: "active", isDefault: true },
+        });
+        expect(defaults).toHaveLength(1);
+        expect(defaults[0]?.modelId).toBe("deepseek-v4-flash");
+      }
+    }
+    const oldDefault = await client.providerModelCatalog.findUnique({
+      where: { id: "llm.smart.deepseek.deepseek-v4-pro" },
+    });
+    expect(oldDefault).toMatchObject({ status: "active", isDefault: false });
+  });
+
   it("hydrates migration placeholder rows, then disables them and persists the real seed", async () => {
     const { client, db } = await createBootstrappedContext();
 

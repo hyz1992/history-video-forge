@@ -563,9 +563,8 @@ function buildLlmSeedEntries(
     }),
   ];
 
-  // S2-2C §7.1：每个候选种入其声明槽位（缺省两槽；2026-08-25 起 DeepSeek
-  // 按档位拆分：v4-pro 仅 smart、v4-flash 仅 flash）；与槽位默认（tier 解析
-  // 结果）重合的候选去重，不重复种入。
+  // S2-2C §7.1：每个候选种入其声明槽位（缺省两槽）；与槽位默认
+  // （tier 解析结果）重合的候选去重，不重复种入。
   if (llm.candidates && llm.candidates.length > 0) {
     const slotTargets: Array<{ slot: "llm.smart" | "llm.flash"; target: { providerKey: string; modelId: string } }> = [
       { slot: "llm.smart", target: smart },
@@ -596,7 +595,9 @@ function buildLlmSeedEntries(
     }
   }
 
-  return entries;
+  // 旧默认可能仍作为候选保留。先取消旧默认，再写新默认，避免 SQLite
+  // active-default 唯一索引在同一事务的中间步骤发生冲突。
+  return entries.sort((a, b) => Number(a.isDefault) - Number(b.isDefault));
 }
 
 function stubTokenPricing(): Record<string, unknown> {

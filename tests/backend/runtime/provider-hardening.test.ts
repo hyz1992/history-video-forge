@@ -16,6 +16,36 @@ import type { LlmInteractionLogEntry } from "../../../backend/src/runtime/llm/in
 import { ScriptDraftPackage } from "../../../shared/src/index.js";
 
 describe("provider hardening", () => {
+  it.each(["json", "tool"] as const)("GLM-5.3-Flash %s 请求兼容仅开启思考的能力，日志与发送值一致", async (strategy) => {
+    const entries: LlmInteractionLogEntry[] = [];
+    const bodies: Array<Record<string, unknown>> = [];
+    const fetchImpl = vi.fn(async (_url: unknown, init?: RequestInit) => {
+      bodies.push(JSON.parse(String(init?.body)));
+      return new Response(JSON.stringify({ choices: [{ message: strategy === "tool"
+        ? { tool_calls: [{ type: "function", function: { name: "result", arguments: '{"ok":true}' } }] }
+        : { content: '{"ok":true}' }, finish_reason: strategy === "tool" ? "tool_calls" : "stop" }] }),
+        { status: 200, headers: { "Content-Type": "application/json" } });
+    });
+    const provider = createOpenAiCompatibleProvider({
+      model: "glm-5.3-flash", baseUrl: "https://llm.example.test/v1", apiKey: "test-key", fetchImpl,
+    });
+    const common = {
+      prompt: createPromptRegistry().getPrompt("topic.selector"), input: {},
+      operationName: strategy === "tool" ? "storyboard.planner" : "script.writer",
+      interactionLogWriter: { write: (entry: LlmInteractionLogEntry) => { entries.push(entry); } },
+    };
+    const result = strategy === "tool"
+      ? await provider.invokeStrictStructured!({ ...common,
+          schema: { name: "result", description: "result", parameters: { type: "object", properties: { ok: { type: "boolean" } } } },
+          parse: (value) => value, options: { strategy: "tool_call", thinking: "disabled" },
+        })
+      : await provider.invokeStructuredPrompt({ ...common });
+    expect(result).toEqual({ ok: true });
+    expect(bodies).toHaveLength(1);
+    expect(bodies[0]?.thinking).toEqual({ type: "enabled" });
+    expect(entries[0]?.effectiveRequest?.thinking).toBe("enabled");
+  });
+
   it.each([
     "asset-planning.segment-intent-planner",
     "asset-planning.segment-intent-repair",

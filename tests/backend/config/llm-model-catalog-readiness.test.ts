@@ -28,6 +28,8 @@ import {
   resolveGenerationCostBootstrapInput,
 } from "../../../backend/src/modules/generation-cost/generation-cost-bootstrap.js";
 import { LLM_MODEL_CANDIDATES_V1 } from "../../../backend/src/modules/generation-cost/llm-model-catalog.js";
+import { DEFAULT_GENERATION_CONFIGURATION } from "../../../shared/src/generation/generation-configuration.schema.js";
+import { resolveGenerationConfiguration } from "../../../shared/src/generation/generation-configuration-resolver.js";
 
 const RESOLVED_LLM: Extract<LlmTierSeedInput, { mode: "resolved" }> = {
   mode: "resolved",
@@ -68,6 +70,85 @@ afterEach(() => {
 });
 
 describe("LLM 候选表 seed（S2-2C §7.1）", () => {
+  it("两槽提供 DeepSeek V4 Flash 与 GLM-5.3-Flash，fixed 选择解析到准确模型", () => {
+    const seed = buildPricingCatalogSeed({
+      llm: { ...RESOLVED_LLM, candidates: LLM_MODEL_CANDIDATES_V1 },
+      media: { deploymentScope: "cn-beijing" },
+    });
+    const readiness = evaluateGenerationCapabilityReadiness(readinessInput({
+      llmCandidates: LLM_MODEL_CANDIDATES_V1,
+      catalog: seed,
+    }));
+    for (const slot of ["llm.smart", "llm.flash"] as const) {
+      for (const [providerKey, modelId] of [
+        ["deepseek", "deepseek-v4-flash"],
+        ["zhipu", "glm-5.3-flash"],
+      ]) {
+        const id = `${slot}.${providerKey}.${modelId}`;
+        const entry = seed.find((e) => e.id === id);
+        expect(entry, id).toBeDefined();
+        expect(readiness.items[id]?.realDispatchAllowed, id).toBe(true);
+        const resolved = resolveGenerationConfiguration({
+          projectConfiguration: {
+            ...DEFAULT_GENERATION_CONFIGURATION,
+            capabilities: {
+              ...DEFAULT_GENERATION_CONFIGURATION.capabilities,
+              [slot]: { mode: "fixed", provider_model_id: id },
+            },
+          },
+          projectConfigurationRevision: 1,
+          sourceUserPreferenceRevision: 1,
+          systemConstraints: { apiVideoProviderEnabled: true },
+          providerModelCatalog: seed.map((e) => ({
+            provider_model_id: e.id, capability: e.capability,
+            provider_key: e.providerKey, model_id: e.modelId,
+            status: e.status, is_default: e.isDefault,
+          })),
+          operation: "assets.generate",
+        });
+        expect(resolved.ok, id).toBe(true);
+        if (!resolved.ok) throw new Error(JSON.stringify(resolved.error));
+        expect(resolved.value.resolved_capabilities[slot]).toMatchObject({
+          provider_model_id: id, provider_key: providerKey, model_id: modelId,
+        });
+      }
+    }
+  });
+
+  it("两槽 tier 使用 DeepSeek V4 Flash 时默认唯一、去重，auto 解析到 Flash", () => {
+    const seed = buildPricingCatalogSeed({
+      llm: {
+        mode: "resolved",
+        smart: { providerKey: "deepseek", modelId: "deepseek-v4-flash" },
+        flash: { providerKey: "deepseek", modelId: "deepseek-v4-flash" },
+        candidates: LLM_MODEL_CANDIDATES_V1,
+      },
+      media: { deploymentScope: "cn-beijing" },
+    });
+    const resolved = resolveGenerationConfiguration({
+      projectConfiguration: DEFAULT_GENERATION_CONFIGURATION,
+      projectConfigurationRevision: 1,
+      sourceUserPreferenceRevision: null,
+      systemConstraints: { apiVideoProviderEnabled: true },
+      providerModelCatalog: seed.map((e) => ({
+        provider_model_id: e.id, capability: e.capability,
+        provider_key: e.providerKey, model_id: e.modelId,
+        status: e.status, is_default: e.isDefault,
+      })),
+      operation: "assets.generate",
+    });
+    expect(resolved.ok).toBe(true);
+    if (!resolved.ok) throw new Error(JSON.stringify(resolved.error));
+    for (const slot of ["llm.smart", "llm.flash"] as const) {
+      const entries = seed.filter((e) => e.capability === slot);
+      expect(entries.filter((e) => e.isDefault)).toHaveLength(1);
+      expect(entries.filter((e) => e.modelId === "deepseek-v4-flash")).toHaveLength(1);
+      expect(resolved.value.resolved_capabilities[slot]).toMatchObject({
+        provider_key: "deepseek", model_id: "deepseek-v4-flash",
+      });
+    }
+  });
+
   it("非 stub 部署：每槽默认条目 + 候选条目（非默认，与默认重合去重），每槽恰好一个默认", () => {
     const seed = buildPricingCatalogSeed({
       llm: { ...RESOLVED_LLM, candidates: LLM_MODEL_CANDIDATES_V1 },
@@ -83,13 +164,11 @@ describe("LLM 候选表 seed（S2-2C §7.1）", () => {
       const keys = entries.map((e) => `${e.providerKey}:${e.modelId}`);
       expect(new Set(keys).size, slot).toBe(keys.length);
     }
-    // smart 默认 = deepseek-v4-pro（tier），候选 = glm-5；
-    // flash 默认 = glm-4（tier），候选 = deepseek-v4-flash（2026-08-25：
-    // 按档位拆分——smart 槽 glm-5、flash 槽 glm-4/v4-flash，不再出现 v4-pro/glm-4 错配）。
+    // 保留旧 tier 配置时默认不变，新增候选通过明确 modelId 定位。
     const smartDefault = seed.find((e) => e.capability === "llm.smart" && e.isDefault)!;
     expect(smartDefault.providerKey).toBe("deepseek");
     expect(smartDefault.modelId).toBe("deepseek-v4-pro");
-    const smartCandidate = seed.find((e) => e.capability === "llm.smart" && !e.isDefault)!;
+    const smartCandidate = seed.find((e) => e.capability === "llm.smart" && e.modelId === "glm-5")!;
     expect(smartCandidate.providerKey).toBe("zhipu");
     expect(smartCandidate.modelId).toBe("glm-5");
     const flashDefault = seed.find((e) => e.capability === "llm.flash" && e.isDefault)!;
@@ -162,8 +241,10 @@ describe("LLM 候选表 seed（S2-2C §7.1）", () => {
       (e) => e.capability === "llm.smart" && !e.isDefault && e.status === "active",
     );
     expect(candidates.map((e) => `${e.providerKey}:${e.modelId}`).sort()).toEqual([
+      "deepseek:deepseek-v4-flash",
       "deepseek:deepseek-v4-pro",
       "zhipu:glm-5",
+      "zhipu:glm-5.3-flash",
     ]);
   });
 

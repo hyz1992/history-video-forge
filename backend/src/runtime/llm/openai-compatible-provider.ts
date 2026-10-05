@@ -77,6 +77,16 @@ export interface OpenAiCompatibleProviderOptions {
   structuredOutputFixer?: StructuredOutputFixer;
 }
 
+/** 模型能力约束在策略合并后生效，日志与实际请求共同使用适配后的值。 */
+function resolveModelThinking(
+  model: string,
+  thinking: "enabled" | "disabled" | "provider_default",
+): "enabled" | "disabled" | undefined {
+  // 官方接口只接受 enabled：https://docs.z.ai/guides/vlm/glm-5.3-flash
+  if (model === "glm-5.3-flash") return "enabled";
+  return thinking === "provider_default" ? undefined : thinking;
+}
+
 /**
  * 根据 operation policy 解析本次调用的 retry 策略。
  *
@@ -190,7 +200,7 @@ export function createOpenAiCompatibleProvider(
         invocationOptions: request.options,
       });
       const effectiveTimeoutMs = effective.timeoutMs;
-      const effectiveThinking = effective.thinking === "provider_default" ? undefined : effective.thinking;
+      const effectiveThinking = resolveModelThinking(model, effective.thinking);
       const effectiveMaxTokens = effective.maxTokens;
       const effectiveTemperature = effective.temperature;
       const effectiveTopP = effective.topP;
@@ -398,10 +408,7 @@ export function createOpenAiCompatibleProvider(
         request.options?.strategy ??
         providerConfig.structuredStrategy ??
         "json_object";
-      const effectiveThinking =
-        strictEffective.thinking === "provider_default"
-          ? undefined
-          : strictEffective.thinking;
+      const effectiveThinking = resolveModelThinking(model, strictEffective.thinking);
       const effectiveMaxTokens = strictEffective.maxTokens;
       const effectiveTemperature = strictEffective.temperature;
       const effectiveTopP = strictEffective.topP;
