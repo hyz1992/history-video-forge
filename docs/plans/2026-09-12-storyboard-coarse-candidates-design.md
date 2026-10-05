@@ -22,7 +22,7 @@
 
 ### 2026-10-05 算法修订
 
-上述句末范围查找及原生 token 间隙判定替代原“前一边界到当前边界的片段含句末标点”及“当前到下一边界的时间差”两项条件，详细依据见[句末与真实停顿修复设计](./2026-10-05-storyboard-boundary-filter-fix-design.md)。宏观候选、首尾、短稿回退、四字段及编号合同保持；不改 timingMap、不可拆 span、真实 boundary ID、持久化投影或正式 prompt。新生成的候选集合及编号会改变，历史计划仍按其真实 boundary ID 投影。
+上述句末范围查找及原生 token 间隙判定替代原“前一边界到当前边界的片段含句末标点”及“当前到下一边界的时间差”两项条件，详细依据见[句末与真实停顿修复设计](./archive/2026-10-05-storyboard-boundary-filter-fix-design.md)与[有限验收](../records/2026-10-05-storyboard-boundary-filter-acceptance.md)。宏观候选、首尾、短稿回退、四字段及编号合同保持；不改 timingMap、不可拆 span、真实 boundary ID、持久化投影或正式 prompt。新生成的候选集合及编号会改变，历史计划仍按其真实 boundary ID 投影。
 
 ## 代价与可逆性
 
