@@ -47,15 +47,27 @@ export const COARSE_BOUNDARY_MIN_PAUSE_MS = 400;
 export interface StoryboardBoundaryCandidate { id: string; boundary_id: string; visual_time_ms: number; source_offset: number; }
 export function buildStoryboardBoundaryCandidates(timingMap: NarrationTimingMapV1): StoryboardBoundaryCandidate[] {
   const boundaries = timingMap.boundaries;
+  const sentenceEndIndices = new Set<number>();
+  let boundaryCursor = 0;
+  // match.index / length 均为 UTF-16 偏移；闭范围内取最右合法点，不拆开附字标点所在 span。
+  // schema 已保证 sourceOffset 严格递增，游标只向前，避免每个标点范围重扫全量边界。
+  for (const run of timingMap.sourceText.matchAll(/[\p{P}\p{Z}\s]+/gu)) {
+    if (!/[。！？；…]/u.test(run[0])) continue;
+    const start = run.index, end = start + run[0].length;
+    while (boundaryCursor < boundaries.length && boundaries[boundaryCursor]!.sourceOffset < start) boundaryCursor++;
+    let rightmost = -1;
+    while (boundaryCursor < boundaries.length && boundaries[boundaryCursor]!.sourceOffset <= end) rightmost = boundaryCursor++;
+    if (rightmost >= 0) sentenceEndIndices.add(rightmost);
+  }
+  const tokensById = new Map(timingMap.tokens.map(token => [token.id, token]));
   const selected: number[] = [];
   for (let i = 0; i < boundaries.length; i++) {
     const boundary = boundaries[i]!;
     if (i === 0 || i === boundaries.length - 1) { selected.push(i); continue; }
-    const prev = boundaries[i - 1]!, next = boundaries[i + 1]!;
-    const segment = timingMap.sourceText.slice(prev.sourceOffset, boundary.sourceOffset);
-    const sentenceEnd = /[。！？；…]/u.test(segment);
-    const pause = next.visualTimeMs - boundary.visualTimeMs >= COARSE_BOUNDARY_MIN_PAUSE_MS;
-    if (sentenceEnd || pause) selected.push(i);
+    const left = boundary.leftTokenId ? tokensById.get(boundary.leftTokenId) : undefined;
+    const right = boundary.rightTokenId ? tokensById.get(boundary.rightTokenId) : undefined;
+    const pause = left && right && right.startMs - left.endMs >= COARSE_BOUNDARY_MIN_PAUSE_MS;
+    if (sentenceEndIndices.has(i) || pause) selected.push(i);
   }
   const indices = selected.length >= 3 ? selected : boundaries.map((_, i) => i);
   return indices.map((boundaryIndex, n) => {

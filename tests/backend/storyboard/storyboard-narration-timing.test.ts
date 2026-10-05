@@ -14,6 +14,14 @@ function fixture(text = "汉".repeat(18)) {
   return { timingMap, narrationReference: { narration_record_id: "n1", audio_hash: audioHash,
     timing_map_hash: hash(timingMap), duration_ms: timingMap.durationMs } };
 }
+/** 内联供应商词与原生端点；正文偏移及不可拆闭包交给正式 normalizer 构建。 */
+function nativeTiming(sourceText: string, nativeWords: Array<[string, number, number]>) {
+  return normalizeNarrationTiming({ sourceText, audioHash, durationMs: nativeWords.at(-1)![2],
+    sentences: [{ providerSentenceIndex: 0, originalText: sourceText,
+      normalizedText: nativeWords.map(([text]) => text).join(""),
+      words: nativeWords.map(([text, begin_time, end_time], i) => ({
+        text, begin_index: i, end_index: i + 1, begin_time, end_time })) }] });
+}
 const visual = { narrative_role: "opening", visual_intent: "宫门", scene_description: "宫门", visual_elements: ["门"],
   framing_hint: "wide", content_type: "live_action", motion_hint: "static", editing_hint: "single",
   on_screen_text: [], linked_beats: [], linked_quotes: [], risk_notes: [], api_video_suitability: "remotion_only" };
@@ -113,6 +121,63 @@ describe("粗切点候选与编号还原", () => {
     expect(candidates.map(c => c.id)).toEqual(["C1", "C2", "C3", "C4"]);
     expect(candidates.map(c => c.boundary_id)).toEqual([
       timingMap.boundaries[0]!.id, timingMap.boundaries[3]!.id, timingMap.boundaries[6]!.id, timingMap.boundaries[9]!.id]);
+    expect(candidates.every(c => Object.keys(c).sort().join(",") === "boundary_id,id,source_offset,visual_time_ms")).toBe(true);
+  });
+  it.each(["。", "！", "？", "；", "…"])("句末%s附右字时只选标点前的既有合法点", async mark => {
+    const timingMap = nativeTiming("甲" + mark + "乙丙。丁", [
+      ["甲", 0, 100], [mark + "乙", 100, 200], ["丙。", 200, 300], ["丁", 300, 400]]);
+    expect((await api()).buildStoryboardBoundaryCandidates(timingMap).map(c => c.source_offset)).toEqual([0, 1, 5, 6]);
+  });
+  it.each([
+    ["附左字", ["甲。", "乙", "丙。", "丁"]],
+    ["独立标点", ["甲", "。", "乙", "丙。", "丁"]],
+  ] as const)("句号%s时选标点后的既有合法点", async (_, words) => {
+    const timingMap = nativeTiming("甲。乙丙。丁", words.map((text, i) => [text, i * 100, (i + 1) * 100]));
+    expect((await api()).buildStoryboardBoundaryCandidates(timingMap).map(c => c.source_offset)).toEqual([0, 2, 5, 6]);
+  });
+  it("真实最小片段：漏后句末入选，玄后及里漏间的长发声不误选，输入保持不变", async () => {
+    // 原工件片段源偏移重建为 0..5，保留原生时间：里|漏 gap=0，但下一 boundary 相差 560ms。
+    const timingMap = nativeTiming("里漏。玄奘", [
+      ["里", 2160, 2320], ["漏", 2320, 2720], ["。玄", 2880, 3120], ["奘", 3120, 3200]]);
+    const before = hash(timingMap);
+    expect(timingMap.tokens[1]!.startMs - timingMap.tokens[0]!.endMs).toBe(0);
+    expect(timingMap.boundaries[2]!.visualTimeMs - timingMap.boundaries[1]!.visualTimeMs).toBe(560);
+    expect((await api()).buildStoryboardBoundaryCandidates(timingMap)).toEqual([
+      { id: "C1", boundary_id: "boundary:0:0", visual_time_ms: 0, source_offset: 0 },
+      { id: "C2", boundary_id: "boundary:2880:2", visual_time_ms: 2880, source_offset: 2 },
+      { id: "C3", boundary_id: "boundary:3200:5", visual_time_ms: 3200, source_offset: 5 },
+    ]);
+    expect(hash(timingMap)).toBe(before);
+  });
+  it("不可拆甲。乙内部没有合法点时不把span后当句末", async () => {
+    const timingMap = nativeTiming("甲。乙丙。丁", [["甲。乙", 0, 100], ["丙。", 100, 200], ["丁", 200, 300]]);
+    expect(timingMap.boundaries.map(b => b.sourceOffset)).toEqual([0, 3, 5, 6]);
+    expect((await api()).buildStoryboardBoundaryCandidates(timingMap).map(c => c.source_offset)).toEqual([0, 5, 6]);
+  });
+  it("连续标点、空格、制表符与Unicode分隔符跨span只选范围内最右合法点", async () => {
+    const timingMap = nativeTiming("甲。！？ \t　乙丙。丁", [
+      ["甲。", 0, 100], ["！", 100, 200], ["？ \t", 200, 300], ["　乙", 300, 400],
+      ["丙。", 400, 500], ["丁", 500, 600]]);
+    expect((await api()).buildStoryboardBoundaryCandidates(timingMap).map(c => c.source_offset)).toEqual([0, 6, 10, 11]);
+  });
+  it("句末前有代理对时沿UTF-16偏移选择标点前合法点", async () => {
+    const timingMap = nativeTiming("𠀀。乙丙。丁", [
+      ["𠀀", 0, 100], ["。乙", 100, 200], ["丙。", 200, 300], ["丁", 300, 400]]);
+    expect((await api()).buildStoryboardBoundaryCandidates(timingMap).map(c => c.source_offset)).toEqual([0, 2, 6, 7]);
+  });
+  it("共享数字span内部500ms间隙仍不能造候选点", async () => {
+    const timingMap = nativeTiming("12甲。乙", [
+      ["十", 0, 100], ["二", 600, 700], ["甲。", 700, 800], ["乙", 800, 900]]);
+    expect(timingMap.sourceSpans[0]!.tokenIds).toEqual(["token:0", "token:1"]);
+    expect((await api()).buildStoryboardBoundaryCandidates(timingMap).map(c => c.boundary_id)).toEqual([
+      "boundary:0:0", "boundary:800:4", "boundary:900:5"]);
+  });
+  it("零时长标点并入前span后只保留闭包外的句末点", async () => {
+    const timingMap = nativeTiming("甲。乙丙。丁", [
+      ["甲", 0, 100], ["。", 100, 100], ["乙", 100, 200], ["丙。", 200, 300], ["丁", 300, 400]]);
+    expect(timingMap.sourceSpans[0]!.tokenIds).toEqual(["token:0", "token:1"]);
+    expect((await api()).buildStoryboardBoundaryCandidates(timingMap).map(c => c.boundary_id)).toEqual([
+      "boundary:0:0", "boundary:100:2", "boundary:300:5", "boundary:400:6"]);
   });
   it("无句末无停顿短稿回退全量边界表", async () => {
     const f = fixture(), a = await api();
@@ -142,8 +207,9 @@ describe("粗切点候选与编号还原", () => {
         { text: "乙", begin_index: 1, end_index: 2, begin_time: 250, end_time: 500 },
         { text: "丙", begin_index: 2, end_index: 3, begin_time: 500 + g1, end_time: 750 + g1 },
         { text: "丁", begin_index: 3, end_index: 4, begin_time: 750 + g1 + 500, end_time: 1500 + g1 }] }] });
-    expect(a.buildStoryboardBoundaryCandidates(make(150)).map(c => c.visual_time_ms)).toContain(250);
-    expect(a.buildStoryboardBoundaryCandidates(make(149)).map(c => c.visual_time_ms)).not.toContain(250);
+    // 另一处固定500ms真实gap使399ms负向样例仍有首尾加锚点，避免不足3项的回退掩盖误选。
+    expect(a.buildStoryboardBoundaryCandidates(make(400)).map(c => c.visual_time_ms)).toEqual([0, 900, 1650, 1900]);
+    expect(a.buildStoryboardBoundaryCandidates(make(399)).map(c => c.visual_time_ms)).toEqual([0, 1649, 1899]);
   });
 });
 it.each(["token", "boundary", "missing_tail", "duplicate_id"])("完整来源与覆盖验证：%s", async mode => {
