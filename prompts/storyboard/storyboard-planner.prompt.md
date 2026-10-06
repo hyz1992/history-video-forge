@@ -1,6 +1,6 @@
 ---
 id: storyboard.planner
-version: v1.6.0
+version: v1.7.0
 stage: storyboard
 language: zh-CN
 consumes:
@@ -29,7 +29,7 @@ status: active
 
 输出必须是合法 JSON 对象，不输出 Markdown，不输出解释文字。
 
-提供 `narration_timing` 时使用 `storyboard_v2`：原文、原生 tokens、不可拆 sourceSpans、候选切点表 `boundary_candidates`、真实 durationMs 和冻结 narrationReference 均已给出。`boundary_candidates` 是按时间顺序编号的全部候选切点（`C1` 到 `Cn`，含全文首尾，每个候选给出时间与原文位置），只从这些候选中选切点，不猜时间、不改正文。每镜输出 `start_boundary_id` / `end_boundary_id`，直接使用候选编号（如 `C1`、`C12`）；相邻镜头共享同一编号，首尾必须使用 `C1` 与 `Cn`。镜头必须沿口播时间轴单向排列：每镜 end 必须晚于 start，下一镜 start 必须等于上一镜 end，任何一镜都不得时间倒流或回跳，start/end 不得互换。编号必须原样使用：禁止改数字、禁止交换、禁止自造编号或使用候选表之外的 ID。停顿归前镜，首尾静音归首末镜。每镜必须包含全部规定字段，一个都不能少，也不能输出规定之外的字段：`segment_id`、`order`、`start_boundary_id`、`end_boundary_id`、`narrative_role`、`visual_intent`、`scene_description`、`visual_elements`、`framing_hint`、`content_type`、`motion_hint`、`editing_hint`、`on_screen_text`、`linked_beats`、`linked_quotes`、`risk_notes`、`api_video_suitability`（四档其一：`remotion_only` / `remotion_sufficient` / `api_video_beneficial` / `api_video_strongly_recommended`）。`source_script_record_id` 与 `source_topic_package_id` 必须逐字复制输入值。
+提供 `narration_timing` 时使用 `storyboard_v2`：已验证的展示视图给出原文 sourceText、候选切点表 `boundary_candidates`、真实 durationMs 和冻结 narrationReference。`boundary_candidates` 是按时间顺序编号的全部候选切点（`C1` 到 `Cn`，含全文首尾，每个候选给出时间、原文位置及 `text_to_next`）。`text_to_next` 是从本候选到下一候选的完整原文，末行为空；`Ca`→`Cb` 的当前段正文按含起点、不含终点的候选行顺序连接 `text_to_next`，终点行的正文属于下一段。只从这些候选中选切点，不猜时间、不改正文。每镜输出 `start_boundary_id` / `end_boundary_id`，直接使用候选编号（如 `C1`、`C12`）；相邻镜头共享同一编号，首尾必须使用 `C1` 与 `Cn`。镜头必须沿口播时间轴单向排列：每镜 end 必须晚于 start，下一镜 start 必须等于上一镜 end，任何一镜都不得时间倒流或回跳，start/end 不得互换。编号必须原样使用：禁止改数字、禁止交换、禁止自造编号或使用候选表之外的 ID。停顿归前镜，首尾静音归首末镜。每镜必须包含全部规定字段，一个都不能少，也不能输出规定之外的字段：`segment_id`、`order`、`start_boundary_id`、`end_boundary_id`、`narrative_role`、`visual_intent`、`scene_description`、`visual_elements`、`framing_hint`、`content_type`、`motion_hint`、`editing_hint`、`on_screen_text`、`linked_beats`、`linked_quotes`、`risk_notes`、`api_video_suitability`（四档其一：`remotion_only` / `remotion_sufficient` / `api_video_beneficial` / `api_video_strongly_recommended`）。`source_script_record_id` 与 `source_topic_package_id` 必须逐字复制输入值。
 
 v2沿用下方示例的来源ID、视觉、trace和全局说明字段，但将版本改为 `storyboard_v2`，每镜用两项候选编号替代 `script_excerpt` / `start_hint_sec` / `end_hint_sec`，省略顶层 `estimated_total_duration_sec`。不要独立输出source offsets、visual毫秒或摘录；这些全部由所选同一边界确定性派生。冻结口播身份由运行时附加，不能改选音频。
 

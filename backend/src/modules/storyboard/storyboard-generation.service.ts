@@ -5,7 +5,6 @@ import {
   type ScriptDraftPackage,
 } from "../../../../shared/src/index.js";
 import { StoryboardSegmentV2 } from "../../../../shared/src/storyboard/storyboard-plan-v2.schema.js";
-import { NarrationTimingMapV1 } from "../../../../shared/src/index.js";
 import { z } from "zod";
 import { env, getValidatedRuntimeEnv } from "../../config/env.js";
 import { createHash } from "node:crypto";
@@ -19,7 +18,7 @@ import type {
 } from "../../runtime/llm/provider-contract.js";
 import { createPromptRegistry } from "../../runtime/prompts/prompt-registry.js";
 
-import { projectStoryboardTiming, validateStoryboardTiming, StoryboardBoundaryError, buildStoryboardBoundaryCandidates, resolveStoryboardBoundaryLabels, type StoryboardTimingContext, type StoryboardBoundaryCandidate } from "./storyboard-timing-projector.js";
+import { projectStoryboardTiming, validateStoryboardTiming, StoryboardBoundaryError, buildStoryboardBoundaryCandidates, resolveStoryboardBoundaryLabels, type StoryboardTimingContext } from "./storyboard-timing-projector.js";
 import { verifyStoryboardNarrationContext } from "./storyboard-narration-context.js";
 
 export interface TopicBoundaryContext {
@@ -58,13 +57,22 @@ export interface GenerateStoryboardPlanInput {
 export function buildStoryboardPlannerPromptInput(
   input: GenerateStoryboardPlanInput,
 ) {
-  // 候选切点精简：LLM 只看到按时间编号的粗切点候选（C1..Cn），不看到全量边界表。
-  // tokens/sourceSpans/sourceText 保留；投影仍使用完整 timingMap，校验不变。
+  // 完整图先核验；LLM 展示仅包含原文、实测时长与候选区间，正式投影仍用完整图。
   const narrationDisplay = input.narrationTiming
     ? (() => {
       const verified = verifyStoryboardNarrationContext(input.narrationTiming, input.draft.script_text);
-      const { boundaries: _dropped, ...rest } = verified.timingMap as NarrationTimingMapV1 & { boundaries: unknown };
-      return { timingMap: { ...rest, boundary_candidates: buildStoryboardBoundaryCandidates(verified.timingMap) }, narrationReference: verified.narrationReference };
+      const { timingMap, narrationReference } = verified;
+      const candidates = buildStoryboardBoundaryCandidates(timingMap);
+      const boundaryCandidates = candidates.map((candidate, index) => ({
+        ...candidate,
+        text_to_next: index < candidates.length - 1
+          ? timingMap.sourceText.slice(candidate.source_offset, candidates[index + 1]!.source_offset)
+          : "",
+      }));
+      return {
+        timingMap: { sourceText: timingMap.sourceText, durationMs: timingMap.durationMs, boundary_candidates: boundaryCandidates },
+        narrationReference,
+      };
     })()
     : undefined;
   const promptInput = {
@@ -640,10 +648,9 @@ function buildVisualElements(topicBoundaryContext: TopicBoundaryContext) {
 }
 
 function buildDeterministicNarrationStoryboard(input: ReturnType<typeof buildStoryboardPlannerPromptInput>) {
-  const timingMap = input.narration_timing!.timingMap as NarrationTimingMapV1 & { boundary_candidates?: StoryboardBoundaryCandidate[] };
-  // prompt 输入用候选表替代了全量边界：stub 直接取候选的真实 boundary ID
+  // stub 直接取展示候选的真实 boundary ID
   // （编号还原对真实 ID 透传，下游投影路径一致）。
-  const entries = timingMap.boundary_candidates ?? timingMap.boundaries.map(b => ({ id: b.id, boundary_id: b.id }));
+  const entries = input.narration_timing!.timingMap.boundary_candidates;
   const last = entries.length - 1;
   const cuts = [...new Set([0, Math.floor(last / 3), Math.floor(last * 2 / 3), last])];
   return { plan_version: "storyboard_v2", source_script_record_id: input.source_script_record_id,

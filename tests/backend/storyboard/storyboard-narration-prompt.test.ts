@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createHash } from "node:crypto";
 import { canonicalStringify, StoryboardPlanV2 } from "../../../shared/src/index.js";
 import { normalizeNarrationTiming } from "../../../backend/src/modules/narration/narration-timing-normalizer.js";
-import { projectStoryboardTiming } from "../../../backend/src/modules/storyboard/storyboard-timing-projector.js";
+import { buildStoryboardBoundaryCandidates, projectStoryboardTiming } from "../../../backend/src/modules/storyboard/storyboard-timing-projector.js";
 import { buildStoryboardPlannerPromptInput, generateStoryboardPlan, regenerateSingleSegment } from "../../../backend/src/modules/storyboard/storyboard-generation.service.js";
 import { createPromptRegistry } from "../../../backend/src/runtime/prompts/prompt-registry.js";
 
@@ -24,6 +24,25 @@ function fixture() {
   return { input, raw };
 }
 
+/** 原文映射由正式 normalizer 构建，词级原生时间不依赖展示对象。 */
+function nativeFixture(sourceText: string, nativeWords: Array<[string, number, number]>) {
+  const { input, raw } = fixture();
+  const timingMap = normalizeNarrationTiming({ sourceText, audioHash: input.narrationTiming.timingMap.audioHash,
+    durationMs: nativeWords.at(-1)![2], sentences: [{ providerSentenceIndex: 0, originalText: sourceText,
+      normalizedText: nativeWords.map(([text]) => text).join(""),
+      words: nativeWords.map(([text, begin_time, end_time], i) => ({
+        text, begin_index: i, end_index: i + 1, begin_time, end_time })) }] });
+  return { raw, input: { ...input,
+    draft: { ...input.draft, script_text: sourceText, opening_span: sourceText, ending_span: sourceText },
+    narrationTiming: { timingMap, narrationReference: { ...input.narrationTiming.narrationReference,
+      timing_map_hash: createHash("sha256").update(canonicalStringify(timingMap)).digest("hex"), duration_ms: timingMap.durationMs } } } };
+}
+
+function mappedFixture() {
+  return nativeFixture("甲。甲。𠀀12乙。尾", ["甲。", "甲。", "𠀀", "十", "二", "乙。", "尾"]
+    .map((text, i) => [text, i * 100, (i + 1) * 100]));
+}
+
 describe("Task8 规划前已知真实口播", () => {
   it("输入原文、候选切点编号与冻结身份，首尾切点不丢失", () => {
     const { input } = fixture(); const p = buildStoryboardPlannerPromptInput(input) as any;
@@ -36,6 +55,62 @@ describe("Task8 规划前已知真实口播", () => {
     expect(candidates[0]).toMatchObject({ id: "C1", boundary_id: "boundary:0:0", visual_time_ms: 0 });
     expect(candidates[6]).toMatchObject({ id: "C7", boundary_id: "boundary:1500:6", visual_time_ms: 1500 });
     expect(candidates.at(-1)).toMatchObject({ id: "C19", boundary_id: "boundary:4500:18" });
+  });
+  it("timing展示精确限定三字段，完整原生图与冻结身份保持不变", () => {
+    const { input } = mappedFixture();
+    const before = canonicalStringify(input.narrationTiming);
+    const display = buildStoryboardPlannerPromptInput(input).narration_timing!;
+    expect(Object.keys(display.timingMap).sort()).toEqual(["boundary_candidates", "durationMs", "sourceText"]);
+    expect(display.timingMap.sourceText).toBe(input.draft.script_text);
+    expect(display.timingMap.durationMs).toBe(input.narrationTiming.timingMap.durationMs);
+    expect(display.narrationReference).toEqual(input.narrationTiming.narrationReference);
+    expect(canonicalStringify(input.narrationTiming)).toBe(before);
+    expect(createHash("sha256").update(canonicalStringify(input.narrationTiming.timingMap)).digest("hex"))
+      .toBe(input.narrationTiming.narrationReference.timing_map_hash);
+  });
+  it("候选四值原样保留，重复句、代理对与共享数字span的区间逐字覆盖全文且末行为空", () => {
+    const { input } = mappedFixture();
+    const timingMap = input.narrationTiming.timingMap;
+    // 12 的两个口播词共用同一不可拆原文 span，代理对占两个 UTF-16 code units。
+    expect(timingMap.sourceSpans.find(span => span.tokenIds.includes("token:3")))
+      .toMatchObject({ sourceStart: 6, sourceEnd: 8, tokenIds: ["token:3", "token:4"] });
+    const candidates = buildStoryboardPlannerPromptInput(input).narration_timing!.timingMap.boundary_candidates;
+    expect(candidates.map(({ text_to_next, ...original }) => original)).toEqual(buildStoryboardBoundaryCandidates(timingMap));
+    for (const candidate of candidates) {
+      expect(Object.keys(candidate).sort()).toEqual(["boundary_id", "id", "source_offset", "text_to_next", "visual_time_ms"]);
+    }
+    expect(candidates.map(candidate => candidate.source_offset)).toEqual([0, 2, 4, 10, 11]);
+    expect(candidates.map(candidate => candidate.text_to_next)).toEqual(["甲。", "甲。", "𠀀12乙。", "尾", ""]);
+    expect(candidates.map(candidate => candidate.text_to_next).join("")).toBe(timingMap.sourceText);
+  });
+  it("多个候选区间按含起点不含终点连接，非首项起点与正式投影摘录直接相等", () => {
+    const { input, raw } = mappedFixture();
+    const candidates = buildStoryboardPlannerPromptInput(input).narration_timing!.timingMap.boundary_candidates;
+    const cuts = [0, 1, 3, 4];
+    const plan = projectStoryboardTiming({ ...input.narrationTiming, plan: { ...raw,
+      segments: cuts.slice(0, -1).map((start, i) => ({ ...raw.segments[0]!, segment_id: "sb" + i, order: i,
+        start_boundary_id: candidates[start]!.boundary_id, end_boundary_id: candidates[cuts[i + 1]!]!.boundary_id })) } });
+    for (const [start, end] of [[0, 2], [1, 3], [2, 4]] as const) {
+      const text = candidates.slice(start, end).map(candidate => candidate.text_to_next).join("");
+      expect(text).toBe(input.draft.script_text.slice(candidates[start]!.source_offset, candidates[end]!.source_offset));
+    }
+    const middleText = candidates.slice(1, 3).map(candidate => candidate.text_to_next).join("");
+    expect(middleText).toBe("甲。𠀀12乙。");
+    expect(middleText).toBe(plan.segments[1]!.script_excerpt);
+    expect(plan.segments[2]!.script_excerpt).toBe(candidates[3]!.text_to_next);
+  });
+  it("normalizer生成的长稿展示字节较旧native展示至少减少四分之三", () => {
+    const sourceText = "宫门关闭，守卫仍在等候。".repeat(40);
+    const { input } = nativeFixture(sourceText, Array.from(sourceText, (text, i) => [text, i * 100, (i + 1) * 100]));
+    const timingMap = input.narrationTiming.timingMap;
+    expect(timingMap.tokens.length).toBeGreaterThan(300);
+    expect(timingMap.sourceSpans.length).toBeGreaterThan(300);
+    const { boundaries: _boundaries, ...oldNativeDisplay } = timingMap;
+    const previous = { timingMap: { ...oldNativeDisplay, boundary_candidates: buildStoryboardBoundaryCandidates(timingMap) },
+      narrationReference: input.narrationTiming.narrationReference };
+    const current = buildStoryboardPlannerPromptInput(input).narration_timing!;
+    const bytes = (value: unknown) => Buffer.byteLength(JSON.stringify(value, null, 2), "utf8");
+    expect(bytes(current)).toBeLessThan(bytes(previous) * 0.25);
   });
   it("v2选择真实边界，不读取估时重算，原始timing保持不变", async () => {
     const { input, raw } = fixture(); const before = canonicalStringify(input.narrationTiming.timingMap);
@@ -81,7 +156,14 @@ describe("Task8 规划前已知真实口播", () => {
     expect(planner.body).toContain("当前段口播的主要事件");
     expect(planner.body).toContain("不能提前演出后文结果或用下一事件替代当前事件");
     expect(planner.body).toContain("完整称谓、语义和动作边界");
-    expect(planner.metadata.version).toBe("v1.6.0");
+    expect(planner.body).toContain("text_to_next");
+    expect(planner.body).toContain("含起点、不含终点");
+    expect(planner.body).toContain("终点行的正文属于下一段");
+    expect(planner.body).not.toContain("原生 tokens");
+    expect(planner.body).not.toContain("不可拆 sourceSpans");
+    expect(planner.metadata.consumes).toContain("NarrationTimingMapV1");
+    expect(planner.metadata.consumes).toContain("NarrationReference");
+    expect(planner.metadata.version).toBe("v1.7.0");
   });
 });
 

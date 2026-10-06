@@ -15,7 +15,7 @@
 ## 设计
 
 1. **粗切点候选**：`buildStoryboardBoundaryCandidates(timingMap)` 确定性筛选——保留首尾边界。句末沿原文 UTF-16 偏移扫描连续 Unicode 标点（P）、分隔符（Z）及空白范围，只处理包含 `。！？；…` 的范围，用单向有序边界游标选择其闭区间内 sourceOffset 最大的既有合法边界。标点附左字选标点后，附右字且标点后位于不可拆 span 内时选标点前；独立标点及连续标点/空白优先最右合法点，无合法点时不造点，也不把含“甲。乙”的 span 后误作句末。停顿由当前边界的 `leftTokenId` / `rightTokenId` 查原生 token，以 `right.startMs - left.endMs ≥400ms` 判定。句末与真实停顿取并集，候选按时间顺序编号 `C1..Cn`，每项携带真实 `boundary_id`、`visual_time_ms`、`source_offset`。若粗筛不足 3 个（极端短稿），退回全量边界表。
-2. **prompt 只给候选表**：prompt 输入中的 `narration_timing.timingMap` 用 `boundary_candidates` 替换 `boundaries`（tokens/sourceSpans/sourceText 等保留）。LLM 每镜 `start_boundary_id`/`end_boundary_id` 直接使用候选编号（如 `C1`、`C12`），禁止改数字、交换、自造。
+2. **prompt 展示候选表与原文**：prompt 输入中的 `narration_timing.timingMap` 明确限定为 `sourceText`、`durationMs`、`boundary_candidates`，展示候选行在原四字段上增加相邻候选间完整原文 `text_to_next`，末行为空；不下发 tokens/sourceSpans 等 native 明细。LLM 每镜 `start_boundary_id`/`end_boundary_id` 直接使用候选编号（如 `C1`、`C12`），禁止改数字、交换、自造。完整图仍留在正式核验、候选计算与投影路径。
 3. **本地还原**：`resolveStoryboardBoundaryLabels(plan, candidates)` 在投影前把 `C<n>` 确定性还原成真实 `boundary_id`（纯查表）；非 `C<n>` 格式的 ID 原样透传（旧格式计划/已有行为兼容，未知 `C<n>` 原样保留交由投影拒绝并进入带反馈重生）。
 4. **投影与校验不变**：还原后走既有 `projectStoryboardTiming`（含吸附、结构化违反信息、重生触发面），持久化计划仍存真实边界 ID，shared schema 零改动。
 5. **prompt v1.5.0**：v2 段改为描述候选编号规则；regeneration 分支同步（错误反馈会引用真实边界 ID 或编号）。
@@ -23,6 +23,10 @@
 ### 2026-10-05 算法修订
 
 上述句末范围查找及原生 token 间隙判定替代原“前一边界到当前边界的片段含句末标点”及“当前到下一边界的时间差”两项条件，详细依据见[句末与真实停顿修复设计](./archive/2026-10-05-storyboard-boundary-filter-fix-design.md)与[有限验收](../records/2026-10-05-storyboard-boundary-filter-acceptance.md)。宏观候选、首尾、短稿回退、四字段及编号合同保持；不改 timingMap、不可拆 span、真实 boundary ID、持久化投影或正式 prompt。新生成的候选集合及编号会改变，历史计划仍按其真实 boundary ID 投影。
+
+### 2026-10-06 展示合同修订
+
+上述三字段白名单及 `text_to_next` 展示取代旧“tokens/sourceSpans 等保留”的输入说明，见[原文区间展示与输入精简设计](./2026-10-06-storyboard-readable-input-design.md)。范围 `Ca`→`Cb` 按含起点、不含终点的候选行连接原文，与正式投影的同一 UTF-16 source slice 一致；候选构建函数的四字段合同、冻结口播身份、legacy 与重生路径保持，planner 同步为 v1.7.0。
 
 ## 代价与可逆性
 
