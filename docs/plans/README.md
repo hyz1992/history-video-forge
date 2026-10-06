@@ -2,6 +2,10 @@
 
 ## 当前状态
 
+截至 2026-10-06：
+
+- 用户批准继续[分镜原文区间展示与输入精简](./2026-10-06-storyboard-readable-input-design.md)及[实施计划](./2026-10-06-storyboard-readable-input-plan.md)：在同一 planner 展示候选的精确原文区间、删去 LLM 不需读取的 native 明细，服务器完整来源校验与投影保持。当前 84 项 storyboard 基线及独立设计/计划审查通过；实施及单次 ≤0.50 元真实分镜尚待验证，不生成媒体。
+
 截至 2026-10-05：
 
 - [候选切点修复验收](../records/2026-10-05-storyboard-boundary-filter-acceptance.md)：句末附着标点与真实停顿粗筛已修并提交 `eba853cd`，187 项回归、后端类型检查及顺序独立审查通过。原口播候选 68→24，恢复自然句末；一次真实 Flash 返回 8 段结构/时间轴通过，词句断裂消失，但仍提前勒马关键事件，语义未整体通过。本批停止，不重试，global/segment/image/H3 未派发，真实视觉未验证。新增保守估算 0.119578 元，累计含历史预留 47.9399935 元，账户账单未核验。[设计](./archive/2026-10-05-storyboard-boundary-filter-fix-design.md)与[计划](./archive/2026-10-05-storyboard-boundary-filter-fix-plan.md)已归档，不作为续跑清单。
