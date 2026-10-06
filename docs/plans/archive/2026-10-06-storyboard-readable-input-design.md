@@ -1,8 +1,10 @@
 # 分镜 planner 原文区间展示与输入精简设计
 
+状态：本批已实施并完成一次有限验收，作为历史设计归档；当前结果见[验收记录](../../records/2026-10-06-storyboard-readable-input-acceptance.md)。整体语义尚未通过，不作为重复调用清单。
+
 ## 授权与问题
 
-用户在[候选修复验收](../records/2026-10-05-storyboard-boundary-filter-acceptance.md)后批准继续“补充候选原文上下文、精简 planner 输入，再验分镜”。本批只落实这一方向，直接在 `dev` 主工作区，不创建分支或 worktree。
+用户在[候选修复验收](../../records/2026-10-05-storyboard-boundary-filter-acceptance.md)后批准继续“补充候选原文上下文、精简 planner 输入，再验分镜”。本批只落实这一方向，直接在 `dev` 主工作区，不创建分支或 worktree。
 
 上一批两个候选筛选缺陷已修，不能重新当作本批待修事项。24 个合法候选生成的 8 段仍把“十余里后勒缰”提前到向东求救段，文字语义未通过；没有新媒体。本批从当前实际输入和调用结果出发，不追加本地语义判断。
 

@@ -26,7 +26,7 @@
 
 ### 2026-10-06 展示合同修订
 
-上述三字段白名单及 `text_to_next` 展示取代旧“tokens/sourceSpans 等保留”的输入说明，见[原文区间展示与输入精简设计](./2026-10-06-storyboard-readable-input-design.md)。范围 `Ca`→`Cb` 按含起点、不含终点的候选行连接原文，与正式投影的同一 UTF-16 source slice 一致；候选构建函数的四字段合同、冻结口播身份、legacy 与重生路径保持，planner 同步为 v1.7.0。
+上述三字段白名单及 `text_to_next` 展示取代旧“tokens/sourceSpans 等保留”的输入说明，见[原文区间展示与输入精简设计](./archive/2026-10-06-storyboard-readable-input-design.md)。范围 `Ca`→`Cb` 按含起点、不含终点的候选行连接原文，与正式投影的同一 UTF-16 source slice 一致；候选构建函数的四字段合同、冻结口播身份、legacy 与重生路径保持，planner 同步为 v1.7.0。
 
 ## 代价与可逆性
 

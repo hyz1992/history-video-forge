@@ -4,7 +4,7 @@
 
 截至 2026-10-06：
 
-- 用户批准继续[分镜原文区间展示与输入精简](./2026-10-06-storyboard-readable-input-design.md)及[实施计划](./2026-10-06-storyboard-readable-input-plan.md)：在同一 planner 展示候选的精确原文区间、删去 LLM 不需读取的 native 明细，服务器完整来源校验与投影保持。当前 84 项 storyboard 基线及独立设计/计划审查通过；实施及单次 ≤0.50 元真实分镜尚待验证，不生成媒体。
+- [分镜原文区间展示与输入精简验收](../records/2026-10-06-storyboard-readable-input-acceptance.md)：原子合同提交 `96370547`，91项回归、后端类型检查、prompt治理及独立规格/质量审查通过。真实输入177,916→11,395字节，24候选四值、完整来源和旧投影保持；一次Flash返回6段，勒缰范围对应改善，但距离误解和流沙险情扩写仍使整体语义未通过。本批停止、无重试/后续规划/媒体；负载、衣物、摆拍及音轨未验证。新增保守估算0.026424元，累计含历史预留47.9664175元，账户账单未核验。[设计](./archive/2026-10-06-storyboard-readable-input-design.md)与[计划](./archive/2026-10-06-storyboard-readable-input-plan.md)已归档，不作为续跑清单。
 
 截至 2026-10-05：
 

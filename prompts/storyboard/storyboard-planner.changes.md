@@ -3,7 +3,7 @@
 ## v1.7.0 - 2026-10-06
 - v2 输入展示精简为 `sourceText`、`durationMs`、`boundary_candidates`；完整时间图仍由运行时核验、筛选及投影，冻结 `narrationReference` 保持。正式 consumes 仍声明 `NarrationTimingMapV1` 与 `NarrationReference` 来源。
 - 候选展示行增加 `text_to_next`：本候选到下一候选的完整原文，末行为空；所选范围按含起点、不含终点的行连接，终点行正文归下一段。候选四值与筛选、输出字段、来源、编号、trace、枚举及既有质量规则保持。
-- 本次只改变输入展示与配套说明，真实语义质量仍需逐段验收。设计见[分镜原文区间展示与输入精简设计](../../docs/plans/2026-10-06-storyboard-readable-input-design.md)。
+- 本次只改变输入展示与配套说明，真实语义质量仍需逐段验收。设计见[分镜原文区间展示与输入精简设计](../../docs/plans/archive/2026-10-06-storyboard-readable-input-design.md)。
 
 ## v1.6.0 - 2026-10-05
 - 补充当前口播事件与画面的对应：关键动作、转折和发现结果按口播顺序出现，禁止提前演出后文结果或用下一事件替代当前事件；保留氛围、引语和余韵的合理视觉表达，不要求每句一镜或每字直译。
