@@ -16,7 +16,7 @@ global与segment prompt均v1.7.0，已有按ID冻结负载/磨损/身体状态�
 
 ## 规划阶段
 
-沿用正式`generateAssetPlan`的输入builder、typed intent校验、compiler及口播前置来源校验。全部11镜按用户已选api_video路线规划，但本批不执行视频/TTS/合成。
+沿用正式`generateAssetPlan`的输入builder、typed intent校验、compiler及口播前置来源校验。11镜按用户已选`all_api_video`策略由正式resolver解析，保留实际矩阵结果（`remotion_only`仍可能解析为remotion），不强制改路线、不按相同sb ID继承旧record覆盖。本批不执行视频/TTS/合成，实际路线数量与策略边界记入验收。
 
 一次global后，chunk_001至004严格顺序；实验显式`chunkSize=3`、`chunkConcurrency=1`，不沿用生产缺省。每个命名阶段最多一次真实gateway及HTTP，maxAttempts=1、maxTokens=8192。后续可零网络复用成功结果；实验包装器拒绝重复派发、repair、安全重试及regen，不改生产策略。输入由正式生成器捕获，不手拼简版、改正文/时间或注入人工状态。
 
