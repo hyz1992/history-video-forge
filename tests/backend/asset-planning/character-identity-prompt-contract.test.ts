@@ -3,16 +3,20 @@ import { describe, expect, it } from "vitest";
 
 // 仅验证正式 prompt 的输入/输出合同与规则存在，不代表真实 LLM 或出图质量已通过。
 describe("稳定角色身份的正式 prompt 合同", () => {
-  it("全局身份只描述主叙事时点的稳定身体特征，并与神态、姿态、气质和能力分工", () => {
+  it("全局身份只描述主叙事时点的稳定身体特征，造型参考不编排镜头身体状态与动作", () => {
     const prompt = readFileSync(new URL("../../../prompts/asset-planning/asset-planner.prompt.md", import.meta.url), "utf8");
     expect(prompt).toContain("- `identity_description` 必须非空，只描述跨镜稳定的年龄区间、脸型、五官和体型");
-    expect(prompt).toContain("神态、姿态、气质与能力不写入 `identity_description`，如需描述可放入 `visual_description`");
+    expect(prompt).toContain("神态、姿态、气质与能力不写入 `identity_description`");
+    expect(prompt).toContain("气质可作为整体造型参考");
     expect(prompt).toContain("- `visual_description` 保留为整体视觉与场景造型参考");
+    expect(prompt).toContain("可描述服饰、气质和整体造型");
+    expect(prompt).toContain("不编排具体镜头的身体状态、姿态或动作");
+    expect(prompt).not.toContain("如需描述可放入 `visual_description`");
     expect(prompt).toContain("不把它当作所有镜头的固定造型");
     expect(prompt).toContain("先依据 `script_text` 的主叙事时点确定年龄阶段");
     expect(prompt).toContain("不得套用人物其他时期的年龄");
     expect(prompt).toContain("无法可靠确认精确年龄时，只写宽年龄阶段，不猜具体数字");
-    expect(prompt).toContain("version: v1.9.0");
+    expect(prompt).toContain("version: v1.10.0");
     expect(prompt).toContain("language: zh-CN");
     expect(prompt).toContain("ProjectArtBible");
     expect(prompt).toContain("`identity_description`");
@@ -20,15 +24,19 @@ describe("稳定角色身份的正式 prompt 合同", () => {
     expect(prompt).toContain("不包含服饰、冠帽、兵器、动作或背景");
   });
 
-  it("全局状态保留恢复痕迹，并明确持续物件的唯一承载关系和局部可见性", () => {
+  it("身体与动作时序直接沿用分镜，全局只延续衣物、携带关系和物件状态", () => {
     const prompt = readFileSync(new URL("../../../prompts/asset-planning/asset-planner.prompt.md", import.meta.url), "utf8");
     expect(prompt).toContain("在顶层 `art_bible.consistency_notes` 中，按实际分镜 ID 或连续 ID 范围写少量状态安排");
-    expect(prompt).toContain("服装使用痕迹、身体状态、携带物及其相对位置");
+    expect(prompt).toContain("身体状态、姿态、动作及事件先后直接由已确认分镜提供");
+    expect(prompt).toContain("全局各字段不逐镜重述或重新安排");
+    expect(prompt).toContain("只说明服装使用痕迹、携带关系和物件状态");
     expect(prompt).toContain("何时保持、何时因已确认事件变化，以及变化后仍须保留什么");
-    expect(prompt).toContain("恢复或休整须分别写出身体变化项（包括仍未好转）与衣物/负载保留项");
-    expect(prompt).toContain("好转程度以已确认事件为准");
-    expect(prompt).toContain("没有已确认换衣、清洗或更换事件，不得清除此前已有积尘、磨损或携带关系");
-    expect(prompt).toContain("无状态变化时不强加脏污、困顿或磨损");
+    expect(prompt).toContain("恢复或休整期间，没有已确认换衣、清洗或更换事件，不得清除此前已有积尘、磨损或负载");
+    expect(prompt).toContain("不重新推导身体恢复程度");
+    expect(prompt).toContain("无服饰或负载变化时不强加脏污或磨损");
+    expect(prompt).not.toContain("服装使用痕迹、身体状态、携带物及其相对位置");
+    expect(prompt).not.toContain("恢复或休整须分别写出身体变化项");
+    expect(prompt).not.toContain("好转程度以已确认事件为准");
     expect(prompt).toContain("必须按人物处境判断是否需要普通行装");
     expect(prompt).toContain("需要时写入现有 `props` 并说明形态");
     expect(prompt).toContain("对需持续携带的物件（包括原剧情已有物件），须选定唯一基准承载关系");
@@ -40,7 +48,7 @@ describe("稳定角色身份的正式 prompt 合同", () => {
     expect(prompt).toContain("原剧情核心道具不能代替普通行装需求判断");
     expect(prompt).toContain("不得新增关键道具、具体装备数量或新剧情");
     expect(prompt).toContain("史料未证的普通合理视觉推断写入 `manual_review_notes`，说明推断边界，不冒充事实");
-    expect(prompt).toContain("状态以 `script_text` 和已确认分镜为准；冲突写入 `manual_review_notes` 报告，不回改上游");
+    expect(prompt).toContain("衣物与物件状态以 `script_text` 和已确认分镜为准；冲突写入 `manual_review_notes` 报告，不回改上游");
     expect(prompt).toContain("动态状态不写入 `identity_description` 或覆盖全片的 `global_prompt_prefix`");
   });
 
