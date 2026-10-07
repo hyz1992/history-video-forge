@@ -42,10 +42,10 @@ git diff --check
 
 只新增storage/visual-state-ownership-acceptance-20261008/，复制上一carry源common.mts、planner.mts、offline-verification.mts、media-preparation.mts、README.md；不复制results/lock/review。适配ROOT、新正式版本/SHA、旧run追加保护、基线48.4233695及limits1.55/0.95/0.60；除已复现的金额比较精度修复外controller逻辑不改。
 
-- [ ] 新身份、协议和保护清单冻结；原有81件保护保持，追加上一carry十件；6份native narration副本经storage核验，系统路线保持，原库/关键配置/活动指针只读。
-- [ ] 新common原逻辑先验证边界红灯：两次0.20历史加第三次0.20应在0.60内却抛stage_budget_exceeded。只把预算比较换算为七位小数整数计价单位，不改账本、价格/上限、锁与派发。新增离线第16项：三图等于上限允许；一个计价单位超限及真实超出支持精度拒绝，不能用epsilon放宽授权。保存红绿证据。
-- [ ] prepare、preview global保存实际完整messages/上界/预留；fresh离线16项exit0且history/gateway/HTTP/新费用0；各预算边界基于新LIMITS。
-- [ ] 顺序独立规格与质量审查Approved后根代理fresh核验，才实际付费。不得复跑旧prompt版本run或释放旧失败预留。
+- [x] 新身份72eebaaf-9206-4234-a29a-472ddc89e0cc、协议和91件保护冻结；原有81件保护保持，追加上一carry十件；6份native narration副本经storage核验，系统路线保持，原库/关键配置/活动指针及DB/WAL SHA不变。planner/media-preparation与上一carry字节相同，实际五源diff已审。
+- [x] 新common真实边界红灯exit1（三次0.20误抛stage_budget_exceeded）→逐笔七位整数换算后绿灯exit0；budget-tdd.red.log/green.log保存。初轮质量I1指出固定换算容差接纳真实超精度，根代理复现后收紧为量级double误差界、正金额不得归零；ULP新增用例红exit1→绿exit0（budget-ulp-tdd.red.log/green.log），原日志保留。账本、价格/上限、锁与派发不改。第16项覆盖等于0.60、最小单位超限/真实超精度/逐笔抵消、LLM0.95+三图0.60及极小正数；不使用epsilon放宽预算比较。
+- [x] prepare及preview global exit0，完整messages41,854字节、输入上界43,902、输出16384，预留0.218876元。整改后根代理fresh离线16项、audit及verify exit0（root-offline-final-prepaid.log、root-audit-final-prepaid.log、root-verify-final-prepaid.log），history/gateway/HTTP/新费用均0；真实语义与媒体尚未验证。
+- [x] 初轮规格通过，质量I1金额容差经实际复现与红绿整改后，顺序规格→质量复审均Approved C/I/M0；根代理已实际读diff、红绿与换算代码，fresh核验通过。步骤四仅控制器通过，不能代替真实语义；旧run不复跑、旧失败预留不释放。
 
 默认只预览/核验；付费须每次指定`VISUAL_LOAD_STATE_PAID_STAGE`、`--allow-paid-once`，PowerShell保存node退出码后清理env并显式exit。maxTokens16384、maxAttempts1。
 
