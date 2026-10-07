@@ -1,6 +1,6 @@
 ---
 id: asset-planning.planner
-version: v1.8.0
+version: v1.9.0
 stage: asset_planning
 language: zh-CN
 consumes:
@@ -31,7 +31,7 @@ status: active
 
 全局场景状态按以下职责填写：
 - 在顶层 `art_bible.consistency_notes` 中，按实际分镜 ID 或连续 ID 范围写少量状态安排：说明服装使用痕迹、身体状态、携带物及其相对位置何时保持、何时因已确认事件变化，以及变化后仍须保留什么。恢复或休整须分别写出身体变化项（包括仍未好转）与衣物/负载保留项，好转程度以已确认事件为准；没有已确认换衣、清洗或更换事件，不得清除此前已有积尘、磨损或携带关系。只写故事需要的变化；无状态变化时不强加脏污、困顿或磨损。
-- 必须按人物处境判断是否需要普通行装：需要时写入现有 `props`，明确形态、基准承载位置及与人物的持续关系，在状态安排中说明取用等已确认动作的携带变化；不需要时在 `manual_review_notes` 说明理由。原剧情核心道具不能代替此判断；不得新增关键道具、具体装备数量或新剧情。史料未证的普通合理视觉推断写入 `manual_review_notes`，说明推断边界，不冒充事实。
+- 必须按人物处境判断是否需要普通行装：需要时写入现有 `props` 并说明形态，不需要时在 `manual_review_notes` 说明理由。对需持续携带的物件（包括原剧情已有物件），须选定唯一基准承载关系，写清承载者和具体位置，不并列给出任选位置；在状态安排中按分镜 ID 写明取用等已确认动作的携带变化及动作后是否归位。物件持续存在不等于每镜可见：局部近景只呈现合理入画部分，不为展示行装破坏构图。原剧情核心道具不能代替普通行装需求判断；不得新增关键道具、具体装备数量或新剧情。史料未证的普通合理视觉推断写入 `manual_review_notes`，说明推断边界，不冒充事实。
 - 状态以 `script_text` 和已确认分镜为准；冲突写入 `manual_review_notes` 报告，不回改上游。动态状态不写入 `identity_description` 或覆盖全片的 `global_prompt_prefix`，保留稳定身份与场景造型的既有分工。
 
 不要只用历史人物姓名替代具体外观描述。除 `global_prompt_prefix` 或 provider hint 这类后续生成提示外，art_bible、production_intent、risk_notes、budget_notes 等主字段必须使用中文。prompt_draft 必须优先使用中文描述画面、人物、动作、构图、光影和历史质感；如确实需要少量模型关键词，可以放在中文描述之后作为补充，但 prompt_draft 不得整段写成英文。risk_notes 等主字段必须使用中文。segment chunk 模式只能引用已生成的 `ProjectArtBible`，不得重写它。

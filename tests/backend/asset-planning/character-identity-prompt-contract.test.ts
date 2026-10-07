@@ -12,7 +12,7 @@ describe("稳定角色身份的正式 prompt 合同", () => {
     expect(prompt).toContain("先依据 `script_text` 的主叙事时点确定年龄阶段");
     expect(prompt).toContain("不得套用人物其他时期的年龄");
     expect(prompt).toContain("无法可靠确认精确年龄时，只写宽年龄阶段，不猜具体数字");
-    expect(prompt).toContain("version: v1.8.0");
+    expect(prompt).toContain("version: v1.9.0");
     expect(prompt).toContain("language: zh-CN");
     expect(prompt).toContain("ProjectArtBible");
     expect(prompt).toContain("`identity_description`");
@@ -20,7 +20,7 @@ describe("稳定角色身份的正式 prompt 合同", () => {
     expect(prompt).toContain("不包含服饰、冠帽、兵器、动作或背景");
   });
 
-  it("全局状态安排恢复保留项并判断普通行装，推断可审阅且不污染稳定身份", () => {
+  it("全局状态保留恢复痕迹，并明确持续物件的唯一承载关系和局部可见性", () => {
     const prompt = readFileSync(new URL("../../../prompts/asset-planning/asset-planner.prompt.md", import.meta.url), "utf8");
     expect(prompt).toContain("在顶层 `art_bible.consistency_notes` 中，按实际分镜 ID 或连续 ID 范围写少量状态安排");
     expect(prompt).toContain("服装使用痕迹、身体状态、携带物及其相对位置");
@@ -30,10 +30,14 @@ describe("稳定角色身份的正式 prompt 合同", () => {
     expect(prompt).toContain("没有已确认换衣、清洗或更换事件，不得清除此前已有积尘、磨损或携带关系");
     expect(prompt).toContain("无状态变化时不强加脏污、困顿或磨损");
     expect(prompt).toContain("必须按人物处境判断是否需要普通行装");
-    expect(prompt).toContain("需要时写入现有 `props`，明确形态、基准承载位置及与人物的持续关系");
-    expect(prompt).toContain("在状态安排中说明取用等已确认动作的携带变化");
+    expect(prompt).toContain("需要时写入现有 `props` 并说明形态");
+    expect(prompt).toContain("对需持续携带的物件（包括原剧情已有物件），须选定唯一基准承载关系");
+    expect(prompt).toContain("写清承载者和具体位置，不并列给出任选位置");
+    expect(prompt).toContain("在状态安排中按分镜 ID 写明取用等已确认动作的携带变化及动作后是否归位");
+    expect(prompt).toContain("物件持续存在不等于每镜可见");
+    expect(prompt).toContain("局部近景只呈现合理入画部分，不为展示行装破坏构图");
     expect(prompt).toContain("不需要时在 `manual_review_notes` 说明理由");
-    expect(prompt).toContain("原剧情核心道具不能代替此判断");
+    expect(prompt).toContain("原剧情核心道具不能代替普通行装需求判断");
     expect(prompt).toContain("不得新增关键道具、具体装备数量或新剧情");
     expect(prompt).toContain("史料未证的普通合理视觉推断写入 `manual_review_notes`，说明推断边界，不冒充事实");
     expect(prompt).toContain("状态以 `script_text` 和已确认分镜为准；冲突写入 `manual_review_notes` 报告，不回改上游");
