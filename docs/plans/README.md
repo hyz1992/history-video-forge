@@ -4,7 +4,7 @@
 
 截至 2026-10-07：
 
-- 用户批准继续[分镜事实忠实边界](./2026-10-07-storyboard-factual-fidelity-design.md)与[计划](./2026-10-07-storyboard-factual-fidelity-plan.md)：细化现有planner的事实关系及普通视觉还原边界，保留文案/口播/候选/模型；91项基线通过。本批实施与一次新增≤0.50元的真实分镜尚待验收，不生成媒体。
+- [分镜事实忠实边界验收](../records/2026-10-07-storyboard-factual-fidelity-acceptance.md)：正式planner v1.8.0合同提交`c6dfa3ca`，91项回归、prompt治理及顺序独立规格/质量审查通过。同输入一次Flash返回11段，已走距离和流沙两个旧偏差在本样例中消失，但仍将求援目标画成可见烽燧，另有心理因果过度解释，自动稿整体未通过。另附零费用人工候选，五处字段修订后结构及独立11镜文字通过；未激活、无后续阶段或媒体，视觉/音轨未验。本批停止，新增保守估算0.036706元，累计含历史预留48.0031235元，账户账单未核验。[设计](./archive/2026-10-07-storyboard-factual-fidelity-design.md)与[计划](./archive/2026-10-07-storyboard-factual-fidelity-plan.md)已归档，不作为续跑清单。
 
 截至 2026-10-06：
 

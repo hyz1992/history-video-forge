@@ -3,7 +3,7 @@
 ## v1.8.0 - 2026-10-07
 - 细化正文来源条目的事实关系边界：保持距离、方向、时间、数量与因果原意，区分已发生过程与剩余条件、推想或目标与已见事实。
 - 在现有当前事件/顺序条目中明确普通环境、器物、身体/服装状态及即时反应的合理还原许可，保留氛围、引语和余韵；不得借还原新增危险、改变剧情的关键行动或结局，视觉意图、场景、元素与风险说明须相容。既有输入、来源、候选、字段、trace、枚举及重生合同保持。
-- 合同测试仅验证正式规则存在，真实语义效果待逐段人工验收。设计见[分镜事实忠实边界设计](../../docs/plans/2026-10-07-storyboard-factual-fidelity-design.md)。
+- 合同测试仅验证正式规则存在，真实语义效果需逐段人工验收。一次本样例旧距离/流沙偏差消失，自动稿仍有目标可见化与因果偏差；另附人工文字候选不作为自动通过证据。见[分镜事实忠实边界设计](../../docs/plans/archive/2026-10-07-storyboard-factual-fidelity-design.md)与[真实验收记录](../../docs/records/2026-10-07-storyboard-factual-fidelity-acceptance.md)。
 
 ## v1.7.0 - 2026-10-06
 - v2 输入展示精简为 `sourceText`、`durationMs`、`boundary_candidates`；完整时间图仍由运行时核验、筛选及投影，冻结 `narrationReference` 保持。正式 consumes 仍声明 `NarrationTimingMapV1` 与 `NarrationReference` 来源。
