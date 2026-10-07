@@ -155,6 +155,14 @@ describe("Task8 规划前已知真实口播", () => {
     expect(planner.body).toContain("api_video_suitability");
     expect(planner.body).toContain("当前段口播的主要事件");
     expect(planner.body).toContain("不能提前演出后文结果或用下一事件替代当前事件");
+    // 仅锁定正式合同存在；不把字面断言当作模型输出的语义验收。
+    expect(planner.body).toContain("距离、方向、时间、数量与因果原意");
+    expect(planner.body).toContain("已发生的过程不能改成剩余条件");
+    expect(planner.body).toContain("推想或目标不能画成已经看见的事实");
+    expect(planner.body).toContain("普通环境、器物及身体/服装状态可以合理还原");
+    expect(planner.body).toContain("符合当前事件的即时反应可以合理视觉化");
+    expect(planner.body).toContain("还原不得新增危险、改变剧情的关键行动或结局");
+    expect(planner.body).toContain("`visual_intent`、`scene_description`、`visual_elements` 与 `risk_notes` 须与正文事实相容，彼此不得矛盾");
     expect(planner.body).toContain("完整称谓、语义和动作边界");
     expect(planner.body).toContain("text_to_next");
     expect(planner.body).toContain("含起点、不含终点");
@@ -163,7 +171,7 @@ describe("Task8 规划前已知真实口播", () => {
     expect(planner.body).not.toContain("不可拆 sourceSpans");
     expect(planner.metadata.consumes).toContain("NarrationTimingMapV1");
     expect(planner.metadata.consumes).toContain("NarrationReference");
-    expect(planner.metadata.version).toBe("v1.7.0");
+    expect(planner.metadata.version).toBe("v1.8.0");
   });
 });
 
