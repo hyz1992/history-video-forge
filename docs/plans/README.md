@@ -4,7 +4,7 @@
 
 截至 2026-10-07：
 
-- 用户批准继续[全局行装与恢复保留项设计](./2026-10-07-global-load-retention-design.md)与[计划](./2026-10-07-global-load-retention-plan.md)：只细化全局prompt两处既有规则，先验同源文字，通过后最多三图。原项目保持，50元总上限不变；基线含历史预留48.0798395元。设计→计划独立审查Approved，尚未修改正式prompt或付费。
+- [全局行装与恢复保留项](./2026-10-07-global-load-retention-design.md)及[计划](./2026-10-07-global-load-retention-plan.md)：正式global v1.8.0两处规则已提交`56a0e236`，183项回归、prompt治理、独立规格→质量审查通过；普通行装必须判断、恢复后分别保留衣物/负载状态。真实文字与图片未验证，正在准备新实验。50元总上限保持，基线含历史预留48.0798395元，原库不激活。
 
 - [行旅负载与跨镜状态验收](../records/2026-10-07-visual-load-state-acceptance.md)：183项基线、prompt治理、15项离线控制及顺序独立规格/质量审查通过；已审人工11镜的一次Flash global结构通过，人工C0/I2/M0未通过。普通行装缺失、恢复后衣物磨损保留不足，四chunk及三图取消，未编译完整计划、未验媒体或成品，原库未激活。新增保守估算0.076716元，累计含历史预留48.0798395元、余额1.9201605元，账户账单未核验。[设计](./archive/2026-10-07-visual-load-state-check-design.md)与[计划](./archive/2026-10-07-visual-load-state-check-plan.md)已归档，不作为续跑清单。
 
