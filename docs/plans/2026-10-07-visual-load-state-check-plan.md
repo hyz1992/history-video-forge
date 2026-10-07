@@ -20,11 +20,13 @@
 
 仅新增实验目录`storage/visual-load-state-acceptance-20261007/`脚本/工件，不改正式prompt或业务代码。
 
-- [ ] 冻结11镜人工输入、来源、原生时间图/ref、模型/prompt版本/hash及保护SHA。
-- [ ] 从正式generateAssetPlan捕获global输入，使用完整11镜路线/原画风；all_api_video仍由正式resolver矩阵解析，保留remotion_only结果，不按相同sb ID继承旧record覆盖；显式chunkSize=3、chunkConcurrency=1，直接Flash gateway仅限实验覆盖，原smart=Pro配置保持；实验分镜record身份与原record区别记录。
-- [ ] 五阶段排他锁，一阶段一gateway/HTTP，maxAttempts=1/8192、1.75总新增/1.15LLM/0.60图片预检；全部messages字节含system prompt+pretty输入+2048余量；保存响应/失败用量，拒绝repair/regen或多余阶段。
+任务1分两个小步：LLM控制与口播副本准备已通过独立规格/质量审查（均C/I/M=0）及根代理fresh 15项离线核验，52份来源保护、协议独立完整性与6份bundle副本一致，历史/HTTP/新增费用均0。真实媒体控制器在完整文字通过后实施；原生V2 importer尚未实际导入完整计划。
+
+- [x] 冻结11镜人工输入、来源、原生时间图/ref、模型/prompt版本/hash及保护SHA。
+- [x] 从正式generateAssetPlan捕获global输入，使用完整11镜路线/原画风；all_api_video仍由正式resolver矩阵解析，实际10 API+1 Remotion，不按相同sb ID继承旧record覆盖；显式chunkSize=3、chunkConcurrency=1，直接Flash gateway仅限实验覆盖，原smart=Pro配置保持；实验分镜record身份与原record区别记录。
+- [x] 五阶段排他锁，一阶段一gateway/HTTP，maxAttempts=1/8192、1.75总新增/1.15LLM/0.60图片预检；全部messages字节含system prompt+pretty输入+2048余量；保存响应/失败用量，拒绝repair/regen或多余阶段。global零网预留0.151712元；真实结果尚待下一任务。
 - [ ] 原库指针/record只读保护；内存DbClient独立付费快照，使用原生v2 `importNarrationManifest/buildNarrationVisualSkeleton`，必要旧音频/字幕仅复制并验SHA、record/revision只在内存指向副本；单目标manifest及projectStorageRootDir绝对路径冻结到实验目录，无应用后台、DB安装/恢复扫描。
-- [ ] 独立规格后质量审查包装器及媒体边界；零网络结构复核和重复派发拒绝证明通过后才付费。
+- [x] LLM包装器独立规格后质量审查、零网络结构复核和重复派发拒绝证明通过后才付费；媒体真实执行器的审查仍待文字通过。
 
 ## 任务2：规划实测
 
