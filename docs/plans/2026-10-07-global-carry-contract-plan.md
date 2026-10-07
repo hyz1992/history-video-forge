@@ -39,9 +39,9 @@ git diff --check
 
 只新增`storage/global-carry-contract-acceptance-20261007/`，生成态不stage。复制上一容量目录五份控制源，不复制派发锁、结果或人工审核；适配ROOT、v1.9.0/SHA及预算常量。保留原来源、旧视觉批、首次截断保护，再追加上一容量run十份协议/identity/账本/历史/请求/回执/response/structure/人工fail/closure保护；基线取该run账本48.3302755元，新身份不复用任何前批或原record。
 
-- [ ] 新协议、完整性、原库快照、原人工11镜/口播timing/ref/画风/原生路线冻结；6份bundle副本经正式storage读取核验。
-- [ ] 预算新增1.65元、LLM1.05元、三图0.60元，总上限49.9802755元；maxTokens16384、maxAttempts1；保存完整messages/UTF-8上界预检。
-- [ ] prepare/preview/fresh离线15项退出0，独立规格→质量审查通过。控制语义保持：永久once、reserve在dispatch前、成功usage结算/失败预留、repair/regen/安全重试拒绝、人工SHA绑定、原件保护。
+- [x] 新协议与完整性冻结81份保护，保留旧首次失败9件并追加上一容量10件；原库/源人工11镜/口播timing/ref/画风/路线同源，6份bundle副本经正式storage核验。独立身份`851197d6-a267-415f-8360-5ddb50ac6459`。
+- [x] 新预算1.65元、LLM1.05元、三图0.60元，总上限49.9802755元；16384/maxAttempts1；global实际完整messages41,768字节，输入上界43,816，预留0.218704元。
+- [x] prepare/preview、根代理fresh离线15项exit0，顺序独立规格→质量审查均C/I/M0。控制保持，付费前history/gateway/HTTP/费用均0；planner/media-preparation与上一容量源字节相同，预算离线边界改为实际新LIMITS。
 
 默认命令只预览/核验，不派发。实际付费每次显式指定阶段、`VISUAL_LOAD_STATE_PAID_STAGE`及`--allow-paid-once`，PowerShell在finally清理前保存node退出码并显式exit。完整请求上限与价格沿用已核验来源，账户账单不假定通过。
 
