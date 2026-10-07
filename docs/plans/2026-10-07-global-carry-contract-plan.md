@@ -19,10 +19,10 @@
 
 仅三个文件：`prompts/asset-planning/asset-planner.prompt.md`、同目录`asset-planner.changes.md`、`tests/backend/asset-planning/character-identity-prompt-contract.test.ts`。
 
-- [ ] 更新已有合同断言到v1.9.0及新携带/可见性职责；先跑合同测试，保存红灯退出码及真实失败项。不增加文本输出关键词门。
-- [ ] 按设计替换global“场景状态”第二条：普通行装必要性与形态；需持续携带物件含原剧情物件，唯一基准关系、承载者/位置、无任选；按ID说明已确认动作携带变化及是否归位；持续存在不等于每镜可见；保留推断/事实边界。第一条恢复与第三条身份规则及其他prompt内容不改。
-- [ ] global v1.9.0中文changes登记；合同绿灯退出0；独立规格通过后质量审查，修复阻断后根代理读diff。
-- [ ] 根代理fresh五文件183项、prompt治理及diff检查通过，精确stage三个文件并中文提交。
+- [x] 更新已有合同断言到v1.9.0及新携带/可见性职责；合同红灯exit1、2失败/2通过，分别为旧版本与缺新规则，不是环境错误；没有文本输出关键词门。
+- [x] 仅按设计替换global“场景状态”第二条及版本，恢复第一条、事实身份第三条和其他内容保持；包含原剧情持续物件、唯一承载及已确认变化/归位、近景可见性边界。
+- [x] global v1.9.0中文changes登记；合同绿灯exit0、4/4；顺序独立规格→质量审查均Approved，C/I/M0，根代理读实际diff确认范围。
+- [x] 根代理fresh五文件183/183、prompt治理（23prompt/12fixture）、cached diff检查退出0，精确三个文件提交`4d19b7b2`。正式global trimmed SHA为`d5bedd4983fa8ffb509d0df54bbb5d001967d329cd76411c7b4d448c8d7d6114`，segment v1.7.0保持。真实语义与图片未验证。
 
 命令：
 
