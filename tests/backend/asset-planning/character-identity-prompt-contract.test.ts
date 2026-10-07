@@ -12,7 +12,7 @@ describe("稳定角色身份的正式 prompt 合同", () => {
     expect(prompt).toContain("先依据 `script_text` 的主叙事时点确定年龄阶段");
     expect(prompt).toContain("不得套用人物其他时期的年龄");
     expect(prompt).toContain("无法可靠确认精确年龄时，只写宽年龄阶段，不猜具体数字");
-    expect(prompt).toContain("version: v1.7.0");
+    expect(prompt).toContain("version: v1.8.0");
     expect(prompt).toContain("language: zh-CN");
     expect(prompt).toContain("ProjectArtBible");
     expect(prompt).toContain("`identity_description`");
@@ -20,13 +20,20 @@ describe("稳定角色身份的正式 prompt 合同", () => {
     expect(prompt).toContain("不包含服饰、冠帽、兵器、动作或背景");
   });
 
-  it("全局状态按实际分镜安排连续性，普通负载推断可审阅且不污染稳定身份", () => {
+  it("全局状态安排恢复保留项并判断普通行装，推断可审阅且不污染稳定身份", () => {
     const prompt = readFileSync(new URL("../../../prompts/asset-planning/asset-planner.prompt.md", import.meta.url), "utf8");
     expect(prompt).toContain("在顶层 `art_bible.consistency_notes` 中，按实际分镜 ID 或连续 ID 范围写少量状态安排");
     expect(prompt).toContain("服装使用痕迹、身体状态、携带物及其相对位置");
     expect(prompt).toContain("何时保持、何时因已确认事件变化，以及变化后仍须保留什么");
+    expect(prompt).toContain("恢复或休整须分别写出身体变化项（包括仍未好转）与衣物/负载保留项");
+    expect(prompt).toContain("好转程度以已确认事件为准");
+    expect(prompt).toContain("没有已确认换衣、清洗或更换事件，不得清除此前已有积尘、磨损或携带关系");
     expect(prompt).toContain("无状态变化时不强加脏污、困顿或磨损");
-    expect(prompt).toContain("必要的普通场景负载可写入现有 `props`，明确形态、承载方式及与人物的持续关系");
+    expect(prompt).toContain("必须按人物处境判断是否需要普通行装");
+    expect(prompt).toContain("需要时写入现有 `props`，明确形态、基准承载位置及与人物的持续关系");
+    expect(prompt).toContain("在状态安排中说明取用等已确认动作的携带变化");
+    expect(prompt).toContain("不需要时在 `manual_review_notes` 说明理由");
+    expect(prompt).toContain("原剧情核心道具不能代替此判断");
     expect(prompt).toContain("不得新增关键道具、具体装备数量或新剧情");
     expect(prompt).toContain("史料未证的普通合理视觉推断写入 `manual_review_notes`，说明推断边界，不冒充事实");
     expect(prompt).toContain("状态以 `script_text` 和已确认分镜为准；冲突写入 `manual_review_notes` 报告，不回改上游");
