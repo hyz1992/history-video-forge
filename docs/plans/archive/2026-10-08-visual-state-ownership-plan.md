@@ -1,5 +1,7 @@
 # 分镜与全局美术状态职责实施计划
 
+状态：2026-10-08关闭归档。正式合同及控制器通过，单次global人工C0/I2/M0未过，后续按失败分支取消；无新媒体或成片。[验收记录](../../records/2026-10-08-visual-state-ownership-acceptance.md)是本批结果真相源，本清单不得当作续跑指令。
+
 > 使用superpowers:subagent-driven-development顺序实施，fresh implementer、规格后质量审查；根代理fresh核验与中文提交。用户已批准职责收敛方向，直接dev，不创建worktree。设计见[状态职责设计](./2026-10-08-visual-state-ownership-design.md)。
 
 **目标**：消除全局重新编排身体时序，让分段按原镜头展开动作，同时保留负载与旧衣约束。
@@ -51,18 +53,18 @@ git diff --check
 
 ## 步骤五：逐次真实文字
 
-- [ ] global一次，结构通过后根代理和独立人工审查所有art字段的职责、行囊/水囊唯一基准、取用/归位、旧衣保留及推断边界；绑定response/structure SHA写pass/fail。
-- [ ] global人工pass后，chunk_001–004各一次、逐次正式typed结构+人工审查通过；特别检查008镜内微弱恢复/再上路/跟马及image/video/reserve，没有身体变化被固定锚点吞掉，009/010无提前恢复或突然换衣。
-- [ ] 末chunk run可先产生零费用原生compile/validator候选并冻结SHA，不代表语义通过；所有文字人工pass后才显式compile缓存复验、完整人工计划审阅及媒体资格确认。任何失败立即关闭，preview下一阶段证明拒绝，再verify。无repair、额外容量、人工patched pass。
+- [x] global唯一一次真实调用结构通过；根代理与独立state_ownership_text_review读实际全部parsedOutput，人工fail C0/I2/M0：水囊仍并列身上/马鞍，sb008重新输出竞争动作链。response/structure SHA绑定reviews/global.json。输入10,661/output12,452（含reasoning8,404），用量保守估算0.120938元。
+- [x] 失败分支：四chunk取消、未实测。普通行囊/局部可见性/旧衣保留局部文字通过，不代表分段或画面通过；不手改模型结果当pass。
+- [x] 无完整计划，compile/全计划人工审阅/媒体资格取消。preview chunk_001真实exit1、manual_review_not_passed；最终fresh verify exit0，history/HTTP各1、91保护/6副本保持。batch-closure.json关闭，无重试/额外容量/paid后offline。
 
 ## 步骤六：条件媒体
 
-- [ ] 仅文字全部pass后，单独实现/审查媒体执行器并零费用核验：正式V2 importer/skeleton、内存DB、executeAssetManifest、DashScope，n=1、每次只有一个execution/一次POST、0.20预留及真实请求先落盘，有限只读poll/download，无其他媒体入口。
-- [ ] 身份图一次并人工确认，再sb_007失水段锚点与sb_010再上路段锚点各一次，正式身份参考注入、依赖及费用正确；任一坏图停止。
-- [ ] 内置浏览器静态只读本地预览三图，验行装附着、与起始锚点相符的体力状态、恢复后旧衣痕迹/同人；sb_007由前行至倒卧，不把终点倒卧强加到起始锚点，终点视频效果仍未验证。无新视频/TTS/compose，条件不满足明确取消及未验证。
+- [x] 因文字未通过取消媒体执行器实现及全计划导入；接口存在不算真实导入验收。
+- [x] 身份/sb007/sb010三图全部取消，未调用、图片成本0，参考注入与依赖未验证。
+- [x] 无新图片，内置浏览器实图验收取消；实际行装/旧衣/体力/同人、镜内终点倒卧、音轨和成片均未验证。没有新视频/TTS/compose。
 
 ## 步骤七：收口
 
-- [ ] 中文docs/records/2026-10-08-visual-state-ownership-acceptance.md回填原始诉求清单、局部/整体结论、真实调用/usage/费用/剩余及保护核验；费用为保守估算，不冒充账单。
-- [ ] 独立最终事实/费用/范围/链接审查，根代理fresh verify及diff核验；关闭并归档本计划、更新README、中文提交，仅精确正式文件stage。
-- [ ] 最终报告实际改动、验证结果、自审、剩余风险、下一步；无新成片时明确说明。
+- [x] 中文验收记录回填原始诉求、局部/整体范围、一次真实调用/usage、0.120938增量、累计48.5443075/余额1.4556925及保护核验；账单未验证。设计计划按失败分支关闭归档，入口更新。
+- [x] 独立最终收口事实/费用/范围/13个链接审查Approved C/I/M0，真实global仍为fail；根代理fresh verify与cached diff检查exit0。仅记录、README及两归档文档进入中文提交，storage/.claude不stage。
+- [x] 最终报告区分实施与实测失败，说明费用、未验证项及下一步；明确没有新成片，不宣称高质量视频已完成。
