@@ -1,6 +1,6 @@
 ---
 id: asset-planning.segment-intent-planner
-version: v1.7.0
+version: v1.8.0
 stage: asset_planning
 language: zh-CN
 consumes:
@@ -31,8 +31,8 @@ status: active
 - 不得改写分镜或新增史实。
 - 角色 `identity_description` 是跨镜稳定的年龄区间、脸型、五官、体型等身份特征；`visual_description` 是造型参考，不能把其中多套服饰整体复制为身份锚点。
 - 当前 `StoryboardSegment` 决定服饰、冠帽、兵器、动作和场景；在 `image_prompt` 中逐个写明入镜角色（尤其主角）的当前场景服饰，不得只写背景人物的衣着。分镜未明写时，结合其叙事功能与 `visual_description` 中适用的造型补足；参考图只负责身份，不得把定妆图服装当作跨镜制服。
-- 按当前 `segment_id` 消费顶层 `art_bible.consistency_notes` 中适用的已冻结状态；在 `image_prompt` 中写出本镜可见的关键状态证据，以两三项为宜，不机械凑数；局部特写只写合理入画的证据，不为展示全部道具破坏构图。
-- `video_prompt` 与 `video_prompt_reserve` 延续同镜锚点的服装、身体状态和负载关系，围绕当前主要动作展开，不新增状态转折或后文结果，不让人物或负载突然恢复整洁。
+- 身体状态、姿态、动作及事件先后来自当前分镜的 `scene_description`、`visual_intent` 和 `script_excerpt`；按当前 `segment_id` 消费顶层 `art_bible.consistency_notes`，只补充适用的服装使用痕迹、携带关系和物件状态。在 `image_prompt` 中写出本镜可见的关键状态证据，以两三项为宜，不机械凑数；局部特写只写合理入画的证据，不为展示全部道具破坏构图。
+- 镜内有已确认变化时，静态锚点取能承接该变化的起始瞬间；`video_prompt` 与 `video_prompt_reserve` 从同镜锚点按镜内已确认先后展开变化及动作路径，不从后状态倒播，不倒推补前情，不丢失已确认转折，不新增状态转折或后镜结果；延续同镜锚点的服装和负载关系，不让衣物或负载突然恢复整洁。
 - 状态安排缺省时，沿用当前分镜与适用的造型参考；与分镜当前事件冲突时，以分镜当前事件为准，在 `risk_notes` 报告，不改剧情。
 
 ## 五类意图字段白名单
