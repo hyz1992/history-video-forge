@@ -40,12 +40,22 @@ git diff --check
 只新增`storage/global-load-retention-acceptance-20261007/`实验工件，不stage。复制已审实验控制器源，不复制旧派发锁或成功结果；改ROOT、prompt期望版本/SHA和预算基线。旧来源仍冻结；追加上一批预算/请求/结果/人工fail保护。新run不释放历史预留。
 
 - [x] 新协议/保护完整性、原库/源分镜/口播与6份副本冻结；62保护项，prepare/preview退出0；根代理fresh离线15项退出0；独立规格→质量审查均C/I/M0，新身份独立、旧锁结果未复用。global预检0.1526元；媒体执行器未准备。
-- [ ] 新global零网preview后显式一次paid run；maxAttempts1/maxTokens8192，一gateway/HTTP，拒绝repair/regen/安全重试。
-- [ ] 根代理及独立人工审阅，写绑定response/structure SHA的pass/fail；global未过取消余下付费并直接收口。
-- [ ] 通过后顺序chunk_001–004各一次，逐步审阅真实image/video/reserve状态消费及原动作；未过停止。
-- [ ] 五阶段通过后正式compile/validator及人工完整计划审阅，11镜/75,170ms及来源ref、10API+1Remotion、参考依赖保持。
+- [x] 首次global已显式调用一次，一gateway/HTTP；8192容量导致JSON截断，技术失败，拒绝repair/regen/安全重试。
+- [ ] 原run完整JSON及人工文字验收取消（技术失败，无完整可解析产物）。
+- [ ] 原run chunk_001–004取消；不得续跑旧锁或接受partial。
+- [ ] 原run完整compile及人工计划审阅取消；容量对照新run通过后才可按下节继续。
 
 CLI沿用`planner.mts prepare/preview/run/compile/verify`，路径换为新目录；付费必须命名阶段、`VISUAL_LOAD_STATE_PAID_STAGE`和`--allow-paid-once`同时满足。新增上限1.75元，累计上限50元，基线48.0798395元；每次先保存reserve，结算仅用实际usage，缺失保留reserve。
+
+### 首次global截断后的单次容量对照
+
+首次global已调用一次，但HTTP200/length导致JSON截断，完整输出与语义未验。保留旧锁/请求/原始usage，取消该run后续阶段，不复用片段结果。
+
+- [x] 保存`truncation-diagnosis.json`：8192请求上限、8193实际completion含5206 reasoning，真实用量折价0.086712元；失败预留0.1526元保持，累计48.2324395元。
+- [x] 容量补充设计→计划独立审查Approved（C/I/M均0），确认总预留上限49.9824395元；旧run取消边界明确。
+- [ ] 仅新建`storage/global-load-retention-capacity-acceptance-20261007/`，新ROOT/identity、maxTokens16384、新预算基线48.2324395取首次失败账本，追加失败证据保护，不改正式prompt/业务策略；修订离线reserve公式为实际新maxTokens并保留其余控制。
+- [ ] 新runprepare/preview/fresh offline、规格→质量审查通过后，只增加一次global技术对照；再次失败则停止所有本轮付费，不建第三run、不改语义规则；通过后仅按原流程四chunk各一次及条件三图。
+- [ ] 记录两run总次数/费用及原件保护，区别用量折价与保留预留；本技术对照不冒充原首次调用成功。付费PowerShell入口在finally清理环境前保存node退出码，清理后显式exit同码。
 
 ## 步骤四：仅文字通过后的三图
 
