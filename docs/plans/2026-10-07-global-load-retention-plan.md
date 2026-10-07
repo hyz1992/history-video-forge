@@ -39,7 +39,7 @@ git diff --check
 
 只新增`storage/global-load-retention-acceptance-20261007/`实验工件，不stage。复制已审实验控制器源，不复制旧派发锁或成功结果；改ROOT、prompt期望版本/SHA和预算基线。旧来源仍冻结；追加上一批预算/请求/结果/人工fail保护。新run不释放历史预留。
 
-- [ ] 冻结新协议/保护清单及独立完整性、原库/源分镜/口播与6份副本；离线复核、新旧SHA与预算边界审阅，禁止旧实验续跑。
+- [x] 新协议/保护完整性、原库/源分镜/口播与6份副本冻结；62保护项，prepare/preview退出0；根代理fresh离线15项退出0；独立规格→质量审查均C/I/M0，新身份独立、旧锁结果未复用。global预检0.1526元；媒体执行器未准备。
 - [ ] 新global零网preview后显式一次paid run；maxAttempts1/maxTokens8192，一gateway/HTTP，拒绝repair/regen/安全重试。
 - [ ] 根代理及独立人工审阅，写绑定response/structure SHA的pass/fail；global未过取消余下付费并直接收口。
 - [ ] 通过后顺序chunk_001–004各一次，逐步审阅真实image/video/reserve状态消费及原动作；未过停止。
