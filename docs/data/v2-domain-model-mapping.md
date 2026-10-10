@@ -4,7 +4,7 @@
 
 本文冻结 V1 内存数据库到 V2 Prisma 数据模型的迁移去向，作为首版 schema、导入器和仓储适配的共同输入。
 
-本文确定模型归属、主键、外键、JSON 边界和文件边界，并与当前 Prisma baseline 保持一致；不移动项目文件，也不引入登录等用户系统实现。模型命名以 `docs/superpowers/specs/2026-07-10-v2-data-auth-design.md` 为设计真相源。
+本文保留 V1→V2 导入边界，并随当前 Prisma 模型同步（2026-10-10）。登录/用户管理、VoiceProfile 主表与 narration 持久化均已实现；早期数据设计仅作迁移追溯，实际模型以 `backend/prisma/schema.prisma` 和 migrations 为准。
 
 ## 2. 全局映射原则
 
@@ -35,19 +35,19 @@
 | `assetProviderJobRecords` | `AssetProviderJobRecord` | 主表 + JSON | 全量迁移；provider job id 可空 |
 | `recommendationRounds` | `RecommendationRound` + `RecommendationExposure` | 主表 + 子表 | 数组拆为轮次及曝光明细；按项目与轮次建立唯一约束 |
 | `mediaLibraryItems` | 版本化媒体 catalog | 文件资产 | 首版不建主表；保持现有 catalog，数据库仅在业务记录中保存相对引用 |
-| `voiceProfiles` | 版本化音色 catalog | 文件资产 | 首版不建主表；用户偏好只保存 profile id 引用，运行时仍由 catalog 解析 |
+| `voiceProfiles` | `VoiceProfile` | 主表 | S2-2B 起数据库权威，owner/visibility 授权；文件 catalog 只作 seed，用户/项目保存稳定 profile id |
 | `userGenerationPreferences` | `UserGenerationPreference` | 主表 | S2-2A 新增；每用户一行，`userId` 唯一，revision 乐观并发，完整配置 JSON |
 | `projectGenerationConfigurations` | `ProjectGenerationConfiguration` | 主表 | S2-2A 新增；每项目一行，`projectId` 唯一，来源用户默认 revision 可空 |
 | `providerModelCatalog` | `ProviderModelCatalog` | 主表 | S2-2A 新增；服务端受控 seed，每 capability 恰好一个 active 默认项（partial unique index 防多个 + 触发器防零个），金额/价格 JSON |
 | `storyboardSegmentOverrides` | `StoryboardSegmentOverride` | 主表 | S2-2A 新增；`(storyboardRecordId, segmentId)` 唯一，`projectId` 仅 owner scope |
-| `generationCostQuotes` | `GenerationCostQuote` | 主表 | S2-2A 新增；一次性报价，创建时持久化 `quoteFingerprint`，金额列非负十进制微元 CHECK |
+| `generationCostQuotes` | `GenerationCostQuote` | 历史表 | 2026-08-23 报价移除后不再创建/消费，保留既有行与金额约束 |
 | `runConfigurationSnapshots` | `RunConfigurationSnapshot` | 主表（append-only） | S2-2A 新增；不可变，repository 不提供 update，quote 绑定字段成套出现/缺失 |
-| `generationRuns` | `GenerationRun` | 主表 | S2-2A 新增；`(projectId, operation, idempotencyKey)` 唯一，run/snapshot/quote 同项目一致性由 writer 事务级强校验 |
+| `generationRuns` | `GenerationRun` | 主表 | S2-2A 新增；`(projectId, operation, idempotencyKey)` 唯一，run/snapshot 同项目一致性由 writer 事务级强校验；新 run 的 quote 字段为空，旧字段留档 |
 | `generationRunEvents` | `GenerationRunEvent` | 主表（append-only） | S2-2A 新增；无 `updatedAt`，只追加 |
 | `usageCostRecords` | `UsageCostRecord` | 主表 | S2-2A 新增；`(runConfigurationSnapshotId, providerRequestKey, attemptIndex)` 唯一防重复记账 |
-| `auditLogs` | `AuditLog` | 主表（append-only） | S2-2A 新增内存镜像；Prisma 激活态由事务/thirdAggregateWriter 落库，legacy Map 态仅内存（不入 fixture 快照），预算超额授权审计与 quote 消费同事务 |
+| `auditLogs` | `AuditLog` | 主表（append-only） | Prisma 权威；用户/管理员与配置审计保留，预算授权/quote 消费已废止 |
 
-`voiceProfilePersistence` 不是 Map，也不是领域数据；它是运行时文件持久化配置，不进入数据库。后续若允许用户创建音色，再以独立设计升级 `VoiceProfile` 为主表，不能机械复制当前 Map。
+`voiceProfilePersistence` 是兼容文件配置，不作为当前音色权威；VoiceProfile 已为主表。另有 `NarrationRecord` / `NarrationSubtitleRevision` 与项目口播模式/active 指针，见 [Schema 设计](./schema-design.md) 的口播小节；这些为新模式产物，旧 JSON 导入不伪造原生时间轴。
 
 ## 4. Project 字段逐项映射
 
@@ -86,7 +86,7 @@ V2 `Project` 新增 `ownerId`、`createdById`、`storageKey`，且由 S1-3 起 V
 
 - `User` 必须保存 `username`、`displayName`、`passwordHash`、`role`、`status`、`mustChangePassword`、`lastLoginAt` 和时间字段。
 - SQLite baseline 使用 CHECK 限制 `User.role` 为 `ADMIN | USER`，`User.status` 为 `ACTIVE | DISABLED`；Project 的多阶段 status 继续保留兼容字符串，不复用用户状态约束。
-- `Session` 预留 `userAgentHash` 与 `ipPrefix` 可空字段，只用于后续受控审计；本任务不创建 Session 或认证接口。
+- `Session` 预留 `userAgentHash` 与 `ipPrefix` 可空字段，只用于后续受控审计；此条为数据基础任务的历史边界；Session 和认证接口已在 S1 实现。
 
 ## 5. 其他领域记录
 

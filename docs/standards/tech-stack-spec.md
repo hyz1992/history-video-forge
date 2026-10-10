@@ -1,112 +1,40 @@
 # history-video-forge 技术栈规范
 
-## 1. 目标
+截至 2026-10-10，以下以 package.json、锁文件和当前源码为依据；旧项目的框架选型只作迁移背景。
 
-新项目延续旧项目成熟技术栈，减少无谓技术迁移成本，把主要精力放在内容流水线重建上。
+## 当前实现
 
-本文档回答两个问题：
+| 层 | 实际技术与位置 |
+| --- | --- |
+| Monorepo | npm workspaces：backend / frontend / shared / renderer；TypeScript 5 |
+| Node.js | 根 package.json 声明 >=20；锁定 Vite 7 / Prisma 7 的实际要求为 20.19+（20.x）、22.12+（22.x）或 24+ |
+| HTTP | Node 原生 node:http，backend/src/server.ts；AppInstance 本地路由注册，JSON/multipart/文件路由 |
+| 内容编排 | LangGraph / LangChain 用于 topic + script graph；下游独立 service，OpenAI-compatible gateway 与 tier 路由 |
+| 数据与合同 | Prisma 7、better-sqlite3 adapter、SQLite（WAL）；shared/ 使用 Zod 3 |
+| 认证 | Argon2 密码散列、数据库会话 Cookie、owner 授权、管理员审计 |
+| 前端 | Vue 3、Vue Router 4、Vite 7、Element Plus；reactive + provide/inject stores，apiFetch 封装 fetch |
+| 视频 | renderer/ 内 React 19 / Remotion 4；后端 Remotion bundler/renderer；FFmpeg/ffprobe 用于媒体处理和探测 |
+| 检查 | Vitest 3、Vue Test Utils/jsdom、Playwright；runtime harness 和 prompt 治理脚本 |
+| 开发/部署 | tsx、Python 开发启动器、Node 生产启动脚本；Windows 可使用 NSSM 服务 |
 
-- 新项目在技术栈上应继承什么
-- 哪些东西即使旧项目有，也不该在 greenfield 中原样带过来
+当前 HTTP 服务未采用 Fastify，前端未采用 Pinia/Axios；不要据旧项目方向在实现中假定这些依赖存在。shared/ 的 Zod 为实际 schema 来源，Prisma 模型与 migrations 为数据库来源。
 
-## 2. 当前确认的技术栈方向
+## 工程组织
 
-### Monorepo
+- backend/：服务、阶段编排、provider、存储、认证与 CLI。
+- frontend/：六步工作区、用户设置与管理页面。
+- shared/：跨阶段类型、schema、配置与投影。
+- renderer/：Remotion 组合（旧设计中的 video/ 已由此目录承载）。
+- prompts/：正式中文 prompt 与变更记录。
+- harness/：执行规范、回归、显式 live/browser 检查。
+- scripts/：构建、启动和分区测试。
+- storage/：SQLite 主库、媒体和 trace；JSON 快照为历史导入材料。
 
-- Node.js `>=18`
-- npm workspaces
-- 推荐继续采用 monorepo 组织
+## 约束与验证
 
-理由：
+- 不为框架迁移扩大本次任务，也不复刻旧项目的多层 narrative 合同和重试状态机。
+- 生成配置与模型选择按冻结运行快照执行；semantic reviewer 保持 shadow-only。
+- npm run typecheck:backend 做后端 TS 检查；npm run build:frontend 只做 Vite 构建，前端独立 TS 检查闸门仍待补。
+- 后端/harness Vitest 使用 --configLoader runner；写候选库与渲染相关多文件测试优先串行。
 
-- 旧项目已经验证过 backend / frontend / video 共享 monorepo 的协作方式
-- 新项目仍需要跨阶段共享类型、配置、脚本与验证能力
-
-### Backend
-
-沿用旧项目已验证方向：
-
-- TypeScript
-- Fastify
-- LangGraph.js / LangChain 相关运行编排能力
-- OpenAI / LLM 接入层
-- Prisma
-- Zod
-- Remotion / FFmpeg 相关视频合成能力
-
-后端方向重点：
-
-- 继续使用 TypeScript 做结构化对象建模
-- 尽量通过本地规则和 schema 降低 prompt 负担
-- 保留 LLM orchestration 能力，但避免把状态机做得像旧项目一样重
-
-### Frontend
-
-沿用旧项目已验证方向：
-
-- Vue 3
-- Vite
-- Pinia
-- Vue Router
-- Axios
-
-### Video / Rendering
-
-- Remotion
-- FFmpeg
-
-## 3. 当前推荐的工程组织方式
-
-建议继续采用：
-
-- `backend/`：服务端、流水线调度、存储、校验、审校
-- `frontend/`：任务页、主题页、script 页等交互
-- `video/`：Remotion 组合与渲染
-- `docs/`：正式规范、留档、路线图、todo
-- `scripts/`：本地验证、检查、迁移、回归脚本
-
-## 4. 技术栈层面的约束
-
-- 不为“更现代”而引入新的平台层
-- 不为了 topic/script 重建而重做前后端基础栈
-- 不把风格系统做成难以维护的运行时 prompt 叠层
-- 优先复用旧项目中已跑通的工程设施，而不是重做底层
-
-## 5. 当前建议保留的旧技术能力
-
-### 后端
-
-- Fastify 路由组织方式
-- Zod schema 化输入输出
-- Prisma 数据访问方式
-- 现有 LLM service / auto-fix / diagnostics 思路
-
-### 前端
-
-- Vue 3 + Pinia 的状态管理模式
-- 基于页面级步骤的任务向导交互
-- 抽屉与列表组合的交互模式
-
-### 渲染
-
-- Remotion 组合方式
-- FFmpeg 工具链
-
-## 6. 当前明确不要在技术层复制的东西
-
-- 旧 topic/script/storyboard 状态机
-- 旧 narrative 多层对象
-- 旧系统推荐流程和旧 custom draft 编辑逻辑
-- 依赖多层 prompt 套娃的写法
-- 用 dist/历史状态兼容影响新目录语义
-
-## 7. 明确未定项
-
-以下内容尚未定版：
-
-- 数据库具体部署方案
-- 认证方式是否沿用旧项目实现
-- 新项目的视频工作区与存储目录结构
-- 运行环境区分（本地 / CI / 生产）
-
-这些项在实现前需另行确认，但不影响当前主题阶段与 script 阶段文档收敛。
+启动、数据库准备与生产部署分别见 [项目 README](../../README.md) 和 [部署指南](../../DEPLOY_WINDOWS_SERVER.md)。现有 SQLite/认证/存储布局已落地；生产扩容、CI 和独立前端类型检查仍需单独设计。

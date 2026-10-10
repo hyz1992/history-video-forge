@@ -61,6 +61,7 @@ prompts/
 每个正式 prompt 必须能被注册为一个最小对象，至少包含：
 
 - `id`
+- `version`
 - `stage`
 - `language`
 - `consumes`
@@ -71,6 +72,8 @@ prompts/
 
 - `id`
   - 全局唯一，便于检查脚本和 runtime harness 引用。
+- `version`
+  - 必须为 `vX.Y.Z`；runtime loader 强校验，语言检查的六字段检查不代替版本检查。
 - `stage`
   - 必须使用当前 loader 与 `check-prompt-language.ts` 共同支持的 stage。
 - `language`
@@ -123,6 +126,7 @@ prompts/
   asset/
     narration-audio-review.prompt.md
     prompt-optimizer.prompt.md
+    protoface-ltx-video-smoke.prompt.md
   event-library/
     enrich.prompt.md
   publish/
@@ -136,6 +140,8 @@ prompts/
 
 - 这是当前 harness v1 的实际组织方式，以 `prompts/` 目录实存为准。
 - `asset/narration-audio-review` 服务口播前置的机器听审（对匿名口播录音做质量评审），属于 `stage: assets`。
+- `protoface-ltx-video-smoke` 为视频 smoke 提示资产，存在不代表已接入生产自动生成。
+- 每个 prompt 配套 `.changes.md`；完整治理入口 `npm run harness:check-prompts` 依次检查语言、重复、changelog、fixtures 和 version/hash 漂移。hash 为 registry 派生的运行快照证据，不是要求手填的 frontmatter 字段。
 - 后续如需新增 prompt，必须先确认其所属 stage、输入输出对象与职责边界。
 - 不允许因为“方便”把不同阶段的 prompt 混放。
 

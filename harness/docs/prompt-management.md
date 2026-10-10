@@ -23,6 +23,7 @@
 - `prompts/storyboard/*`
 - `prompts/asset-planning/*`
 - `prompts/asset/*`
+- `prompts/event-library/*`
 - `prompts/publish/*`
 
 当前可识别 stage 见 `harness/docs/prompt-registry-spec.md`。其中 `prompts/asset/*` 对应 `stage: assets`。
@@ -71,9 +72,10 @@ prompt 只能建立在已经收敛的正式对象之上，例如：
 
 - `topic` prompt 只能处理候选生成、轻评审、选择与修复，不定义 script 写法。
 - `script` prompt 只能处理口播首稿、语义审校和明确保留的 patch/lift 提示资产，不定义下游资产结构。
-- `storyboard` prompt 只能把合格 script 转成视觉段落计划，不生成素材文件。
-- `asset_planning` prompt 只能规划素材任务和结构修复，不调用 provider。
+- `storyboard` prompt 把合格 script 与确认口播的合法切点转成视觉段落计划，独占镜内身体动作时序；不改正文、不猜新模式时间、不生成素材文件。
+- `asset_planning` prompt 规划全局美术/分段资产意图和结构修复；全局建立稳定身份、服饰/负载状态与携带基准，分段按已有分镜衔接静态锚点与镜内变化，不另写竞争动作链、不调用 provider。
 - `assets` prompt 只能服务素材任务的局部提示词优化，不改变 AssetPlan 合同。
+- `event_library` prompt 服务事件库条目策划完善，不改已冻结 Topic Package。
 - `publish` prompt 只能服务发布包中的标题、描述、封面提示词等文案生成，不等同于真实平台发布。
 
 ### 3. prompt 变更必须联动文档与检查

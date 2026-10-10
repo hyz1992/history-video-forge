@@ -1,5 +1,7 @@
 # 后续阶段高层设计（留档版）
 
+> 2026-10-10 状态边界：正文是 2026-04/05 的设计背景与后续补记，不是当前待执行清单。六步前端、素材上传/预览、合成渲染和发布包已接通；新项目确认口播后才分镜，原生时间轴为权威。当前合同见 [Pipeline IO](./pipeline-io-spec.md)，待办见 [路线图](../todos/roadmap-todo.md)。
+
 本文档不进入实现细节，只回答一个问题：
 
 - 在 `topic + script` 之后，`storyboard / asset planning / assets / compose` 这些后续阶段，目前已经确定了哪些高层边界，哪些还没有拍死。
@@ -10,9 +12,9 @@
 - 防止在尚未正式设计时，被实现端“顺手发明”一整套下游链路
 - 为下一轮正式设计这些阶段时提供起点
 
-## 1. 当前状态
+## 1. 2026-05 历史状态
 
-> 2026-05-27 修订说明：本文档早期段落保留了从 `topic + script` 冻结后进入 downstream 设计前的历史基线。当前正式状态是：`storyboard`、`asset planning`、`assets`、`compose` 均已完成 v1 后端链路；`renderer/export` 已完成 v1 后端首批实现与回归；DashScope 图生视频已作为显式 opt-in 的 assets provider 后端路径接入；BGM/SFX 已完成离线本地媒体库选择、deterministic WAV fixture 物化与 compose/renderer 消费回归。后续可以围绕真实付费 BGM/SFX provider、素材上传/预览 UI、发布流、人工审稿流和质量评分系统继续正式设计与小步实施，但不得绕过 design + implementation plan。
+> 2026-05-27 修订说明：本文档早期段落保留了从 `topic + script` 冻结后进入 downstream 设计前的历史基线。当前正式状态是：`storyboard`、`asset planning`、`assets`、`compose` 均已完成 v1 后端链路；renderer / export 已完成 v1 后端首批实现与回归；DashScope 图生视频已作为显式 opt-in 的 assets provider 后端路径接入；BGM/SFX 已完成离线本地媒体库选择、deterministic WAV fixture 物化与 compose/renderer 消费回归。后续可以围绕真实付费 BGM/SFX provider、素材上传/预览 UI、发布流、人工审稿流和质量评分系统继续正式设计与小步实施，但不得绕过 design + implementation plan。
 
 当前项目已经比较完整地设计并收口了：
 
@@ -169,7 +171,7 @@
 - 时间轴对象的 source-of-truth 是什么
 - 导出失败、素材缺失、节奏不合时，如何处理而不越权回改 topic/script
 
-## 8. 当前结论
+## 8. 最初设计期结论
 
 当前已经明确：
 
@@ -183,7 +185,7 @@
 - 明确记下当前高层边界
 - 明确记下为何暂不继续细化
 
-## 9. 当前状态标记
+## 9. 最初设计期状态标记（已被后续实现覆盖）
 
 `TBD`
 
@@ -282,7 +284,7 @@ Assets 后端阶段边界：
 显边界面：
 
 - 历史说明：第一版初始骨架不接真实 provider；截至 2026-05-19，显式 DashScope TTS/文生图/image-to-video 路径已存在，默认自动化仍使用 fake/local。
-- 第一版历史骨架未实现前端 assets 面板 UI；当前可由前端工作流计划继续推进。
+- 第一版历史骨架当时没有 assets UI；当前资产工作区已接入，含定妆图分区、上传替换/重跑/参考标记，验收范围见当前路线图。
 - 第一版不实现 compose timeline 或最终视频导出。
 
 ## 2026-05-17 状态更新：Compose v1 已完成后端 timeline 合同

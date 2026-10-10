@@ -58,8 +58,15 @@
 - 是否区分了“可用线”“爆款首稿线”“发布线”。
 - local validator 是否只做结构性质量下限，没有冒充语义审校。
 - semantic reviewer 是否仍只作为 shadow 量尺。
-- 是否通过 `npm run harness:topic-script-five-round-quality-check` 做 5 轮真实 topic -> script 观测记录抽读质量。
-- 是否记录了 5 轮输出目录，并读取 `live-check-summary.json`、各样本 `script-draft.json`、`semantic-review-result.json`。
+- 是否根据明确的 live 范围抽读真实首稿；若采用 `harness:topic-script-five-round-quality-check`，它会产生 5 轮真实调用，不因本清单自动获得执行资格。
+- 如运行了五轮巡检，是否记录输出目录，并读取 `live-check-summary.json`、各样本 `script-draft.json`、`semantic-review-result.json`。
+
+### 修改口播/时间轴与角色参考
+
+- 先运行受影响的离线测试；`harness:narration-first-runtime-smoke` 验三处引用同源、无 ASR 与资产重试不重做口播。
+- 字幕 revision、来源 hash、失效链与整数帧投影是否仍对应当前确认口播。
+- `harness:assets-character-sheet-smoke` 只证明编译/执行/注入合同；人物同一性、衣着与动作需要实际图片和人工核对。
+- legacy product/render smoke 不能替代 narration-first A8；未导出真实整片并核验音视频/字幕误差时标记未验证。
 
 ### 修改 UI、render/export 或 publish 链路
 

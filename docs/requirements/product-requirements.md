@@ -1,4 +1,6 @@
-# history-video-forge 原始需求文档
+# history-video-forge 产品需求文档
+
+2026-10-10 核对：产品目标保留；当前流程以下文及 [文档索引](../README.md) 为准。旧项目问题描述属于立项背景。
 
 ## 0. 这是什么项目
 
@@ -66,7 +68,7 @@
 
 核心使用场景：
 
-1. 用户新建一个任务，系统推荐 3-5 个值得讲的历史题
+1. 用户新建一个任务，系统推荐 3 个候选历史题（builder 生成 8 个后由 selector 选 3 个）
 2. 用户从事件库中主动指定一个历史事件，再从系统生成的 candidate 中确认一个讲法
 3. 用户输入一个成语、事件名或故事简介，系统识别后生成 candidate，再确认进入 script
 
@@ -86,8 +88,13 @@
 -> Script Input Bundle
 -> Script Draft Package
 -> 本地硬校验
--> 单一语义审校
--> 确认 script
+-> semantic reviewer shadow（只观测）
+-> 确认正文
+-> 生成口播并确认（新项目唯一模式）
+-> 分镜
+-> 资产规划与生成
+-> 合成渲染
+-> 发布包与文件导出
 ```
 
 说明：
@@ -97,7 +104,7 @@
 - `Topic Delivery Pack` 是单题交付微调包
 - `Script Input Bundle` 是 script 阶段真正消费的统一输入对象
 
-storyboard / asset planning / assets / compose / render / publish 阶段均已完成后端 v1 实现，当前下一步可进入前端工作流、预览/导出、发布流与人工审稿流的正式设计与实施。
+前后端六步工作区已接通；口播位于文案页，资产规划位于资产页，合成和渲染合并。口播原生词级时间轴是新项目下游权威，legacy 项目仍可读/导出并显式升级。reviewer 不触发自动 patch 或内容门禁；结构失败的有限重生与用户主动重生按各阶段合同执行。真实平台发布与人工审稿仍待正式设计。
 
 ## 5.1 明确复用范围
 
@@ -172,6 +179,6 @@ storyboard / asset planning / assets / compose / render / publish 阶段均已�
 
 ## 11. 当前待补充项
 
-- storyboard / assets / compose 的详细产品要求：`TBD`
+- 已实现阶段的对象与输入输出见 [Pipeline IO](../architecture/pipeline-io-spec.md)，验收缺口见 [路线图](../todos/roadmap-todo.md)；实现不等于全片质量通过
 - 平台发布规范和审核策略的具体清单：`TBD`
 - 商业化范围、账号运营策略、A/B 机制：`TBD`

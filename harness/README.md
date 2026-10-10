@@ -1,12 +1,14 @@
 # Harness README
 
+核对日期：**2026-10-10**。安装与启动见 [项目 README](../README.md)，系统状态见 [文档索引](../docs/README.md)。
+
 适用项目：`history-video-forge`
 
 本目录承载：
 
 - 执行约束
 - 质量规则
-- 正式 prompt 资产
+- 正式 prompt 资产的治理（正文位于根目录 `prompts/`）
 - 检查脚本
 - runtime harness
 
@@ -20,8 +22,8 @@
 当前 harness 服务于：
 
 - 全链路 v1 的执行治理、最小验证和显式巡检。
-- 正式 prompt 资产的集中存放、元数据检查和重复检查。
-- `topic -> script -> storyboard -> asset planning -> assets -> compose/render -> publish` 的 runtime smoke、live check 与质量观测。
+- 根目录正式 prompt 的元数据、语言、版本/hash、fixtures、changelog 与重复检查。
+- `topic -> script（确认正文 -> 生成并确认口播）-> storyboard -> asset planning -> assets -> compose/render -> publish` 的 runtime smoke、live check 与质量观测。
 - UI acceptance、product acceptance、render smoke、真实 provider 小样本巡检等人工触发入口。
 - 运行产物、trace、截图、LLM interaction 与人工复盘材料的固定落点。
 
@@ -92,6 +94,7 @@ runtime harness 是当前项目的核心验证层：
 - `storyboard/`
 - `asset-planning/`
 - `asset/`
+- `event-library/`
 - `publish/`
 
 `compose` 与 `render` stage 已被 runtime prompt loader 支持，但当前没有正式 prompt 文件；新增前必须先确认是否真的需要 LLM prompt。详见 `harness/docs/prompt-registry-spec.md`。
@@ -203,7 +206,7 @@ runtime harness 是当前项目的核心验证层：
 
 ## Runtime Harness Entries
 
-以下入口均为人工触发的显式巡检，不并入默认自动化 gate；真实模型、真实 provider、浏览器和 Remotion 导出类检查必须显式运行并记录输出。
+以下区分离线测试、显式巡检和历史兼容脚本；离线 Vitest 可进入默认回归，真实模型/provider、浏览器和 Remotion 导出必须显式运行并记录输出。
 
 - `harness/scripts/runtime/topic-script-smoke.ts`
   - 单样本官方 topic -> script smoke 链路。
@@ -229,14 +232,29 @@ runtime harness 是当前项目的核心验证层：
   - 口播前置 fake runtime 冒烟：覆盖口播单次生成（无 ASR）、storyboard/manifest/compose 三处 narration_reference 同源、资产重试零额外 TTS；fake/stub 部署零付费。该测试为纯离线合同验证，会随默认 `npm test`（vitest）执行，也可用此入口单独运行。
   - 配套显式巡检/live 证据脚本见 `harness/scripts/runtime/narration-*.ts`（这类非测试脚本才属于人工触发、不进默认 gate 的范畴）。
 - `harness/scripts/runtime/product-acceptance-live-check.ts`
+  - legacy 成品样片入口，调用真实 provider 与 Remotion；不能替代 narration-first A8。
 - `harness/scripts/runtime/seed-second-aggregate-browser-fixture.ts`
-  - 面向成品验收的显式 live check，会调用真实 provider 与 Remotion 导出。
+  - 隔离数据库播种，不调用 LLM/媒体 provider；用来验读取与重启，不代表生成质量。
 - `harness/scripts/runtime/script-semantic-reviewer-fixtures.ts`
   - semantic reviewer shadow 对照样本巡检入口。
 - `harness/samples/topic-script/family-set.md`
   - 默认稳定回归样本集。
 - `harness/samples/topic-script/expanded-family-set.md`
   - 扩展真实巡检样本集，不替代默认稳定回归。
+
+### 默认离线验证与模式边界
+
+| 入口 | 实际范围 |
+| --- | --- |
+| `npx tsx harness/scripts/run-fast-checks.ts` | 关键文件、prompt 基础元数据和文档关键术语；不是完整代码/文档一致性检查 |
+| `npm run harness:check-prompts` | 语言、重复、changelog、fixtures、version/hash 漂移；不调用模型 |
+| `npm run harness:narration-first-runtime-smoke` | fake 口播一次生成、无 ASR、三处 narration_reference 同源、资产重试零额外 TTS |
+| `npm run harness:assets-character-sheet-smoke` | fake 角色参考编译/执行/注入与局部重跑合同，不能判断实图一致性 |
+| `npm run test:partitions` | 全量分区测试入口，实际输出为准；指定文件可直接用 Vitest |
+
+新项目唯一模式为 `narration_first_v1`，无发布开关；legacy 兼容项目仍可读/导出/升级。旧 `storyboard-five-round-quality-check`、`asset-planning-five-round-quality-check` 与 `product-acceptance-live-check` 的固定输入/夹具走 legacy 路径，不证明新模式真实时间轴或 A8 整片通过。历史 output 默认 gitignored，新 checkout 不保证具备默认 2026-05 输入，运行前显式准备并检查 source。
+
+`assets-character-sheet-live-check` 是独立参考图实测入口；`npx tsx harness/scripts/runtime/assets-character-sheet-live-check.ts --plan-only` 只生成计划，实际生图需显式 live 范围。浏览器脚本即使采用 stub/fake 仍会启动服务和写隔离 fixture，不能直接对正式数据库播种。
 
 ### Live Check Entry
 
@@ -253,7 +271,7 @@ runtime harness 是当前项目的核心验证层：
 - live check 输出应至少覆盖 graph trace、runtime diagnostics 与 script artifact。
 - live check 只作为人工巡检入口，不替代自动化稳定回归。
 
-### Render Runtime Smoke With Real TTS
+### Render Runtime Smoke With Real TTS（legacy 样片）
 
 本入口用于生成“真实 DashScope TTS 口播 + 本地/fake 视觉资产 + 本地 BGM/SFX”的 Remotion 样片，便于快速确认最终 MP4 是否真正带有人声口播。
 
@@ -278,7 +296,7 @@ npx tsx harness/scripts/runtime/render-runtime-smoke.ts --adapter remotion --tts
 边界：
 
 - 只启用 DashScope TTS，不启用 DashScope 文生图或图生视频。
-- 视觉仍使用 fake image；字幕、本地 BGM/SFX 仍走本地 provider。
+- 视觉仍使用 fake image；字幕/BGM/SFX 由本地 provider 承载。legacy 字幕在有 DashScope 凭据与 merged audio 时会尝试 ASR forced_alignment（可能产生额外真实调用），失败回落估算；“local_subtitle”并不等于零外呼。
 - 这是显式 live-check / smoke 入口，不作为默认自动化 gate。
 - 输出目录位于 `harness/scripts/runtime/output/`，默认被 git 忽略。
 
@@ -407,6 +425,8 @@ harness/scripts/runtime/output/asset-planning-five-round-quality-check
 
 ### Vitest Notes
 
+`npm run test:partitions` 会先验证全部测试文件分区覆盖再运行；若分类缺口导致入口失败，标明未验证，不把它当作所有用例失败或通过。日志在 `.codex-run-logs/test-partitions/`。后端类型检查用 `npm run typecheck:backend`；`npm run build:frontend` 不做独立 TS 类型检查。
+
 - 当前 Node/Vite 组合下，后端/harness 测试建议使用：
 
 ```powershell
@@ -455,7 +475,7 @@ npm run harness:seed-second-aggregate-browser-fixture -- -- --owner=fixture-owne
 
 - `npm run harness:ui-reference-migration`
   - 对单文档 HTML 参考页与 Vue 目标 route 做迁移对照检查。
-  - 第一版内置首页试点：`frontend/public/preview-landing.html` -> `/`。
+  - 历史首页试点合同仍指向 frontend/public/preview-landing.html → `/`，但该参考 HTML 已不在当前仓库；默认合同不能直接作为可运行入口。使用前先显式准备参考文件并核对合同，脚本存在不代表迁移验收通过。
   - 输出截图、合同结果和人工审查清单到 `harness/scripts/runtime/output/ui-reference-migration/<run-id>/`。
 - `npm run harness:ui-reference-migration:report`
   - 读取最近一次 reference migration summary，并打印可读报告。
@@ -466,9 +486,9 @@ npm run harness:seed-second-aggregate-browser-fixture -- -- --owner=fixture-owne
 - 视觉 1:1 第一版是人工审图项，不是 pixel diff 硬门禁。
 - 如果要新增页面合同，先补对应 design / implementation plan 或在当前计划范围内明确试点页面。
 
-## 成品验收 Live Check
+## 成品验收 Live Check（legacy 兼容路径）
 
-该入口会显式调用真实 DashScope TTS 与文生图，并用 Remotion 导出 MP4。它不是默认自动化 gate，只能作为人工触发的成品验收巡检使用。
+该入口通过 legacy project fixture 驱动链路，会调用真实 LLM 资产规划、DashScope TTS 与图片，并用 Remotion 导出 MP4；legacy 本地字幕有凭据时还会尝试 ASR。它不覆盖 narration-first A8 整片验收。它不是默认自动化 gate，只能作为人工触发的成品验收巡检使用。
 
 ```powershell
 npm run harness:product-acceptance-live-check -- --source-dir harness/scripts/runtime/output/2026-05-10-storyboard-five-theme-review/round-1
@@ -487,7 +507,7 @@ npm run harness:product-acceptance-live-check -- --source-dir harness/scripts/ru
 ```text
 ALIYUN_DASHSCOPE_API_KEY=...
 ALIYUN_DASHSCOPE_BASE_URL=https://dashscope.aliyuncs.com
-ALIYUN_DASHSCOPE_TEXT_TO_IMAGE_MODEL=wan2.6-t2i
+ALIYUN_DASHSCOPE_TEXT_TO_IMAGE_MODEL=wan2.7-image
 ALIYUN_DASHSCOPE_TTS_MODEL=qwen3-tts-instruct-flash
 ```
 

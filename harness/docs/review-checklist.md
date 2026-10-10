@@ -24,7 +24,7 @@
   - `TopicDeliveryPack`
   - `ScriptDraftPackage`
   - `ScriptValidationResult`
-  - `NarrationRecord` / `NarrationSubtitleRevision`（narration-first，发布开关默认关闭）
+  - `NarrationRecord` / `NarrationSubtitleRevision`（新项目唯一 narration-first 模式，发布开关已移除）
 - 如果涉及下游，是否同步核对受影响阶段的正式对象：
   - `StoryboardPlan`
   - `AssetPlan`
@@ -33,6 +33,8 @@
   - `RenderJob`
   - `PublishPackage`
   - 下游 `narration_reference` 是否仍三处（storyboard/manifest/compose）同源
+  - 新模式是否复用确认口播的音频/字幕，资产重试是否零额外 TTS/ASR
+  - 角色 sheet 是否与当前选中参考、造型及供应商回执一致；结构通过是否被误写为实图或全片质量通过
 - 是否与 `field-design / schema-design / api-design / implementation-plan` 保持一致？
 - 是否把未定内容误写成了正式规则？
 

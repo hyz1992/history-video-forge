@@ -1,4 +1,6 @@
-# API 设计（第一版）
+# API 设计
+
+核对日期：2026-10-10。路由以 `backend/src/modules/*/*.routes.ts` 与 `backend/src/http/file-routes.ts` 为准，响应以 controller/service 和 shared schema 为准。示例只展示最小输入，完整枚举和错误分支以 shared schema 与路由校验为准。
 
 本文档定义新项目当前已确认阶段的 API 边界。
 
@@ -11,80 +13,33 @@
 ## 1. 设计原则
 
 1. 以 `project` 为顶层资源。
-2. 用户显式操作触发 API；内部 patch / regenerate 不单独暴露成用户 API。
-3. topic 与 script 的长时任务优先采用异步任务 + SSE 状态流。
+2. 用户显式操作触发 API；reviewer 为 shadow-only，不触发自动 patch/语义重生。用户主动重生和本地结构失败的有限重生按实现合同处理。
+3. topic/script 等现有生成提交创建 GenerationRun 后可同步派发并透传结果；口播生成返回 202，状态通过项目/口播读取接口轮询。当前未注册项目 SSE stream。
 4. API 只暴露当前已确认阶段。
-5. storyboard / asset planning / assets / compose v1 已承诺并实现后端 endpoint；renderer/export v1 后端最小闭环已按 implementation plan 完成首批实现；前端预览、发布流和人工审稿 API 可进入后续正式设计与小步实施，但必须在实现前完成对应 design + implementation plan。
+5. 分镜、资产规划/生成、合成、渲染、预览/下载、发布包和素材上传 API 已接入；人工审稿与真实平台发布仍待设计。
 
 ## 2. 顶层资源
 
-### `POST /api/projects`
+### 项目与状态读取
 
-用途：
-- 创建一个新的视频任务
-
-返回：
-- `project_id`
-- 初始状态
-- 默认 topic 页面所需基础信息
-
-请求示例：
+- `POST /api/projects`：登录用户创建项目，请求字段为 `name`，可选 `narration_selection`；新项目模式固定为 narration_first_v1。口播资格不匹配可返回 422 narration_selection_required 并携带组合选项。
+- `GET /api/projects`：当前用户可访问的项目列表。
+- `GET /api/projects/:projectId`：项目快照，包括 current_status、active_topic_package、active_script、script_history、分镜/资产/合成/渲染/发布包与口播就绪信息。
+- `DELETE /api/projects/:projectId`：按 owner 范围归档项目。
+- `GET /api/projects/:projectId/narration-mode/upgrade/preview` 与 `POST .../upgrade`：legacy 显式升级，核对来源与受影响记录；不降级破坏历史数据。
 
 ```json
-{
-  "project_name": "春秋历史短视频实验",
-  "source_mode": "recommended"
-}
+{ "name": "春秋历史短视频实验" }
 ```
 
-响应示例：
-
-```json
-{
-  "project_id": "proj_20260417_001",
-  "current_status": "topic_idle",
-  "topic_context": {
-    "default_tab": "recommended",
-    "available_tabs": [
-      "recommended",
-      "library",
-      "custom"
-    ]
-  }
-}
-```
-
-### `GET /api/projects/:projectId`
-
-用途：
-- 获取项目当前快照
-
-返回：
-- 基础信息
-- 当前阶段状态
-- active topic package / active script record 摘要
-
-### `GET /api/projects/:projectId/stream`
-
-用途：
-- SSE 订阅长时任务状态
-
-典型事件：
-- `topic_generation_started`
-- `topic_candidates_ready`
-- `topic_confirmed`
-- `script_generation_started`
-- `script_patch_started`
-- `script_regen_started`
-- `script_ready`
-- `pipeline_error`
+创建初始 current_status 为 topic_pending。生成态依靠快照、记录执行状态与 trace 观测；早期 `/stream`、queued job/SSE 示例属于未落地方案，当前没有该路由。
 
 ## 3. Topic 阶段 API
 
 ## 3.0 运行时可靠性接口边界
 
 - `GET /healthz` 只表示进程存活，不代表快照、媒体库或存储已就绪。
-- `GET /readyz` 检查持久化加载状态和媒体 catalog 状态；依赖异常返回 `503`。
+- `GET /readyz` 检查持久化加载、媒体 catalog 和数据库（读写、迁移集合/checksum、SQLite pragma/完整性、激活）；依赖异常返回 `503`。
 - 同一项目同一生成阶段的重复 POST 请求返回 `409 project_stage_run_in_progress`。
 - 用户鉴权与项目隔离已随 V2 S1（2026-08）全量上线：会话 Cookie 鉴权、owner 隔离（`guardUserRoute`/`guardOwnedRoute`）、admin 审计；非回环绑定仍必须显式 opt-in，仅适用于受控环境。
 
@@ -108,76 +63,19 @@
 - 当前实现允许 runtime 根据结构化 seed 的形态推断更接近 `discovery seed` 还是 `focus seed`
 
 输入：
-- 用户筛选偏好
-- 是否允许复用缓存候选
 
-返回：
-- 一个异步任务确认
-- 候选完成后通过 SSE 或轮询获取结果
+- 可选结构化 seed：`canonical_name`、`summary`、`core_conflict`、`strong_scene`、`source_hint`、`recent_usage_hint`、`canonical_quotes`、`canonical_quote_intents`、`tags`。
+- 可选 `filters`：`period_range`、`event_domain`、`central_actor_type`、`exclude_terms`、`storytelling_lens`，值域见 `shared/src/topic/topic-recommendation-filter.schema.ts`。旧 preferred_eras / preferred_families / avoid_tags / length_preference 不是当前筛选合同。
 
-请求示例：
+候选卡含 `viral_rubric` 与叙事合同字段；选择评分用于推荐排序，不能代替人工内容质量验收。
 
-```json
-{
-  "filters": {
-    "preferred_eras": [
-      "春秋",
-      "战国"
-    ],
-    "preferred_families": [
-      "外交压场型",
-      "刺杀政变型"
-    ],
-    "avoid_tags": [
-      "三国过热",
-      "已高频人物"
-    ],
-    "length_preference": "standard"
-  },
-  "allow_cache_reuse": true
-}
-```
-
-异步确认响应示例：
+最小请求示例：
 
 ```json
-{
-  "job_id": "job_topic_reco_001",
-  "project_id": "proj_20260417_001",
-  "status": "queued"
-}
+{ "filters": {} }
 ```
 
-`topic_candidates_ready` SSE 示例：
-
-```json
-{
-  "event": "topic_candidates_ready",
-  "project_id": "proj_20260417_001",
-  "candidates": [
-    {
-      "candidate_id": "cand_evt_yan_zi_shi_chu_reversal",
-      "event_id": "evt_yan_zi_shi_chu",
-      "title": "晏子使楚",
-      "one_line_angle": "楚王连压三次，晏子一次没退",
-      "family_label": "外交压场型",
-      "scope_label": "完整事件",
-      "estimated_duration_band": {
-        "min_sec": 75,
-        "max_sec": 95
-      },
-      "why_this_now": "强反转、强对抗、近期未做同簇题材",
-      "viral_rubric": {
-        "hook_power": "high",
-        "novelty_gap": "medium",
-        "emotion_gap": "high",
-        "share_impulse": "high",
-        "visual_promise": "high"
-      }
-    }
-  ]
-}
-```
+提交先创建 GenerationRun 与快照，再同步派发。成功透传 200 推荐结果，包括 `project_id`、`topic_run_id`、`topic_run_index`、`candidates`、`current_round`、`history_rounds`、`graph_trace_summary`、`runtime_diagnostics`，并附 `generation_run_id`；进行中/幂等重放按提交协议返回 run 状态。当前没有 job_id/queued/SSE 通知合同，刷新通过项目快照恢复候选和轮次。
 
 ### B. 事件库入口
 
@@ -249,173 +147,40 @@
 - 这些对象的最小 JSON 示例见：
   - [field-design.md](../data/field-design.md) 中的“最小 JSON 示例”
 
-请求示例：
+请求可使用空对象 `{}`；可选 `sourceMode`、`sourceRef` 必须与所选候选一致。早期 confirm_reason 不属于当前冻结合同。
 
-```json
-{
-  "confirm_reason": "user_selected"
-}
-```
-
-响应示例：
-
-```json
-{
-  "project_id": "proj_20260417_001",
-  "current_status": "script_ready",
-  "topic_package": {
-    "topic_package_id": "tpk_20260417_yanzi_full",
-    "event_id": "evt_yan_zi_shi_chu",
-    "canonical_title": "晏子使楚",
-    "selected_angle": "楚王连压三次，晏子一次没退",
-    "family_label": "外交压场型",
-    "scope_label": "完整事件",
-    "core_conflict": "楚王借公开场合连续羞辱晏子与齐国，晏子必须当场顶回去",
-    "strong_scene": "楚王连续压场，晏子一句句顶回去",
-    "duration_band": {
-      "min_sec": 75,
-      "max_sec": 95
-    },
-    "narrative_tension_map": {
-      "hook_claim": "楚王不是只压了晏子一次，而是连压三次",
-      "pressure_escalation": "从羞辱身形升级到羞辱齐国，再升级到羞辱齐人风气",
-      "mid_reveal": "晏子不是逞口舌，而是在守住齐国场面",
-      "peak_payoff": "橘枳之喻把第三次压场原样顶回",
-      "ending_residue": "这种场面，一退就不只是退掉自己"
-    }
-  }
-}
-```
+成功返回 `project_id`、`current_status` 与 `topic_package`。该 API 摘要使用 `topic_package_id` / `event_id` / `canonical_title`，并包含 stakes、must_include_beats、来源锚点、规范引语、歧义说明和 tension map；字段来源见 `backend/src/modules/topic/topic-confirm.service.ts`。`duration_band` 是保存的字符串档位，不是旧示例中的 min_sec/max_sec 对象。注意 API 摘要与 shared TopicPackage（topic_id/title）命名不同，不应直接把摘要当作 script 输入。
 
 ## 5. Script 阶段 API
 
 ### `POST /api/projects/:projectId/script/generate`
 
-用途：
-- 从当前 active `Topic Package` 进入 script 阶段
-
-输入：
-- 可选：是否允许一次 patch / regenerate
-
-返回：
-- 异步任务确认
-
-SSE 后续事件：
-- `script_started`
-- `script_local_validation_passed`
-- `script_patch_started`
-- `script_regen_started`
-- `script_ready`
-- `script_failed`
-- `script_returned_to_topic`
-
-补充说明：
-
-- 如果本轮 patch 是提升型 patch，应允许事件流中带出 `patch_intent=lift`
-- `patch_intent` 不是新的阶段状态，只是 `script_patch_started` 的补充上下文
-
-请求示例：
+从 active Topic Package 组装输入并生成首稿。可选 idempotency_key；生成路由还接收 allow_regen、allow_local_repair_regen、force_regen、user_feedback。allow_patch 是兼容字段，实际 graph 输入强制 false，不执行 reviewer patch。
 
 ```json
-{
-  "allow_patch": true,
-  "allow_regen": true
-}
+{ "idempotency_key": "script-first-draft-001" }
 ```
 
-异步确认响应示例：
+当前 submitGenerationRun 在持久化 run/snapshot 后同步派发，可透传 200 生成结果：project_id、run_mode=sync_runtime、input_bundle、draft、local_validation、semantic_review、graph_trace_summary、runtime_diagnostics，并附 generation_run_id。进行中或同 key 重放返回 generation_run_id、run_status、idempotency_replayed，不重复派发。不能依赖早期 job_id/queued/SSE 结构。
 
-```json
-{
-  "job_id": "job_script_001",
-  "project_id": "proj_20260417_001",
-  "status": "queued"
-}
-```
+`script_local_validation` 本地硬校验决定首稿结构是否可用；semantic_review 只作 shadow，patch_intent=fix/lift/null 是量尺语义，不代表已修稿。预估时长本地回填，实际时长以确认口播为准。
 
-`script_patch_started` SSE 示例：
+### 读取 script
 
-```json
-{
-  "event": "script_patch_started",
-  "project_id": "proj_20260417_001",
-  "patch_intent": "lift",
-  "reason": "hook_kill_power_weak"
-}
-```
+使用 `GET /api/projects/:projectId` 的 active_script 与 script_history，当前未注册独立 `GET .../script`。active_script 包括 script_record_id、script_text、estimated_duration_sec、opening_span、ending_span、review_decision、patch_intent、local_validation、semantic_review、execution_state 和 trace/diagnostics。
 
-### `GET /api/projects/:projectId/script`
+## 6. 错误与长任务
 
-用途：
-- 获取当前 active script 结果
+- 400：输入不合法；401/403：认证或授权不满足；404：资源不可见/不存在。
+- 409：阶段、来源、配置或幂等负载冲突；报价付费闸门已移除。
+- 422：schema/业务合同不满足（包括口播组合选择与分镜结构失败）。
+- 500：内部或持久化错误；具体错误码以对应端点实现为准。
 
-返回：
-- script 摘要
-- 当前 review 决议
+前端在等待生成时读取项目快照；口播生成为 202，读取 record/run 状态。生成 run 的费用快照/幂等与恢复派发合同见文末生成配置小节，不能假定所有 POST 都立即返回异步 queued。
 
-script 摘要第一版建议至少包含：
+## 7. 扩展边界
 
-- `script_text`
-- `estimated_duration_sec`
-- `opening_span`
-- `ending_span`
-- `review_decision`
-- `patch_intent`
-- `hard_issue_labels`
-- `soft_issue_labels`
-
-说明：
-
-- `patch_intent` 允许为：
-  - `fix`
-  - `lift`
-  - `null`
-- 这样前端或 harness 在读取 script 结果时，能明确知道当前稿件是“修 bug 后通过”还是“提势能后通过”
-- 具体对象示例见：
-  - [field-design.md](../data/field-design.md) 中的“最小 JSON 示例”
-
-响应示例：
-
-```json
-{
-  "project_id": "proj_20260417_001",
-  "script_record_id": "scr_20260417_001",
-  "script_text": "如果有人当着所有人的面羞辱你，你敢不敢当场顶回去？晏子敢……",
-  "estimated_duration_sec": 88,
-  "opening_span": "如果有人当着所有人的面羞辱你，你敢不敢当场顶回去？",
-  "ending_span": "因为这种场面，你一退，丢掉的就不只是你自己。",
-  "review_decision": "patch_once",
-  "patch_intent": "lift",
-  "hard_issue_labels": [],
-  "soft_issue_labels": [
-    "hook_kill_power_weak",
-    "ending_residue_weak"
-  ]
-}
-```
-
-## 6. 错误与状态处理原则
-
-### 统一错误分类
-
-- `400`：输入不合法
-- `404`：资源不存在
-- `409`：当前阶段状态不允许此操作
-- `422`：结构正确但业务约束不满足
-- `500`：内部错误
-
-### 长时任务原则
-
-- API 本身不阻塞等待完整 LLM 结果
-- 前端通过 SSE 或状态轮询获取完成事件
-- 任何 `return_topic` 都应显式通知前端，而不是静默回退
-
-## 7. 尚未在本文正式定义的 API
-
-- 管理后台校正 Event Registry 的运营 API
-- 前端预览 UI、素材上传/预览的 API（可进入正式设计）
-- 人工审稿流 API（可进入正式设计）
-- DashScope 图生视频专用 API：图生视频当前只通过 assets generate 的显式 `provider_mode=dashscope` 配置进入
+素材上传/预览、封面操作、发布包导出与管理员事件库 API 已有实现；相关路由分别在 assets/publish/event-library 与 http/file-routes。真实平台发布和人工审稿仍待设计。图生视频由 assets 执行与视频升级入口调度，模型来自已解析配置（DashScope/配置后的 AutoDL），不由 compose 派发。
 
 ## Narration API（口播前置，2026-09 已实现；新建项目默认启用）
 
@@ -434,7 +199,7 @@ script 摘要第一版建议至少包含：
 ### `POST /api/projects/:projectId/storyboard/generate`
 
 用途：
-- 从当前 active script 生成 storyboard v1。
+- 从当前 active script 生成分镜：legacy 为 storyboard_v1，narration-first 为 storyboard_v2，候选切点确定性投影到真实口播区间。
 - 成功后保存 `StoryboardRecord`，并把项目推进到 `storyboard_ready`。
 
 输入：
@@ -527,18 +292,16 @@ script 摘要第一版建议至少包含：
 用途：
 
 - 从当前 active asset plan 生成 assets manifest v1。
-- 成功后保存 `AssetManifestRecord`，并把项目推进到 `assets_ready` 或 `assets_blocked`。
-- 当前默认路径使用 fake/local provider 与本地文件存储；显式 `provider_mode=dashscope` 可调用 DashScope TTS、文生图 provider，并在 active `AssetPlan` 存在 `video_clip` 任务时调用 DashScope image-to-video provider。若 TTS 选中的本地全局音色缺少 `provider_voice_id`，DashScope TTS 执行会在 assets 阶段懒创建供应商音色。真实 BGM/SFX、前端上传/预览 UI 或发布级素材运营流需要由后续 API/前端设计承接。
+- 保存 `AssetManifestRecord`，按实际执行与校验结果推进到 `assets_ready`、`assets_partial` 或 `assets_blocked`。
+- 正式 HTTP 执行由 GenerationRun 冻结配置选择图片/视频/音色与服务端凭据；fake/local 用于离线测试和显式 harness 路径。新项目复用已确认口播，不在 assets 重做 TTS/ASR。legacy TTS 的供应商音色按需懒创建；真实付费 BGM/SFX 仍未接入。
 
 输入：
 
 - URL 中的 `projectId`。
-- 可选请求体字段：
-  - `voice_profile_id`：TTS 声线 ID，默认 `"voice_default_male_storyteller"`；若该 ID 未命中全局音色库，assets 会根据 `AssetPlan.global_audio_strategy.voice_intent` 做确定性匹配或创建本地音色档案。
-  - `execution_mode`：`"auto_available"` 或 `"dry_run"`，默认 `"auto_available"`。
-  - `provider_mode`：可选；仅显式传 `"dashscope"` 时启用 DashScope TTS/文生图/image-to-video provider，以及 TTS 所需的供应商音色懒创建；否则默认 fake/local。
-  - `dashscope`：可选 DashScope 配置覆盖，包括 `api_key`、`base_url`、`tts_model`、`tts_format`、`tts_sample_rate`、`image_model`、`image_size`、`image_poll_interval_ms`、`image_max_poll_attempts`、`image_to_video_model`、`image_to_video_resolution`、`image_to_video_duration_sec`、`image_to_video_poll_interval_ms`、`image_to_video_max_poll_attempts`。
-  - `enabled_provider_types`：可选数组，指定自动生成的 provider 类型（值域：`"tts"`、`"image"`、`"video"`、`"sfx"`、`"bgm"`）。不传时所有类型都执行。传 `["tts", "sfx", "bgm"]` 时，图片/视频任务状态设为 `waiting_manual_upload`，留给用户手动上传。字幕任务（`subtitle_track`）不在枚举中，随 TTS 自动执行。
+- 可选 `execution_mode`：`"auto_available"` 或 `"dry_run"`；可选 `mode: "missing_only"`、`task_ids` 和 `idempotency_key`。
+- 可选 `enabled_provider_types`：`"tts"`、`"image"`、`"video"`、`"sfx"`、`"bgm"` 数组，作为执行过滤。类型被排除时视觉任务可等待手动上传；字幕不在此枚举中。
+- 音色取快照 `resolved_creative.voice`。旧客户端 `voice_profile_id` 仅做兼容一致性校验，与快照冲突时返回 422。
+- 客户端携带 `provider_mode` 或 `dashscope.api_key` 明确返回 `400 client_provider_credentials_not_allowed`；不通过请求体授权真实 provider 或覆盖其模型。
 
 前置条件与错误：
 
@@ -624,10 +387,10 @@ script 摘要第一版建议至少包含：
 
 边界：
 
-- assets API 默认不调用真实 provider；显式 `provider_mode=dashscope` 允许 TTS、文生图与图生视频 provider。TTS 的供应商音色创建只在 assets TTS 执行中按需发生，不在 asset planning 或默认测试中发生；图生视频只在 assets 阶段处理 `video_clip` 任务，真实 SFX/BGM 仍未接入。
-- assets API 不修改 `script_text`、`TopicPackage`、`StoryboardPlan` 或 `AssetPlan`。
+- 正式 API 按冻结配置执行已授权的 provider；离线 harness 默认不调用真实 provider，live check 必须显式运行。图生视频处理 assets 的 `video_clip` 任务；asset planning 不派发媒体 provider。
+- assets API 不改写 `script_text`、`TopicPackage` 或 `StoryboardPlan` 的语义。提交会收敛 video upgrade 任务授权与时长；prompt 编辑有单独路由，以当前资产计划为准。
 - assets API 不生成 compose timeline 或最终视频。
-- assets v1 API 原始合同不包含前端 UI、物理文件上传或预览功能；这些能力可由后续前端工作流/API 设计补充，不应隐式塞进既有 `register` 合同。
+- `register` 负责元数据登记；物理上传使用下述 `upload` 路由。资产页、上传替换和媒体预览已实现；对象存储发布与素材运营生命周期仍待设计。
 
 ### `POST /api/projects/:projectId/assets/tasks/:taskId/artifacts/upload`
 
@@ -770,7 +533,7 @@ script 摘要第一版建议至少包含：
 
 ## Renderer / Export v1 API（2026-05-18 后端首批实现）
 
-本节覆盖 `POST /api/projects/:projectId/render/generate` 当前后端合同，修正早期 “renderer / Remotion / MP4 export API 不在本轮承诺” 的表述。当前实现是 renderer implementation plan 的后端最小闭环；前端预览、发布流或人工审稿流应在各自正式设计中补充 API 合同，而不是改变该生成端点的职责。
+本节覆盖 `POST /api/projects/:projectId/render/generate` 当前后端合同，修正早期 “renderer / Remotion / MP4 export API 不在本轮承诺” 的表述。当前 renderer 已被六步工作区的合成渲染页消费，预览/下载与发布包已有 API；人工审稿与平台发布扩展另行设计。
 
 ### `POST /api/projects/:projectId/render/generate`
 
@@ -818,7 +581,7 @@ script 摘要第一版建议至少包含：
 - render API 不调用 DashScope 图生视频。
 - render API 不生成缺失素材。
 - render API 不修改 `script_text`、`TopicPackage`、`StoryboardPlan`、`AssetPlan`、`AssetManifest` 或 `ComposeTimeline`。
-- render generate API 不承载前端 preview UI、发布流或人工审稿流的交互状态；这些能力可由后续 API/前端设计围绕 render artifact 补充。
+- render generate API 负责导出；前端通过已有 preview/download/publish 端点消费成品，人工审稿另行设计。
 
 ## Publish v1 API（2026-06-17 已完成后端实现）
 
@@ -932,11 +695,11 @@ script 摘要第一版建议至少包含：
 - `PATCH /api/me/generation-preferences` 与 `PATCH /api/projects/:projectId/generation-configuration`：请求体在 B 基础上增加可选 `capabilities` 段——五个槽位（`llm.smart`/`llm.flash`/`image.generate`/`video.image_to_video`/`tts.synthesize`）strict 齐全，每槽 `{mode:"auto"}` 或 `{mode:"fixed", provider_model_id}`（= 目录条目 id）。**缺省 = 保留服务器现值**（首次创建全 auto；旧 A/B 形状请求体零行为变化）；提供时整体替换。scope 越权返回 `400 configuration_invalid_s2_2c_scope`；revision 冲突码与 409 语义不变。
 - `GET /api/generation-capabilities`：返回目录全部 active 条目（含多候选——每槽一个 `is_default=true` 默认 + 非默认候选；stub 部署只有 stub 条目）。DTO 无凭据字段。
 - 失效预览（`invalidation_preview` 与 `diff_from_user_default`）capabilities 映射：`llm.smart`/`llm.flash` → `llm_generation`；`image.generate` → `asset_planning`+`assets`；`video.image_to_video`/`tts.synthesize` → `assets`；无变化不出现。
-- 候选目录：LLM 候选由服务端常量 `LLM_MODEL_CANDIDATES_V1` 声明（deepseek-v4-pro / glm-4，真实在用模型）；bootstrap 预解析（provider 注册 + 凭据健康）失败的候选不种入目录。条目元数据（displayName/qualityTier/speedTier）一律来自候选声明，同一模型跨槽位一致。
+- 候选目录：LLM 候选由服务端常量 `LLM_MODEL_CANDIDATES_V1` 声明（当前含 DeepSeek V4 Pro / V4 Flash、GLM-5 / GLM-4 / GLM-5.3-Flash，各自适用槽位以声明为准）；bootstrap 预解析（provider 注册 + 凭据健康）失败的候选不种入目录。条目元数据（displayName/qualityTier/speedTier）一律来自候选声明，同一模型跨槽位一致。
 
 ### 执行绑定（快照权威，快照-执行-记账同源）
 
-- 执行端（LLM provider 构造、媒体 adapter 构造、dispatch gate、usage 记账）一律消费 `RunConfigurationSnapshot.resolved.resolved_capabilities`；auto/fixed 同源（mode 只说明选择来源）。`createTierAwareProviderFromEnv({ snapshotCapabilities })` 按快照 provider_key+model_id 经 provider registry 构造；`buildProviderRegistry({ resolvedCapabilities })` 按快照 model 构造 tts/image/video adapter（provider_key 非 dashscope → 不注册）。
+- 执行端（LLM provider 构造、媒体 adapter 构造、dispatch gate、usage 记账）一律消费 `RunConfigurationSnapshot.resolved.resolved_capabilities`；auto/fixed 同源（mode 只说明选择来源）。`createTierAwareProviderFromEnv({ snapshotCapabilities })` 按快照 provider_key+model_id 经 provider registry 构造；`buildProviderRegistry({ resolvedCapabilities })` 按快照 model 构造 tts/image/video adapter（按 provider_key 注册对应 adapter，包含已配置的 DashScope 与 AutoDL 路径）。
 - `createAssetsDispatchHandler` 与 LLM handler 等价：内存镜像缺失 → repository 以数据库为权威加载；内存与 DB 均缺失 → `dispatch_snapshot_missing` 拒绝派发（禁止无快照执行/回退 env）。
 - 漂移防护两个时序：提交前配置/目录变化 → 提交重校验失败返回 `409 generation_run_resolution_failed`（capabilities 参与 configuration_hash；原 `generation_quote_configuration_changed` 已随报价体系移除废止）；快照创建后变化 → 派发仍按快照模型执行与记账。
 

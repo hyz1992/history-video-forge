@@ -1,6 +1,6 @@
 # 流水线阶段输入输出规范
 
-本文档记录当前已经确认的阶段输入输出。
+本文档记录当前已经确认的阶段输入输出（2026-10-10 核对）。新项目为 narration-first；各节出现 TTS chunk/merged 估算的规则须按 legacy 范围理解，详见 §2.6。
 
 ## 1. 主题阶段
 
@@ -48,7 +48,7 @@
 - 用户偏好
 
 输出：
-- `3` 个 family 槽位 candidate
+- 推荐入口 builder 生成 `8` 个候选供 selector 选 `3` 个；事件库/自定义入口按各自确认链路收敛
 
 ### 1.5 推荐审核与排序
 
@@ -271,7 +271,7 @@ Asset Planning v1 消费 active `StoryboardRecord` 及其来源 `ScriptRecord` /
 - 新 active storyboard 激活后，必须清空 active asset plan 指针。
 - asset planning 长耗时运行在激活前必须复查 active storyboard 与来源 script 是否仍一致；若不一致，返回 stale source，不激活旧结果。
 
-仍未进入本阶段实现的内容：
+资产规划职责之外的内容（相关 UI 已在资产阶段接入）：
 
 - assets provider 调用。
 - 图片、视频、TTS、字幕等物理文件生成。
@@ -313,19 +313,19 @@ Assets v1 消费 active `AssetPlanRecord` 及其来源 `StoryboardRecord` / `Scr
 - `sfx_cue` 使用 `AssetPlanTask.source_segment_id` 作为 segment route 归属，并只在有明确 tags 或显式素材 ID 时生成 `sfx_audio` artifact，避免无依据地滥用音效。
 - `bgm_audio` / `sfx_audio` artifact metadata 通过 shared schema passthrough 保留素材审计字段，例如 `library_item_id`、`selection_label`、`license_type`、`attribution_required`、`attribution_text`、`required_tags`、`matched_mood_tags` 与 `source_materialized_from`。
 - assets run 在 manifest build 前会对 TTS chunks 做本地确定性规范化：长 chunk 按句子标点和最大字符数拆分，子分块继承父 chunk 的 segment route；该执行期计划不会写回或修改持久化的 `AssetPlanRecord.planJson`。
-- 默认测试与自动化路径不调用真实 provider；显式 `provider_mode=dashscope` 可调用 DashScope TTS、文生图 provider，并在 `AssetPlan.tasks` 存在 `video_clip` 任务时调用 DashScope image-to-video provider。
+- 默认离线测试不调用真实 provider；正式 HTTP 执行由 GenerationRun 配置快照与服务端凭据决定，客户端不能发送 provider_mode 或 API key。内部 service/harness 的显式 `provider_mode=dashscope` 是 legacy/live 检查选项，不是当前 HTTP 参数。
 - 音色库属于 assets 阶段的全局共享能力，不随单个项目复制。`AssetPlan.global_audio_strategy.voice_intent` 可携带 `VoiceIntent`；assets 执行前会 seed 全局预设音色、用 deterministic matcher 产出 `VoiceMatchResult`，并在没有合适音色时只创建本地 `VoiceProfile` 档案，不立即调用供应商。
 - DashScope TTS 执行时才做供应商音色懒解析：若选中的本地 `VoiceProfile` 已有 `provider_voice_id` 或属于系统音色，则直接用于 TTS；若缺失且 provider 为 `dashscope`，才调用声音设计接口创建 provider voice，并回写本地音色状态。
 - DashScope TTS artifact metadata 同时保留本地 `voice_profile_id` 与供应商 `provider_voice_id`，并记录 `sample_rate`、`format`、`timing_source`、`duration_source`、`estimated_duration_sec` 以及可用的匹配信息。WAV/PCM 可探测时 `duration_sec` 来自音频探测并标记 `audio_probe`；不可探测格式保守回落为 `estimated`。
-- 字幕仍由本地 subtitle provider 基于 TTS chunk 生成，当前为 chunk-level cues；subtitle artifact 会记录来源 chunk artifact ids、总时长、timing source 和 `subtitle_style`，来源混合时标记 `mixed`。`subtitle_style` 第一版写入默认竖屏样式，包含字体、字号、位置、安全区、描边、阴影、最大行数和最大宽度等 renderer-facing 字段。在 assets legacy 链路中，provider timestamp、forced alignment 与 word-level alignment 仍是后续增强；narration-first 模式（见 2.6）的词级 provider 原生时间戳已在 Script 阶段实现并直通下游分镜/资产/合成。
+- legacy `local_subtitle` 在有 DashScope 凭据和 merged audio 时尝试 ASR forced_alignment；失败或不可用时回落 TTS chunk 估算并按音频时长缩放。artifact 记录来源、总时长、实际 timing_source 与 renderer-facing subtitle_style。narration-first（§2.6）直接消费确认口播的原生词级字幕 revision，不追加资产阶段 TTS/ASR。
 - 全局音色库自 S2-2B（2026-08）起以 Prisma `VoiceProfile` 表为跨实例权威（owner/visibility 同源授权）；`storage/voice-profiles/voice-profiles.json` 降级为 legacy 写穿文件（启动 seed 与备份用途）。`runAssetsGeneration()` 会在项目存在 `storageRootDir` 且 db 尚未显式配置时自动接线该库；测试和脚本也可显式配置临时 root。
 - 音色库加载后只 seed 缺失预设，不覆盖已存在档案。成功选择/复用音色会回写 `usage_count` 与 `last_used_at`；供应商音色创建成功会回写 `provider_voice_id`、`provider_status`、`preview_audio_uri` 与 `updated_at`。
 - `storage/voice-profiles/voice-profiles.json` 属于需要备份的运营状态，不进入默认 git 提交；清理或迁移 storage 时必须保留该文件，避免丢失真实 provider voice id 后重复创建付费供应商音色。
 - DashScope image-to-video 仍属于 assets 阶段：它消费同 segment 已生成或已登记的 `image` artifact，产出本地 `video` artifact，并把该 segment route 推进为 `visual_route_type=video_clip`。
 - 若 `video_clip` 任务缺失、图生视频未启用或 provider 失败，既有 image + `motion_recipe` fallback 仍保留给 compose/renderer 消费。
-- 图生视频真实调用只通过显式 live check 或显式 `provider_mode=dashscope` 请求触发，不属于默认自动化门。
+- 正式项目可显式生成/升级视频，按冻结模型配置派发；真实 harness live check 仍需显式运行，不属于默认自动化门。
 - `harness:assets-dashscope-tts-live-check` 是低成本 TTS-only 显式检查入口；`harness:assets-dashscope-voice-live-check` 会创建供应商音色并合成一句测试音频，仍然是 opt-in，不进入默认测试门。
-- fake/local provider 与显式 DashScope 路径会在项目 storage 下写入本地 artifact 文件；物理上传 UI 与对象存储发布链路可由前端工作流/API 计划承接。
+- provider 与手动上传产物写入项目 storage；资产页已支持上传替换与预览，对象存储发布链路仍待设计。
 - 不实现 compose timeline 或最终视频导出。
 
 手动素材登记：
@@ -352,8 +352,8 @@ Artifact 确认：
 Assets v1 后端合同之外的内容：
 
 - renderer-side DashScope 调用或任何非 assets-stage 视频 provider 调用。
-- 真实付费 BGM/SFX provider、素材导入/上传、授权包装、署名输出和运营生命周期。
-- 物理文件上传 UI、对象存储发布链路、预览 UI 与前端 assets 面板 UI：这些能力可由前端工作流/API 后续设计承接，不隐式改变 assets v1 manifest 合同。
+- 真实付费 BGM/SFX provider、授权包装、署名输出和运营生命周期。
+- 对象存储发布链路；物理上传、预览与前端 assets 面板已接入，使用独立 API 并保持 manifest 合同。
 - compose timeline 或最终视频导出。
 - 质量判断（审美、爆款、历史相似度）。
 

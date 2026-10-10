@@ -4,7 +4,7 @@
 
 - 当前已经确认的对象，落到数据库时应该如何分表、关联、缓存和区分职责
 
-本文档不直接等于 Prisma schema。它的定位是：在正式写 Prisma 之前，先把“哪些是源数据、哪些是派生缓存、哪些是一对多”说清楚。
+本文档描述领域持久化职责与阶段映射。当前主存储为 Prisma/SQLite，实际模型、索引和迁移以 `backend/prisma/schema.prisma` 与 migrations 为准；早期建议字段不直接等于物理列。
 
 ## 1. 设计原则
 
@@ -20,8 +20,8 @@
    - compose v1
    - render / export v1
    - S2-2A 起的生成配置、成本账本与全局音色库（`VoiceProfile` 实体）
-   - narration 口播产物表（narration-first，默认关闭）
-5. 发布、运营后台等未实现阶段不在本文档提前拍死。
+   - narration 口播产物表（narration-first，新项目唯一模式）
+5. 发布包、用户/管理后台已实现；真实平台发布、人工审稿与质量评分等扩展另行设计。
 
 ## 2. 当前建议的核心实体
 
@@ -205,12 +205,12 @@
 - `topic_packages (1) -> script_records (N)`
 
 说明：
-- script 阶段仍然允许 patch / regen，因此保留历史记录有价值
+- script 历史记录支持主动重生、对照和恢复；reviewer shadow 不触发自动 patch
 - 但 `projects.active_script_record_id` 只指向最终当前版本
 - `validation_result_json` 用于保存本地硬校验返回对象
 - `semantic_review_result_json` 用于保存单一语义审校返回对象，第一版允许直接存 JSON
 
-### narration 表（narration-first，默认关闭）
+### narration 表（narration-first，新项目唯一模式）
 
 口播前置链路（文案确认 → 生成口播 → 确认口播）的持久化表（2026-09-10 起新建项目一律写入；存量 legacy 项目不写入）。表名以 `backend/prisma/schema.prisma` 为准：
 
@@ -218,7 +218,7 @@
 - `NarrationSubtitleRevision`：字幕 revision，存音频/时序 hash、字幕设置快照与 SRT/VTT；`NarrationRecord.initialSubtitleRevisionId` 指向初始 revision。
 - provider 调用事实（`providerTaskId`/`providerRequestId`/`timingSource`）直接存于 `NarrationRecord` 列，不单独建 provider job/fact 表；计费用量仍走 `usage_cost_records`。
 
-字段细节见 [字段设计](field-design.md) 的「口播产物（narration-first，默认关闭）」小节与 `backend/prisma/schema.prisma` 的 `NarrationRecord` / `NarrationSubtitleRevision` 模型。设计真相源见 [口播前置设计](../plans/2026-09-05-narration-first-timing-design.md)。
+字段细节见 [字段设计](field-design.md) 的「口播产物（narration-first，新项目唯一模式）」小节与 `backend/prisma/schema.prisma` 的 `NarrationRecord` / `NarrationSubtitleRevision` 模型。设计真相源见 [口播前置设计](../plans/2026-09-05-narration-first-timing-design.md)。
 
 ### H. `candidate_exposure_logs`（可选但推荐）
 
@@ -275,7 +275,7 @@
 
 - 不把 `Event Registry`、`Candidate Cache`、`Recent Memory` 混成一张表
 - 不把全部数组型字段都塞进单 JSON 大字段里不区分职责
-- 发布、运营后台、人工审稿、质量评分等后续阶段进入实现前，先按独立设计补最小 schema，不提前设计大而全对象
+- 发布包与管理后台已有实体；真实平台发布、人工审稿和质量评分等后续能力按独立设计补最小 schema，不提前设计大而全对象
 - 不直接复用旧项目的 pipeline state 表结构
 
 ## 6. Task 2 共享 Schema 与持久化映射
@@ -354,11 +354,8 @@
 
 ## 7. 当前仍为 TBD 的点
 
-- Prisma 具体模型定义
-- 索引策略与查询优化
-- `recommendation candidate exposure log` 是否独立成表
-- `Recent Memory` 第一版是否纯查询层，还是做物化表
-- 发布、运营后台、人工审稿、质量评分等后续阶段的持久化对象（待独立设计收口）
+- 生产规模的查询/索引优化与媒体生命周期。Prisma 模型及 `RecommendationRound` / `RecommendationExposure` 已实现，推荐记忆从轮次/曝光记录派生，见 [V2 映射](./v2-domain-model-mapping.md)。
+- 人工审稿、真实平台发布与质量评分的持久化对象仍待独立设计；现有发布包与用户管理已落地。
 
 ## StoryboardRecord 持久化映射（2026-05-10 已实现）
 
@@ -489,11 +486,11 @@ Assets v1 已有第一版持久化记录。它是 `AssetPlanRecord` 之后的派
 
 - `manifest_json` 保存 `AssetManifest`，可包含 DashScope image-to-video 产出的 `video` artifact 及其 image fallback route。
 - `validation_result_json` 保存 `AssetsValidationResult`。
-- `execution_state_json` 记录 `execution_mode`、`voice_profile_id`、`voice_match_result`、`activated` 等执行状态；显式 `provider_mode=dashscope` 的 TTS、image 和 image-to-video provider 调用由 assets provider job 记录和 manifest artifact metadata 表达。
+- `execution_state_json` 记录 `execution_mode`、`voice_profile_id`、`voice_match_result`、`activated` 等执行状态；正式执行按冻结配置派发的 provider 调用（legacy 内部 service/harness 仍有 provider_mode 选项）由 assets provider job 记录和 manifest artifact metadata 表达。
 - 本地 BGM/SFX provider 基线仍由 `manifest_json` 表达：`bgm_cue` / `sfx_cue` 从 approved 且 `commercial_use_allowed` 的 media library item 中选择素材，并物化为本地 render-ready WAV artifact。`BgmPlacement.source_task_id` 是 `bgm_cue` task 与 placement 的稳定关联；`SegmentAssetRoute.bgm_placement_ids` 在当前 slice 保留但不写入。
 - `bgm_audio` / `sfx_audio` metadata 当前利用 shared schema passthrough 保存素材审计字段，例如 `library_item_id`、`selection_label`、`license_type`、`attribution_required`、`attribution_text`、`required_tags`、`matched_mood_tags` 与 `source_materialized_from`；正式落库前不拆成独立列。
 - DashScope TTS artifact metadata 会保存本地 `voice_profile_id`、供应商 `provider_voice_id`、`sample_rate`、`format`、`timing_source`、`duration_source`、`estimated_duration_sec` 以及可用的音色匹配信息；WAV/PCM 可探测时 `duration_sec` 来自音频探测，不可探测格式保守回落为估算值并记录 `duration_probe_error`。
-- 本地字幕 artifact metadata 会保存 `source_tts_chunk_artifact_ids`、`duration_sec`、`timing_source` 与 `subtitle_style`；多个来源 timing source 不一致时记录为 `mixed`。`subtitle_style` 使用 shared `SubtitleStyle` 合同，默认值为 `DEFAULT_SUBTITLE_STYLE`，第一版服务竖屏 Remotion 渲染，不复制到 `ComposeTimeline`。
+- legacy 本地字幕有凭据和 merged audio 时尝试 ASR forced_alignment，失败回落估算；narration-first 消费确认口播字幕 revision，不做资产阶段 ASR。字幕 artifact metadata 会保存 `source_tts_chunk_artifact_ids`、`duration_sec`、`timing_source` 与 `subtitle_style`；多个来源 timing source 不一致时记录为 `mixed`。`subtitle_style` 使用 shared `SubtitleStyle` 合同，默认值为 `DEFAULT_SUBTITLE_STYLE`，第一版服务竖屏 Remotion 渲染，不复制到 `ComposeTimeline`。
 - `asset_manifest_records` 不保存 compose timeline 或最终视频导出；图生视频只作为 assets artifact，不等同于最终导出 MP4。
 
 ## VoiceProfile 全局音色库映射（2026-05-19 已实现）
@@ -641,7 +638,7 @@ Renderer / Export v1 已有第一版持久化记录。它是 `ComposeRecord` 之
 - `execution_state_json` 至少记录 `status`、`activated`、`adapter` 与 source compose 信息。
 - Renderer 运行时从 source `AssetManifestRecord.manifest_json` 与 `ComposeTimeline` 派生 Remotion props：`visualClips`、`audioClips`、`subtitleCues` 与 `subtitleStyle`。其中 subtitle artifact 会被解析为 SRT/VTT cues，`subtitle_track.metadata.subtitle_style` 会作为 `subtitleStyle` 传入 Remotion；这些渲染输入是运行时派生 props，不单独持久化为 render job 字段。
 - 本地 Remotion renderer 当前支持 image/video 视觉 clip、image + `motion_recipe` fallback、基础 pan/zoom/hold/push-in/crossfade、narration 音频 mux，以及已存在 artifact 的 BGM/SFX clip。fake TTS 与本地 BGM/SFX provider 均写入 render-ready WAV 以支持离线 smoke；真实付费 BGM/SFX provider、ducking、响度归一化和署名包装需要独立字段设计，不塞进当前 render job 基础字段。
-- `render_job_records` 不保存 DashScope 图生视频 job；发布流状态与人工审稿状态需要由后续独立 schema 设计承接。
+- `render_job_records` 不保存 DashScope 图生视频 job；发布包已有独立记录；真实平台发布状态与人工审稿状态仍需后续独立 schema。
 
 ---
 

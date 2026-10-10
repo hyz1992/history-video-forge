@@ -99,4 +99,4 @@ graph state 只保留轻量状态穿透：
 - LangGraph 的唯一正式落点是 backend runtime orchestration
 - 当前 semantic reviewer 是 shadow-only
 - 当前 patch 不进入主路径
-- 后续如果 graph 设计与业务代码发生冲突，以本文件定义的边界为先，再回到实施计划和 todolist 做显式调整
+- 后续若本历史参考与当前正式合同、代码或运行证据冲突，先回到当前入口核对；不得以旧 graph 设计覆盖已实现的阶段边界

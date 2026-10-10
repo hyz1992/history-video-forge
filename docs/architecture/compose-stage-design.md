@@ -2,6 +2,8 @@
 
 Date: 2026-05-17
 
+> 2026-10-10 范围注记：下文 TTS chunk / merged duration 规则为 legacy 基线。新项目 `narration_first_v1` 按确认口播与 storyboard_v2 的真实区间合成，storyboard/manifest/compose 的 narration_reference 必须同源，音频/字幕复用确认产物。当前合同见 [Pipeline IO §2.6/Compose](./pipeline-io-spec.md) 与 [口播前置设计](../plans/2026-09-05-narration-first-timing-design.md)。
+
 ## Purpose
 
 The compose stage turns an active `AssetManifestRecord` into a deterministic timeline contract for final video assembly.
@@ -70,7 +72,7 @@ The timeline is a contract for a later renderer. It is not the final exported vi
 
 Each clip should be a reference to an `AssetArtifact.artifact_id`, not an embedded file path. File existence is checked through the manifest artifacts.
 
-## Time Source
+## Time Source（legacy）
 
 The final narration audio is the timeline source of truth.
 
